@@ -3508,11 +3508,11 @@ FRESULT f_read (
 	UINT* br	/* Pointer to number of bytes read */
 )
 {
-	FRESULT res;
-	FATFS *fs;
-	DWORD clst, sect;
-	FSIZE_t remain;
-	UINT rcnt, cc, csect;
+	FRESULT res = FR_OK;
+	FATFS *fs = (FATFS *)0;
+	DWORD clst = 0, sect = 0;
+	FSIZE_t remain = 0;
+	UINT rcnt = 0, cc = 0, csect = 0;
 	BYTE *rbuff = (BYTE*)buff;
 
 

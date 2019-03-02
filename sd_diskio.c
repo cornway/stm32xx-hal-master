@@ -49,6 +49,7 @@
 #include "stm32f769i_discovery_audio.h"
 
 #define SD_MODE_DMA 0
+#define SD_UNALIGNED_WA 1
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
@@ -158,6 +159,34 @@ DSTATUS SD_status(BYTE lun)
     return SD_CheckStatus(lun);
 }
 
+#if SD_UNALIGNED_WA
+
+#if (_MIN_SS != _MAX_SS)
+#error "Unsupported mode"
+#endif
+
+static uint8_t sd_local_buf[_MAX_SS];
+
+DRESULT SD_Uread(BYTE lun, BYTE *buff, DWORD sector, UINT count)
+{
+    DRESULT res = RES_ERROR;
+    DWORD end = sector + count;
+
+    for (; sector < end; sector++, buff += _MAX_SS) {
+        res = BSP_SD_ReadBlocks((uint32_t *)sd_local_buf,
+                                (uint32_t)sector,
+                                1,
+                                SD_TIMEOUT);
+        if (res != MSD_OK) {
+            return RES_ERROR;
+        }
+        memcpy(buff, sd_local_buf, _MAX_SS);
+    }
+    return RES_OK;
+}
+
+#endif /*SD_UNALIGNED_WA*/
+
 /**
   * @brief  Reads Sector(s)
   * @param  lun : not used
@@ -182,7 +211,18 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
     sd_rxtx_wait();
     res = RES_OK;
   }
-#else /*SD_MODE_DMA*/
+#elif SD_UNALIGNED_WA
+  int unaligned = ((uint32_t)buff) & 0x3;
+  if (unaligned) {
+     res = SD_Uread(lun, buff, sector, count);
+  } else {
+     res = BSP_SD_ReadBlocks((uint32_t *)buff,
+                          (uint32_t)sector,
+                          count,
+                          SD_TIMEOUT);
+     res = (res == MSD_OK) ? RES_OK : RES_ERROR;
+  }
+#else
   res = BSP_SD_ReadBlocks((uint32_t *)buff,
                           (uint32_t)sector,
                           count,
