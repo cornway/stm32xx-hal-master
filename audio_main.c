@@ -146,7 +146,7 @@ static void clear_buf (uint8_t idx);
 
 extern uint32_t systime;
 
-static chan_desc_t channels[AUDIO_MAX_CHANS + 1/*Music channel*/];
+static chan_desc_t channels[AUDIO_MUS_CHAN_START + 1/*Music channel*/];
 chan_desc_head_t chan_llist_ready;
 chan_desc_head_t chan_llist_susp;
 
@@ -417,6 +417,27 @@ chan_mix_all_helper (uint8_t idx)
     //BSP_LED_Off(LED1);
 }
 
+static uint32_t audio_irq_saved;
+
+void audio_irq_save (int *irq)
+{
+    if (audio_irq_saved != AUDIO_OUT_SAIx_DMAx_IRQ) {
+        HAL_NVIC_DisableIRQ(AUDIO_OUT_SAIx_DMAx_IRQ);
+        *irq = AUDIO_OUT_SAIx_DMAx_IRQ;
+    } else {
+        *irq = 0;
+    }
+    audio_irq_saved = AUDIO_OUT_SAIx_DMAx_IRQ;
+}
+
+void audio_irq_restore (int irq)
+{
+    if (irq) {
+        HAL_NVIC_EnableIRQ(irq);
+        audio_irq_saved = 0;
+    }
+}
+
 void audio_init (void)
 {
     ll_init();
@@ -428,13 +449,14 @@ void audio_init (void)
 audio_channel_t *audio_play_channel (Mix_Chunk *chunk, int channel)
 {
     audio_channel_t *ch = NULL;
+    int irq;
     if (channel >= AUDIO_MAX_CHANS &&
        channel != AUDIO_MUS_CHAN_START) {
        return NULL;
     }
-    HAL_NVIC_DisableIRQ(AUDIO_OUT_SAIx_DMAx_IRQ);
+    audio_irq_save(&irq);
     ch = chan_add_helper(chunk, channel);
-    HAL_NVIC_EnableIRQ(AUDIO_OUT_SAIx_DMAx_IRQ);
+    audio_irq_restore(irq);
     return ch;
 }
 
@@ -446,15 +468,16 @@ audio_channel_t *audio_stop_channel (int channel)
 
 void audio_pause (int channel)
 {
+    int irq;
     if (channel >= AUDIO_MAX_CHANS &&
        channel != AUDIO_MUS_CHAN_START) {
        return;
     }
-    HAL_NVIC_DisableIRQ(AUDIO_OUT_SAIx_DMAx_IRQ);
+    audio_irq_save(&irq);
     if (chan_is_play(&channels[channel])) {
         chan_remove_helper(&channels[channel]);
     }
-    HAL_NVIC_EnableIRQ(AUDIO_OUT_SAIx_DMAx_IRQ);
+    audio_irq_restore(irq);
 }
 void audio_sdown (int dev)
 {
@@ -509,7 +532,8 @@ void BSP_AUDIO_OUT_Error_CallBack(void)
 
 void audio_update (void)
 {
-    HAL_NVIC_DisableIRQ(AUDIO_OUT_SAIx_DMAx_IRQ);
+    int irq;
+    audio_irq_save(&irq);
     audio_state_control();
     if (audio_need_stop) {
         audio_clr_buf_all();
@@ -524,7 +548,7 @@ void audio_update (void)
     ll_resume();
     audio_need_update = 0;
 exit:
-    HAL_NVIC_EnableIRQ(AUDIO_OUT_SAIx_DMAx_IRQ);
+    audio_irq_restore(irq);
     music_tickle();
 }
 

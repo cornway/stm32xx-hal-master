@@ -176,7 +176,7 @@ DRESULT SD_Uread(BYTE lun, BYTE *buff, DWORD sector, UINT count)
         res = BSP_SD_ReadBlocks((uint32_t *)sd_local_buf,
                                 (uint32_t)sector,
                                 1,
-                                SD_TIMEOUT);
+                                100);
         if (res != MSD_OK) {
             return RES_ERROR;
         }

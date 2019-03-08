@@ -3,6 +3,9 @@
 #include <stdio.h>
 
 #define USE_QSPI 0
+#define MUSIC_MODULE_PRESENT 1
+
+#if MUSIC_MODULE_PRESENT
 
 extern int32_t systime;
 
@@ -28,7 +31,7 @@ static const char mus_dir_path[] =
 /*NOTE 2 : cache size of 'AUDIO_OUT_BUFFER_SIZE * 5' seems to be ok,
   but such size will cause less fps.
 */
-#define MUS_RAM_BUF_SIZE AUDIO_OUT_BUFFER_SIZE * 5
+#define MUS_RAM_BUF_SIZE AUDIO_OUT_BUFFER_SIZE * 1
 
 static snd_sample_t mus_ram_buf[2][MUS_RAM_BUF_SIZE];
 
@@ -455,4 +458,22 @@ int music_init (void)
     return 0;
 }
 
+#else
 
+int music_init (void)
+{
+    return 0;
+}
+
+
+int music_playing (void)
+{
+    return 0;
+}
+
+void music_tickle (void)
+{
+
+}
+
+#endif

@@ -10,10 +10,10 @@
 #define AUDIO_SIZE_TO_MS(rate, size) (((long long)(size) * 1000) / (rate))
 #define AUDIO_MS_TO_SIZE(rate, ms) (((((rate) << 2) / 1000) * (ms)) >> 2)
 
-#define AUDIO_SAMPLE_RATE I2S_AUDIOFREQ_22K
-#define AUDIO_MAX_CHANS 12
-#define AUDIO_MUS_CHAN_START AUDIO_MAX_CHANS
-#define AUDIO_OUT_BUFFER_SIZE 0x400
+#define AUDIO_SAMPLE_RATE I2S_AUDIOFREQ_11K
+#define AUDIO_MAX_CHANS 16
+#define AUDIO_MUS_CHAN_START AUDIO_MAX_CHANS + 1
+#define AUDIO_OUT_BUFFER_SIZE 0x800
 #define AUDIO_BUFFER_MS AUDIO_SIZE_TO_MS(AUDIO_SAMPLE_RATE, AUDIO_OUT_BUFFER_SIZE)
 
 #define REVERB_DELAY 5/*Ms*/
@@ -59,6 +59,9 @@ typedef struct {
     int (*complete) (int);
 } audio_channel_t;
 
+void audio_irq_save (int *irq);
+void audio_irq_restore (int irq);
+
 void audio_init (void);
 
 audio_channel_t *audio_play_channel (Mix_Chunk *chunk, int channel);
@@ -67,6 +70,8 @@ void audio_pause (int channel);
 void audio_sdown (int dev);
 int audio_is_playing (int handle);
 void audio_set_pan (int handle, int l, int r);
+
+void audio_update (void);
 
 
 int music_play_song_num (int num, int repeat);

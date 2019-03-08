@@ -86,6 +86,7 @@ void screen_init (void)
 
     BSP_LCD_SetLayerVisible(LCD_FOREGROUND, ENABLE);
     BSP_LCD_SetLayerVisible(LCD_BACKGROUND, ENABLE);
+    BSP_LCD_SetBrightness(100);
 }
 
 void screen_win_cfg (screen_t *screen)
