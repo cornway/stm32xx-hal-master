@@ -1,4 +1,3 @@
-#include "main.h"
 #include "usbh_def.h"
 #include "usbh_conf.h"
 #include "usbh_core.h"

@@ -1,8 +1,8 @@
 #ifndef _LCD_MAIN_H
 #define _LCD_MAIN_H
 
-#include "main.h"
 #include "gfx.h"
+#include "stm32f769i_discovery_lcd.h"
 
 /*---------------------------------------------------------------------*
  *  additional includes                                                *

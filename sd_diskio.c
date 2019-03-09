@@ -54,15 +54,10 @@
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
 /* use the default SD timout as defined in the platform BSP driver*/
-#if defined(SDMMC_DATATIMEOUT)
-#define SD_TIMEOUT SDMMC_DATATIMEOUT
-#elif defined(SD_DATATIMEOUT)
-#define SD_TIMEOUT SD_DATATIMEOUT
-#else
-#define SD_TIMEOUT 30 * 1000
-#endif
+#define SD_TIMEOUT 3 * 1000
 
 #define SD_DEFAULT_BLOCK_SIZE 512
+#define SD_BLOCK_SECTOR_CNT (_MIN_SS / SD_DEFAULT_BLOCK_SIZE)
 
 /*
  * Depending on the usecase, the SD card initialization could be done at the
@@ -77,18 +72,11 @@
 static volatile DSTATUS Stat = STA_NOINIT;
 
 #if SD_MODE_DMA
-int8_t sd_txrx_complete = 1;
-
-int is_sd_txrx_operation ()
-{
-    return sd_txrx_complete ? 0 : 1;
-}
-
-static void sd_rxtx_wait ()
-{
-    while (!sd_txrx_complete) {}
-}
+static volatile  UINT  WriteStatus = 0, ReadStatus = 0;
 #endif /*SD_MODE_DMA*/
+
+extern void hdd_led_on (void);
+extern void hdd_led_off (void);
 
 /* Private function prototypes -----------------------------------------------*/
 static DSTATUS SD_CheckStatus(BYTE lun);
@@ -172,20 +160,84 @@ DRESULT SD_Uread(BYTE lun, BYTE *buff, DWORD sector, UINT count)
     DRESULT res = RES_ERROR;
     DWORD end = sector + count;
 
-    for (; sector < end; sector++, buff += _MAX_SS) {
+    for (; sector < end;) {
         res = BSP_SD_ReadBlocks((uint32_t *)sd_local_buf,
                                 (uint32_t)sector,
-                                1,
+                                SD_BLOCK_SECTOR_CNT,
                                 100);
         if (res != MSD_OK) {
             return RES_ERROR;
         }
-        memcpy(buff, sd_local_buf, _MAX_SS);
+        memcpy(buff, sd_local_buf, _MIN_SS);
+        sector += SD_BLOCK_SECTOR_CNT;
+        buff += _MIN_SS;
     }
     return RES_OK;
 }
 
 #endif /*SD_UNALIGNED_WA*/
+
+#if SD_MODE_DMA
+
+/**
+  * @brief  Reads Sector(s)
+  * @param  lun : not used
+  * @param  *buff: Data buffer to store read data
+  * @param  sector: Sector address (LBA)
+  * @param  count: Number of sectors to read (1..128)
+  * @retval DRESULT: Operation result
+  */
+DRESULT _SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
+{
+  DRESULT res = RES_ERROR;
+  ReadStatus = 0;
+  uint32_t timeout;
+#if (ENABLE_SD_DMA_CACHE_MAINTENANCE == 1)
+  uint32_t alignedAddr;
+#endif
+
+  if(BSP_SD_ReadBlocks_DMA((uint32_t*)buff,
+                           (uint32_t) (sector),
+                           count) == MSD_OK)
+  {
+    /* Wait that the reading process is completed or a timeout occurs */
+    timeout = HAL_GetTick();
+    while((ReadStatus == 0) && ((HAL_GetTick() - timeout) < SD_TIMEOUT))
+    {
+    }
+    /* incase of a timeout return error */
+    if (ReadStatus == 0)
+    {
+      res = RES_ERROR;
+    }
+    else
+    {
+      ReadStatus = 0;
+      timeout = HAL_GetTick();
+
+      while((HAL_GetTick() - timeout) < SD_TIMEOUT)
+      {
+        if (BSP_SD_GetCardState() == SD_TRANSFER_OK)
+        {
+          res = RES_OK;
+#if (ENABLE_SD_DMA_CACHE_MAINTENANCE == 1)
+            /*
+               the SCB_InvalidateDCache_by_Addr() requires a 32-Byte aligned address,
+               adjust the address and the D-Cache size to invalidate accordingly.
+             */
+            alignedAddr = (uint32_t)buff & ~0x1F;
+            SCB_InvalidateDCache_by_Addr((uint32_t*)alignedAddr, count*BLOCKSIZE + ((uint32_t)buff - alignedAddr));
+#endif
+           break;
+        }
+      }
+    }
+  }
+  return res;
+}
+
+
+#else
 
 /**
   * @brief  Reads Sector(s)
@@ -196,23 +248,12 @@ DRESULT SD_Uread(BYTE lun, BYTE *buff, DWORD sector, UINT count)
   * @retval DRESULT: Operation result
   */
 
-DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
+DRESULT _SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 {
   DRESULT res = RES_ERROR;
-
-  BSP_LED_On(LED2);
-#if SD_MODE_DMA
-  sd_rxtx_wait();
-  sd_txrx_complete = 0;
-  if(BSP_SD_ReadBlocks_DMA((uint32_t*)buff,
-                            (uint32_t)sector,
-                            count) == MSD_OK)
-  {
-    sd_rxtx_wait();
-    res = RES_OK;
-  }
-#elif SD_UNALIGNED_WA
+#if SD_UNALIGNED_WA
   int unaligned = ((uint32_t)buff) & 0x3;
+
   if (unaligned) {
      res = SD_Uread(lun, buff, sector, count);
   } else {
@@ -228,9 +269,19 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
                           count,
                           SD_TIMEOUT);
   res = (res == MSD_OK) ? RES_OK : RES_ERROR;
-#endif /*SD_MODE_DMA*/
-  BSP_LED_Off(LED2);
+#endif /*SD_UNALIGNED_WA*/
   return res;
+}
+#endif /*SD_MODE_DMA*/
+
+
+DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
+{
+    DRESULT res;
+    hdd_led_on();
+    res = _SD_read(lun, buff, sector, count * SD_BLOCK_SECTOR_CNT);
+    hdd_led_off();
+    return res;
 }
 
 /**
@@ -242,33 +293,92 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
   * @retval DRESULT: Operation result
   */
 #if _USE_WRITE == 1
-DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
+#if SD_MODE_DMA
+
+/**
+  * @brief  Writes Sector(s)
+  * @param  lun : not used
+  * @param  *buff: Data to be written
+  * @param  sector: Sector address (LBA)
+  * @param  count: Number of sectors to write (1..128)
+  * @retval DRESULT: Operation result
+  */
+DRESULT _SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
+{
+  DRESULT res = RES_ERROR;
+  WriteStatus = 0;
+  uint32_t timeout;
+
+#if (ENABLE_SD_DMA_CACHE_MAINTENANCE == 1)
+  uint32_t alignedAddr;
+  /*
+   the SCB_CleanDCache_by_Addr() requires a 32-Byte aligned address
+   adjust the address and the D-Cache size to clean accordingly.
+   */
+  alignedAddr = (uint32_t)buff &  ~0x1F;
+  SCB_CleanDCache_by_Addr((uint32_t*)alignedAddr, count*BLOCKSIZE + ((uint32_t)buff - alignedAddr));
+#endif
+
+
+  if(BSP_SD_WriteBlocks_DMA((uint32_t*)buff,
+                            (uint32_t)(sector),
+                            count) == MSD_OK)
+  {
+    /* Wait that writing process is completed or a timeout occurs */
+
+    timeout = HAL_GetTick();
+    while((WriteStatus == 0) && ((HAL_GetTick() - timeout) < SD_TIMEOUT))
+    {
+    }
+    /* incase of a timeout return error */
+    if (WriteStatus == 0)
+    {
+      res = RES_ERROR;
+    }
+    else
+    {
+      WriteStatus = 0;
+      timeout = HAL_GetTick();
+
+      while((HAL_GetTick() - timeout) < SD_TIMEOUT)
+      {
+        if (BSP_SD_GetCardState() == SD_TRANSFER_OK)
+        {
+          res = RES_OK;
+          break;
+        }
+      }
+    }
+  }
+  return res;
+}
+
+#else
+
+DRESULT _SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 {
   DRESULT res = RES_ERROR;
 
-  BSP_LED_On(LED2);
-
-#if SD_MODE_DMA
-  sd_rxtx_wait();
-  sd_txrx_complete = 0;
-  if(BSP_SD_WriteBlocks_DMA((uint32_t*)buff,
-                            (uint32_t)sector,
-                            count) == MSD_OK)
-  {
-    sd_rxtx_wait();
-    res = RES_OK;
-  }
-#else /*SD_MODE_DMA*/
   res = BSP_SD_WriteBlocks((uint32_t*)buff,
                            (uint32_t)sector,
                            count,
                            SD_TIMEOUT);
 
   res = (res == MSD_OK) ? RES_OK : RES_ERROR;
-#endif /*SD_MODE_DMA*/
-  BSP_LED_Off(LED2);
   return res;
 }
+
+#endif /*SD_MODE_DMA*/
+
+DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
+{
+    DRESULT res;
+    hdd_led_on();
+    res = _SD_write(lun, buff, sector, count);
+    hdd_led_off();
+    return res;
+}
+
 #endif /* _USE_WRITE == 1 */
 
 /**
@@ -329,28 +439,42 @@ void BSP_SD_AbortCallback(void)
 {
 
 }
-
-/**
-  * @brief BSP Tx Transfer completed callbacks
-  * @retval None
+/*
+   ===============================================================================
+    Select the correct function signature depending on your platform.
+    please refer to the file "stm32xxxx_eval_sd.h" to verify the correct function
+    prototype
+   ===============================================================================
   */
+//void BSP_SD_WriteCpltCallback(uint32_t SdCard)
 void BSP_SD_WriteCpltCallback(void)
 {
 #if SD_MODE_DMA
-    sd_txrx_complete = 1;
+  WriteStatus = 1;
 #endif
 }
 
 /**
-  * @brief BSP Rx Transfer completed callbacks
+  * @brief Rx Transfer completed callbacks
+  * @param hsd: SD handle
   * @retval None
   */
+
+  /*
+   ===============================================================================
+    Select the correct function signature depending on your platform.
+    please refer to the file "stm32xxxx_eval_sd.h" to verify the correct function
+    prototype
+   ===============================================================================
+  */
+//void BSP_SD_ReadCpltCallback(uint32_t SdCard)
 void BSP_SD_ReadCpltCallback(void)
 {
 #if SD_MODE_DMA
-    sd_txrx_complete = 2;
+  ReadStatus = 1;
 #endif
 }
+
 
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

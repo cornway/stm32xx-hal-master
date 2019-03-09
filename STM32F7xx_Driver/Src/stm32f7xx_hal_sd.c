@@ -368,6 +368,8 @@ HAL_StatusTypeDef HAL_SD_InitCard(SD_HandleTypeDef *hsd)
   
   /* Set Power State to ON */
   SDMMC_PowerState_ON(hsd->Instance);
+
+  HAL_Delay(2);
   
   /* Enable SDMMC Clock */
   __HAL_SD_ENABLE(hsd);

@@ -1,7 +1,7 @@
 #ifndef _AUDIO_MAIN_H
 #define _AUDIO_MAIN_H
 
-#include "main.h"
+#include "stdint.h"
 
 #define USE_STEREO 0
 #define USE_REVERB 0
@@ -10,7 +10,7 @@
 #define AUDIO_SIZE_TO_MS(rate, size) (((long long)(size) * 1000) / (rate))
 #define AUDIO_MS_TO_SIZE(rate, ms) (((((rate) << 2) / 1000) * (ms)) >> 2)
 
-#define AUDIO_SAMPLE_RATE I2S_AUDIOFREQ_11K
+#define AUDIO_SAMPLE_RATE 11025U
 #define AUDIO_MAX_CHANS 16
 #define AUDIO_MUS_CHAN_START AUDIO_MAX_CHANS + 1
 #define AUDIO_OUT_BUFFER_SIZE 0x800

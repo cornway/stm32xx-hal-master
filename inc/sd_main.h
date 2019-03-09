@@ -1,7 +1,6 @@
 #ifndef SD_MAIN_H
 #define SD_MAIN_H
 
-#include "main.h"
 #include "ff.h"
 
 

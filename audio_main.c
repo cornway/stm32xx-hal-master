@@ -2,6 +2,26 @@
 #include "stm32f769i_discovery_audio.h"
 #include "wm8994.h"
 
+#define AUDIO_MODULE_PRESENT 0
+
+#ifndef A_COMPILE_TIME_ASSERT
+#define A_COMPILE_TIME_ASSERT(name, x)               \
+       typedef int A_dummy_ ## name[(x) * 2 - 1]
+#endif
+
+#if AUDIO_MODULE_PRESENT
+
+A_COMPILE_TIME_ASSERT(samplerate,
+    (AUDIO_SAMPLE_RATE == I2S_AUDIOFREQ_8K) ||
+    (AUDIO_SAMPLE_RATE == I2S_AUDIOFREQ_11K) ||
+    (AUDIO_SAMPLE_RATE == I2S_AUDIOFREQ_16K) ||
+    (AUDIO_SAMPLE_RATE == I2S_AUDIOFREQ_22K) ||
+    (AUDIO_SAMPLE_RATE == I2S_AUDIOFREQ_44K) ||
+    (AUDIO_SAMPLE_RATE == I2S_AUDIOFREQ_48K) ||
+    (AUDIO_SAMPLE_RATE == I2S_AUDIOFREQ_96K) ||
+    (AUDIO_SAMPLE_RATE == I2S_AUDIOFREQ_192K));
+
+
 #define COMPRESSION 1
 #define USE_FLOAT 1
 #ifdef USE_REVERB
@@ -999,4 +1019,57 @@ cache_ext_sound (int num, uint8_t *dest, int size)
     return size;
 }
 
+#else /*AUDIO_MODULE_PRESENT*/
 
+void audio_irq_save (int *irq)
+{
+    *irq = 0;
+}
+
+void audio_irq_restore (int irq)
+{
+
+}
+
+void audio_init (void)
+{
+
+}
+
+audio_channel_t *audio_play_channel (Mix_Chunk *chunk, int channel)
+{
+    return NULL;
+}
+
+audio_channel_t *audio_stop_channel (int channel)
+{
+    return NULL;
+}
+
+void audio_pause (int channel)
+{
+
+}
+
+void audio_sdown (int dev)
+{
+
+}
+
+int audio_is_playing (int handle)
+{
+    return 0;
+}
+
+void audio_set_pan (int handle, int l, int r)
+{
+
+}
+
+void audio_update (void)
+{
+
+}
+
+
+#endif

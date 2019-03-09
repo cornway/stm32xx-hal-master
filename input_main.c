@@ -1,5 +1,4 @@
 #include "input_main.h"
-#include "main.h"
 #include "stm32f769i_discovery_ts.h"
 #include <stdlib.h>
 
