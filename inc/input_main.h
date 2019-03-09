@@ -34,12 +34,36 @@ struct usb_gamepad_to_kbd_map {
             hi_trig: 4;
 };
 
+typedef struct {
+    uint8_t type;
+} i_event_t;
+
+enum {
+    K_UP = 0,
+    K_DOWN = 1,
+    K_LEFT = 2,
+    K_RIGHT = 3,
+
+    K_K1 = 4,
+    K_K2 = 5,
+    K_K3 = 6,
+    K_K4 = 7,
+    K_BL = 8,
+    K_BR = 9,
+    K_TL = 10,
+    K_TR = 11,
+    K_START = 12,
+    K_SELECT = 13,
+    K_MAX = 14,
+};
+
+
 void I_GetEvent (void);
 
 int gamepad_read (int8_t *pads);
 
-const struct usb_gamepad_to_kbd_map *
-get_gamepad_to_kbd_map (uint8_t *keys_cnt);
+void gamepad_process (void);
+
 
 
 #endif /*_INPUT_MAIN_H*/

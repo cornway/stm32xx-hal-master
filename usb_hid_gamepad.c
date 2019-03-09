@@ -40,50 +40,9 @@ static uint8_t needs_handle_cnt;
 #define M_START  1
 #define M_SELECT 2
 
-enum {
-    K_UP = 0,
-    K_DOWN = 1,
-    K_LEFT = 2,
-    K_RIGHT = 3,
-
-    K_K1 = 4,
-    K_K2 = 5,
-    K_K3 = 6,
-    K_K4 = 7,
-    K_BL = 8,
-    K_BR = 9,
-    K_TL = 10,
-    K_TR = 11,
-    K_START = 12,
-    K_SELECT = 13,
-    K_MAX = 14,
-};
-
 static int8_t keypads[K_MAX];
 
-#if 0
-
-static const struct usb_gamepad_to_kbd_map gamepad_to_kbd_map[] =
-{
-    [K_UP]      = {KEY_UPARROW,       PAD_LOOK_CONTROL | PAD_LOOK_UP, 0, 0, 0},
-    [K_DOWN]    = {KEY_DOWNARROW,     PAD_LOOK_CONTROL | PAD_LOOK_DOWN, 0, 0, 0},
-    [K_LEFT]    = {KEY_LEFTARROW,     PAD_LOOK_CONTROL | PAD_LOOK_CENTRE, 0, 0, 0},
-    [K_RIGHT]   = {KEY_RIGHTARROW,    PAD_LOOK_CONTROL | PAD_LOOK_CENTRE, 0, 0, 0},
-    [K_K1]      = {KEY_TAB,           PAD_FREQ_LOW, 0, 0, 0},
-    [K_K4]      = {KEY_USE,           0, 0, 0, 0},
-    [K_K3]      = {KEY_FIRE,          0, 0, 0, 0},
-    [K_K2]      = {KEY_RSHIFT,        PAD_FREQ_LOW | PAD_FUNCTION, 0, 0, 0},
-    [K_BL]      = {KEY_STRAFE_L,      0, 0, 0, 0},
-#if GAMEPAD_USE_FLYLOOK
-    [K_BR]      = {KEY_WEAPON_ROL,    PAD_SET_FLYLOOK, 0, 0, 0},
-#else
-    [K_BR]      = {KEY_WEAPON_ROL,    PAD_FREQ_LOW, 0, 0, 0},
-#endif
-    [K_TL]      = {KEY_STRAFE_R,      0, 0, 0, 0},
-    [K_TR]      = {KEY_WEAPON_ROR,    PAD_FREQ_LOW, 0, 0, 0},
-    [K_START]   = {KEY_ENTER,         0, 0, 0, 0},
-    [K_SELECT]  = {KEY_ESCAPE,        PAD_FREQ_LOW, 0, 0, 0},
-};
+extern const struct usb_gamepad_to_kbd_map gamepad_to_kbd_map[K_MAX];
 
 const struct usb_gamepad_to_kbd_map *
 get_gamepad_to_kbd_map (uint8_t *keys_cnt)
@@ -160,9 +119,6 @@ int gamepad_read (int8_t *pads)
 
     return needs_handle_cnt;
 }
-
-
-#endif
 
 static void USBH_UserProcess(USBH_HandleTypeDef * phost, uint8_t id);
 USBH_StatusTypeDef USBH_HID_GamepadInit(USBH_HandleTypeDef *phost);
