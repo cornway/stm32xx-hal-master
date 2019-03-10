@@ -1,9 +1,9 @@
 #include "audio_main.h"
+#include "audio_int.h"
 #include "ff.h"
 #include <stdio.h>
 
 #define USE_QSPI 0
-#define MUSIC_MODULE_PRESENT 1
 
 #if MUSIC_MODULE_PRESENT
 

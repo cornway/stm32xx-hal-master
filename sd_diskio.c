@@ -278,8 +278,11 @@ DRESULT _SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 {
     DRESULT res;
+    int irq;
     hdd_led_on();
+    audio_irq_save(&irq);
     res = _SD_read(lun, buff, sector, count * SD_BLOCK_SECTOR_CNT);
+    audio_irq_restore(irq);
     hdd_led_off();
     return res;
 }
@@ -373,8 +376,11 @@ DRESULT _SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 {
     DRESULT res;
+    int irq;
     hdd_led_on();
+    audio_irq_save(&irq);
     res = _SD_write(lun, buff, sector, count);
+    audio_irq_restore(irq);
     hdd_led_off();
     return res;
 }

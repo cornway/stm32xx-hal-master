@@ -3,9 +3,6 @@
 
 #include "stdint.h"
 
-#define USE_STEREO 0
-#define USE_REVERB 0
-
 
 #define AUDIO_SIZE_TO_MS(rate, size) (((long long)(size) * 1000) / (rate))
 #define AUDIO_MS_TO_SIZE(rate, ms) (((((rate) << 2) / 1000) * (ms)) >> 2)
@@ -49,6 +46,7 @@ typedef struct Mix_Chunk {
     snd_sample_t *abuf;
     int32_t alen;
     uint8_t volume;     /* Per-sample volume, 0-128 */
+    void **cache;
 } Mix_Chunk;
 
 
@@ -67,7 +65,6 @@ void audio_init (void);
 audio_channel_t *audio_play_channel (Mix_Chunk *chunk, int channel);
 audio_channel_t *audio_stop_channel (int channel);
 void audio_pause (int channel);
-void audio_sdown (int dev);
 int audio_is_playing (int handle);
 void audio_set_pan (int handle, int l, int r);
 
