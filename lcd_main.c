@@ -39,9 +39,15 @@
 
 extern LTDC_HandleTypeDef  hltdc_discovery;
 
-extern volatile pix_t *screen_fb_mem_start;
-uint32_t screen_fb_current;
-lcd_layers_t screen_layer_current = LCD_BACKGROUND;
+extern void *Sys_HeapAllocFb (int *size);
+
+static int bsp_lcd_width;
+static int bsp_lcd_height;
+static int bsp_lcd_fbsize;
+static int bsp_lcd_laysize;
+
+static uint32_t layer_addr [LCD_MAX_LAYER];
+static lcd_layers_t screen_layer_current = LCD_BACKGROUND;
 
 static const lcd_layers_t layer_switch[] =
 {
@@ -62,8 +68,6 @@ static const uint32_t screen_mode2fmt_map[] =
     [GFX_COLOR_MODE_RGBA8888] = LTDC_PIXEL_FORMAT_ARGB8888,
 };
 
-static uint32_t layer_addr [LCD_MAX_LAYER];
-
 void screen_load_clut (void *_buf, int size, int layer)
 {
     HAL_LTDC_ConfigCLUT(&hltdc_discovery, (uint32_t *)_buf, size, layer);
@@ -72,17 +76,21 @@ void screen_load_clut (void *_buf, int size, int layer)
 
 void screen_init (void)
 {
+    uint32_t bsp_lcd_fb;
     if(BSP_LCD_Init())
     {
-        while (1) {}
+        fatal_error("");
     }
 
-    screen_res_x = BSP_LCD_GetXSize();
-    screen_res_y = BSP_LCD_GetYSize();
+    bsp_lcd_width = BSP_LCD_GetXSize();
+    bsp_lcd_height = BSP_LCD_GetYSize();
+    bsp_lcd_laysize = (bsp_lcd_width * bsp_lcd_height) * sizeof(pix_t);
+    bsp_lcd_fbsize = bsp_lcd_laysize * LTDC_NB_OF_LAYERS;
 
-    screen_fb_current = (uint32_t)screen_fb_mem_start;
-    layer_addr[LCD_BACKGROUND] = (uint32_t)screen_fb_mem_start + LCD_FRAME_SIZE;
-    layer_addr[LCD_FOREGROUND] = (uint32_t)screen_fb_mem_start;
+    bsp_lcd_fb = (uint32_t)Sys_HeapAllocFb(&bsp_lcd_fbsize);
+
+    layer_addr[LCD_BACKGROUND] = bsp_lcd_fb + bsp_lcd_laysize;
+    layer_addr[LCD_FOREGROUND] = bsp_lcd_fb;
 
     BSP_LCD_SetLayerVisible(LCD_FOREGROUND, ENABLE);
     BSP_LCD_SetLayerVisible(LCD_BACKGROUND, ENABLE);
@@ -92,12 +100,12 @@ void screen_init (void)
 void screen_win_cfg (screen_t *screen)
 {
     int layer;
-    uint32_t scale_w = (GFX_MAX_WIDTH / screen->width);
-    uint32_t scale_h = (GFX_MAX_HEIGHT / screen->height);
+    uint32_t scale_w = (bsp_lcd_width / screen->width);
+    uint32_t scale_h = (bsp_lcd_height / screen->height);
     uint32_t w = screen->width * scale_w;
     uint32_t h = screen->height * scale_h;
-    uint32_t x = (GFX_MAX_WIDTH - w) / scale_w;
-    uint32_t y = (GFX_MAX_HEIGHT - h) / scale_h;
+    uint32_t x = (bsp_lcd_width - w) / scale_w;
+    uint32_t y = (bsp_lcd_height - h) / scale_h;
 
     LCD_LayerCfgTypeDef  Layercfg;
 
@@ -120,7 +128,7 @@ void screen_win_cfg (screen_t *screen)
     for (layer = 0; layer < (int)LCD_MAX_LAYER; layer++) {
         Layercfg.FBStartAdress = layer_addr[layer];
         HAL_LTDC_ConfigLayer(&hltdc_discovery, &Layercfg, layer);
-        memset((void *)layer_addr[layer], 0, LCD_FRAME_SIZE);
+        memset((void *)layer_addr[layer], 0, bsp_lcd_laysize);
     }
 }
 
@@ -134,7 +142,6 @@ void screen_win_cfg (screen_t *screen)
  */
 static inline void lcd_set_layer (lcd_layers_t layer)
 {
-    screen_fb_current = layer_addr[layer];
     BSP_LCD_SetTransparency(LCD_FOREGROUND, layer_transparency[layer]);
 }
 
@@ -155,8 +162,8 @@ void screen_sync (int wait)
 
 void screen_get_invis_screen (screen_t *screen)
 {
-    screen->width = GFX_MAX_WIDTH;
-    screen->height = GFX_MAX_HEIGHT;
+    screen->width = bsp_lcd_width;
+    screen->height = bsp_lcd_height;
     screen->buf = (pix_t *)layer_addr[layer_switch[screen_layer_current]];
 }
 

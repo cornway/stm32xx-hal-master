@@ -72,9 +72,12 @@
 #define   USBH_PROCESS_PRIO    osPriorityNormal
 #endif
 
+extern void *Sys_HeapMAlloc (int size);
+extern void Sys_HeapFree (void *p);
+
 /* Memory management macros */
-#define USBH_malloc               malloc
-#define USBH_free                 free
+#define USBH_malloc               Sys_HeapMAlloc
+#define USBH_free                 Sys_HeapFree
 #define USBH_memset               memset
 #define USBH_memcpy               memcpy
 
