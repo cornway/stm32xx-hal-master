@@ -41,12 +41,12 @@ extern LTDC_HandleTypeDef  hltdc_discovery;
 
 extern void *Sys_HeapAllocFb (int *size);
 
-static int bsp_lcd_width;
-static int bsp_lcd_height;
-static int bsp_lcd_fbsize;
-static int bsp_lcd_laysize;
+static int bsp_lcd_width = -1;
+static int bsp_lcd_height = -1;
+static int bsp_lcd_fbsize = -1;
+static int bsp_lcd_laysize = -1;
 
-static uint32_t layer_addr [LCD_MAX_LAYER];
+static uint32_t layer_addr [LCD_MAX_LAYER] = {0, 0};
 static lcd_layers_t screen_layer_current = LCD_BACKGROUND;
 
 static const lcd_layers_t layer_switch[] =
@@ -74,9 +74,27 @@ void screen_load_clut (void *_buf, int size, int layer)
     HAL_LTDC_EnableCLUT(&hltdc_discovery, layer);
 }
 
-void screen_init (void)
+static void
+_alloc_fb_ondemand (int w, int h)
 {
     uint32_t bsp_lcd_fb;
+
+    if (bsp_lcd_laysize > 0) {
+        return;
+    }
+
+    bsp_lcd_laysize = (w * h) * sizeof(pix_t);
+    bsp_lcd_fbsize = bsp_lcd_laysize * LTDC_NB_OF_LAYERS;
+
+    bsp_lcd_fb = (uint32_t)Sys_AllocVideo(&bsp_lcd_fbsize);
+
+    layer_addr[LCD_BACKGROUND] = bsp_lcd_fb + bsp_lcd_laysize;
+    layer_addr[LCD_FOREGROUND] = bsp_lcd_fb;
+
+}
+
+void screen_init (void)
+{
     if(BSP_LCD_Init())
     {
         fatal_error("");
@@ -84,13 +102,6 @@ void screen_init (void)
 
     bsp_lcd_width = BSP_LCD_GetXSize();
     bsp_lcd_height = BSP_LCD_GetYSize();
-    bsp_lcd_laysize = (bsp_lcd_width * bsp_lcd_height) * sizeof(pix_t);
-    bsp_lcd_fbsize = bsp_lcd_laysize * LTDC_NB_OF_LAYERS;
-
-    bsp_lcd_fb = (uint32_t)Sys_HeapAllocFb(&bsp_lcd_fbsize);
-
-    layer_addr[LCD_BACKGROUND] = bsp_lcd_fb + bsp_lcd_laysize;
-    layer_addr[LCD_FOREGROUND] = bsp_lcd_fb;
 
     BSP_LCD_SetLayerVisible(LCD_FOREGROUND, ENABLE);
     BSP_LCD_SetLayerVisible(LCD_BACKGROUND, ENABLE);
@@ -108,6 +119,8 @@ void screen_win_cfg (screen_t *screen)
     uint32_t y = (bsp_lcd_height - h) / scale_h;
 
     LCD_LayerCfgTypeDef  Layercfg;
+
+    _alloc_fb_ondemand(w, h);
 
     /* Layer Init */
     Layercfg.WindowX0 = x;

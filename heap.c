@@ -85,7 +85,7 @@ heap_free (void *_p)
 
 }
 
-void Sys_HeapInit (void)
+void Sys_AllocInit (void)
 {
     __heap_buf_cache_size    = (HEAP_CACHE_SIZE);
     __heap_buf_cache          = malloc(__heap_buf_cache_size);
@@ -93,64 +93,64 @@ void Sys_HeapInit (void)
     heap_size_total = heap_size_total - HEAP_CACHE_SIZE;
 }
 
-void *Sys_HeapHunkAlloc (int *size)
+void *Sys_AllocShared (int *size)
 {
     heap_check_margin(*size);
-    return heap_malloc(*size, 0);
+    return heap_malloc(*size, 1);
 }
 
-void *Sys_HeapAllocFb (int *size)
+void *Sys_AllocVideo (int *size)
 {
-    return Sys_HeapHunkAlloc(size);
+    return Sys_AllocShared(size);
 }
 
-int Sys_HeapMaxSize (void)
+int Sys_AllocBytesLeft (void)
 {
     return (heap_size_total - HEAP_MALLOC_MARGIN - sizeof(mchunk_t));
 }
 
-void *Sys_HeapMAlloc (int size)
+void *Sys_Malloc (int size)
 {
     return heap_malloc(size, 1);
 }
 
-void Sys_HeapFree (void *p)
+void Sys_Free (void *p)
 {
     heap_free(p);
 }
 
 #else /*DATA_IN_ExtSDRAM*/
 
-void Sys_HeapInit (void)
+void Sys_AllocInit (void)
 {
     __heap_buf_cache          = (void *)(HEAP_CACHE_OFFSET);
     __heap_buf_cache_top      = (void *)(HEAP_CACHE_OFFSET + HEAP_CACHE_SIZE);
     __heap_buf_cache_size    = (HEAP_CACHE_SIZE);
 }
 
-void *Sys_HeapHunkAlloc (int *size)
+void *Sys_AllocShared (int *size)
 {
     *size = HEAP_BUF_SIZE;
     return (void *)HEAP_BUF_OFFSET;
 }
 
-void *Sys_HeapAllocFb (int *size)
+void *Sys_AllocVideo (int *size)
 {
     *size = BSP_LCD_FB_MEM_SIZE_MAX;
     return (void *)SDRAM_VOL_START;
 }
 
-int Sys_HeapMaxSize (void)
+int Sys_AllocBytesLeft (void)
 {
     return HEAP_BUF_SIZE;
 }
 
-void *Sys_HeapMAlloc (int size)
+void *Sys_Malloc (int size)
 {
     return malloc(*size);
 }
 
-void Sys_HeapFree (void *p)
+void Sys_Free (void *p)
 {
     free(p);
 }
