@@ -74,7 +74,7 @@ audio_channel_t *audio_stop_channel (int channel);
 void audio_pause (int channel);
 int audio_is_playing (int handle);
 void audio_set_pan (int handle, int l, int r);
-
+void audio_change_sample_volume (audio_channel_t *achannel, uint8_t volume);
 void audio_update (void);
 
 

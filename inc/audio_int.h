@@ -9,6 +9,15 @@ typedef enum {false, true} bool;
 #define arrlen(a) sizeof(a) / sizeof(a[0])
 #endif
 
+#ifndef offsetof
+#define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
+#endif
+
+#ifndef container_of
+#define container_of(ptr, type, member)     \
+    (type *)((uint8_t *)(ptr) - offsetof(type,member))
+#endif
+
 #ifndef A_COMPILE_TIME_ASSERT
 #define A_COMPILE_TIME_ASSERT(name, x)               \
        typedef int A_dummy_ ## name[(x) * 2 - 1]
@@ -56,6 +65,7 @@ struct a_channel_s {
     audio_channel_t inst;
     int loopsize;
     snd_sample_t *bufposition;
+    uint8_t volume;
 #if USE_STEREO
     uint8_t left, right;
 #endif
@@ -136,9 +146,6 @@ a_get_master4idx (a_buf_t *master, int idx);
 
 void
 a_grab_mixdata (a_channel_t *channel, a_buf_t *track, mixdata_t *mixdata);
-
-void
-a_mix_single_to_master (snd_sample_t *dest, mixdata_t *mixdata, int compratio);
 
 void a_clear_abuf (a_buf_t *abuf);
 void a_clear_master (void);

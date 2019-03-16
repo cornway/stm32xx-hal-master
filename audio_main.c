@@ -100,6 +100,7 @@ a_channel_insert (Mix_Chunk *chunk, int channel)
 
     desc->loopsize =     chan_len(desc);
     desc->bufposition =  chan_buf(desc);
+    desc->volume =       chan_vol(desc);
     
     return &desc->inst;
 }
@@ -115,8 +116,8 @@ a_paint_buff_helper (a_buf_t *abuf)
 {
     int compratio = chan_llist_ready.size + 2;
 
-    a_clear_abuf(abuf);
     if (a_chanlist_try_reject_all(&chan_llist_ready) == 0) {
+        a_clear_abuf(abuf);
         return;
     }
     a_paint_buffer(&chan_llist_ready, abuf, compratio);
@@ -140,7 +141,7 @@ DMA_on_tx_complete (isr_status_e status)
     if (chan_llist_ready.size > 0) {
         if (isr_pending[status] > 100) {
             error_handle();
-        } else if (isr_pending[status] > 5) {
+        } else if (isr_pending[status] > 1) {
             a_clear_master();
         }
     }
@@ -274,13 +275,19 @@ void audio_set_pan (int handle, int l, int r)
         chan_vol(&channels[handle]) = ((l + r)) & MAX_VOL;
         channels[handle].left = (uint8_t)l << 1;
         channels[handle].right = (uint8_t)r << 1;
+        channels[handle].volume = chan_vol(&channels[handle]);
 #else
         chan_vol(&channels[handle]) = ((l + r)) & MAX_VOL;
+        channels[handle].volume = chan_vol(&channels[handle]);
 #endif
     }
 }
 
-
+void audio_change_sample_volume (audio_channel_t *achannel, uint8_t volume)
+{
+    a_channel_t *desc = container_of(achannel, a_channel_t, inst);
+    desc->volume = volume & MAX_VOL;
+}
 
 #else /*AUDIO_MODULE_PRESENT*/
 

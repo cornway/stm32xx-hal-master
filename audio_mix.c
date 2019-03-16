@@ -82,81 +82,64 @@ static void a_rev_proc (a_buf_t *abuf)
 #endif /*USE_REVERB*/
 
 
-#if COMPRESSION
+#if !USE_FLOAT
+#error "Unsupported"
+#endif
 
-void
-a_mix_single_to_master (snd_sample_t *dest, mixdata_t *mixdata, int compratio)
+static void
+a_write_single_to_master (snd_sample_t *dest, mixdata_t *mixdata, int compratio)
 {
     int16_t *pdest = (int16_t *)dest;
     int16_t *psrc = (int16_t *)mixdata[0].buf;
     uint8_t vol = mixdata[0].volume;
-#if USE_FLOAT
-    
-#endif /*USE_FLOAT*/
+
+    if (vol == MAX_VOL) {
+        for (int i = 0; i < mixdata->size; i++) {
+            pdest[i] = psrc[i] / compratio;
+        }
+    } else {
+        int weight = compratio * MAX_VOL;
+        float vol_flt = (float)(vol) / (float)(weight);
+        for (int i = 0; i < mixdata->size; i++) {
+            pdest[i] = GAIN_FLOAT(psrc[i], vol_flt);
+        }
+    }
+}
+
+void
+a_mix_single_to_master (snd_sample_t *dest, mixdata_t *mixdata, int compratio, bool isfirst)
+{
+    int16_t *pdest = (int16_t *)dest;
+    int16_t *psrc = (int16_t *)mixdata[0].buf;
+    uint8_t vol = mixdata[0].volume;
 
     if (vol == 0)
         return;
 
+    if (isfirst) {
+        a_write_single_to_master(dest, mixdata, compratio);
+        return;
+    }
     if (vol == MAX_VOL) {
         for (int i = 0; i < mixdata->size; i++) {
             pdest[i] = psrc[i] / compratio  + pdest[i];
         }
     } else {
         int weight = compratio * MAX_VOL;
-#if USE_FLOAT
         float vol_flt = (float)(vol) / (float)(weight);
         for (int i = 0; i < mixdata->size; i++) {
             pdest[i] = GAIN_FLOAT(psrc[i], vol_flt) + pdest[i];
         }
-#else
-        for (int i = 0; i < mixdata->size; i++) {
-            pdest[i] = GAIN(psrc[i], vol, weight) + pdest[i];
-        }
-#endif /*USE_FLOAT*/
     }
 }
-
-#else /*COMPRESSION*/
-
-void
-a_mix_single_to_master (snd_sample_t *dest, mixdata_t *mixdata, int compratio)
-{
-    int16_t *pdest = (int16_t *)dest;
-    int16_t *psrc = (int16_t *)mixdata[0].buf;
-    uint8_t vol = mixdata[0].volume;
-#if USE_FLOAT
-    float vol_flt = (float)(vol) / (float)(MAX_VOL);
-#endif
-
-    if (vol == 0)
-        return;
-
-    if (vol == MAX_VOL) {
-        for (int i = 0; i < mixdata->size; i++) {
-            pdest[i] = psrc[i] / 2 + pdest[i] / 2;
-        }
-    } else {
-#if USE_FLOAT
-        for (int i = 0; i < mixdata->size; i++) {
-            pdest[i] = GAIN_FLOAT(psrc[i], vol_flt) + pdest[i];
-        }
-#else
-        for (int i = 0; i < mixdata->size; i++) {
-            pdest[i] = GAIN(psrc[i], vol, 1) + pdest[i];
-        }
-#endif
-    }
-}
-
-#endif /*COMPRESSION*/
 
 #if (AUDIO_PLAY_SCHEME == 1)
 
 static inline void
 mix_to_master_raw2 (snd_sample_t *dest, mixdata_t *mixdata, int compratio)
 {
-    a_mix_single_to_master(dest, mixdata, compratio);
-    a_mix_single_to_master(dest, mixdata + 1, compratio);
+    a_mix_single_to_master(dest, mixdata, compratio, false);
+    a_mix_single_to_master(dest, mixdata + 1, compratio, false);
 }
 
 static inline void
@@ -172,7 +155,7 @@ chunk_proc_raw_all (snd_sample_t *dest, mixdata_t *mixdata, int cnt, int comprat
     switch (cnt) {
 
         case 1:
-            a_mix_single_to_master(dest, mixdata, compratio);
+            a_mix_single_to_master(dest, mixdata, compratio, false);
         break;
 
         case 2:
@@ -181,7 +164,7 @@ chunk_proc_raw_all (snd_sample_t *dest, mixdata_t *mixdata, int cnt, int comprat
 
         case 3:
             mix_to_master_raw2(dest, mixdata, compratio);
-            a_mix_single_to_master(dest, mixdata + 2, compratio);
+            a_mix_single_to_master(dest, mixdata + 2, compratio, false);
         break;
 
         case 4:
@@ -190,7 +173,7 @@ chunk_proc_raw_all (snd_sample_t *dest, mixdata_t *mixdata, int cnt, int comprat
 
         case 5:
             mix_to_master_raw4(dest, mixdata, compratio);
-            a_mix_single_to_master(dest, mixdata + 4, compratio);
+            a_mix_single_to_master(dest, mixdata + 4, compratio, false);
         break;
 
         case 6:
@@ -201,7 +184,7 @@ chunk_proc_raw_all (snd_sample_t *dest, mixdata_t *mixdata, int cnt, int comprat
         case 7:
             mix_to_master_raw4(dest, mixdata, compratio);
             mix_to_master_raw2(dest, mixdata + 4, compratio);
-            a_mix_single_to_master(dest, mixdata + 6, compratio);
+            a_mix_single_to_master(dest, mixdata + 6, compratio, false);
         break;
 
         case 8:
@@ -263,19 +246,22 @@ static void a_paint_buf_ex (a_channel_head_t *chanlist, a_buf_t *abuf, int compr
     a_channel_t *cur, *next;
     mixdata_t mixdata;
     int durty = 0;
+    bool cnt = 0;
 
     chan_foreach_safe(chanlist, cur, next) {
         if (chan_complete(cur) && chan_complete(cur)(1)) {
             durty++;
+            cnt++;
             continue;
         }
 
         a_grab_mixdata(cur, abuf, &mixdata);
 
         if (mixdata.size) {
-            a_mix_single_to_master(abuf->buf, &mixdata, compratio);
+            a_mix_single_to_master(abuf->buf, &mixdata, compratio, cnt == 0);
             durty++;
         }
+        cnt++;
     }
 #if (USE_REVERB)
     a_rev_proc(abuf);
@@ -309,7 +295,7 @@ void
 a_grab_mixdata (a_channel_t *channel, a_buf_t *track, mixdata_t *mixdata)
 {
     a_move_channel_window(channel, track, mixdata);
-    mixdata->volume = chan_vol(channel);
+    mixdata->volume = channel->volume;
 }
 
 static inline uint8_t
