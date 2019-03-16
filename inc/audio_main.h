@@ -21,6 +21,12 @@
 
 #define MAX_VOL (0x7f)
 
+#define AUDIO_SAMPLES_2_BYTES(samples) ((samples) * sizeof(snd_sample_t))
+#define AUDIO_SAMPLES_2_WORDS(samples) (AUDIO_SAMPLES_2_BYTES(samples) / sizeof(uint32_t))
+#define AUDIO_SAMPLES_2_DWORDS(samples) (AUDIO_SAMPLES_2_BYTES(samples) / sizeof(uint64_t))
+
+#define AUDIO_BYTES_2_SAMPLES(bytes) ((bytes) / sizeof(snd_sample_t))
+
 typedef struct {
   uint32_t ChunkID;       /* 0 */ 
   uint32_t FileSize;      /* 4 */
@@ -45,8 +51,9 @@ typedef struct Mix_Chunk {
     int allocated;
     snd_sample_t *abuf;
     int32_t alen;
-    uint8_t volume;     /* Per-sample volume, 0-128 */
     void **cache;
+    int loopstart;
+    uint8_t volume;     /* Per-sample volume, 0-128 */
 } Mix_Chunk;
 
 

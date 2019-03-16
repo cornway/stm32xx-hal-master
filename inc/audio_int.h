@@ -1,6 +1,14 @@
 #ifndef _AUDIO_INT_H
 #define _AUDIO_INT_H
 
+#ifndef bool
+typedef enum {false, true} bool;
+#endif
+
+#ifndef arrlen
+#define arrlen(a) sizeof(a) / sizeof(a[0])
+#endif
+
 #ifndef A_COMPILE_TIME_ASSERT
 #define A_COMPILE_TIME_ASSERT(name, x)               \
        typedef int A_dummy_ ## name[(x) * 2 - 1]
@@ -22,14 +30,21 @@ extern snd_sample_t *music_get_next_chunk (int32_t *size);
 extern uint8_t music_get_volume (void);
 extern int music_init (void);
 
-extern snd_sample_t audio_raw_buf[2][AUDIO_OUT_BUFFER_SIZE];
-#if COMPRESSION
-extern uint8_t comp_weight;
-#endif
-
-#define AUDIO_TIMEOUT_MAX 1000 /*2 s*/
+#define AUDIO_TIMEOUT_MAX 2000 /*2 s*/
 #define MAX_2BAND_VOL ((MAX_VOL) | (MAX_VOL << 8))
 #define MAX_4BAND_VOL ((MAX_2BAND_VOL) | (MAX_2BAND_VOL << 16))
+
+typedef struct {
+    int size;
+    snd_sample_t *buf;
+    uint8_t volume;
+} mixdata_t;
+
+typedef struct {
+    snd_sample_t *buf;
+    int samples;
+    bool *durty;
+} a_buf_t;
 
 typedef struct a_channel_head_s a_channel_head_t;
 typedef struct a_channel_s a_channel_t;
@@ -37,8 +52,10 @@ typedef struct a_channel_s a_channel_t;
 struct a_channel_s {
     a_channel_t *next;
     a_channel_t *prev;
-    
+
     audio_channel_t inst;
+    int loopsize;
+    snd_sample_t *bufposition;
 #if USE_STEREO
     uint8_t left, right;
 #endif
@@ -79,66 +96,52 @@ typedef enum {
 #define chan_complete(chan) \
     (chan)->inst.complete
 
-#define chan_foreach(head, cur) \
-for (a_channel_t *cur = (head)->first,\
-    *__next = cur->next;               \
-     cur;                              \
-     cur = __next,                     \
-     __next = __next->next)
+#define chan_loopstart(chan) \
+    (chan)->inst.chunk.loopstart
+
+#define chan_foreach_safe(head, channel, next) \
+for (channel = (head)->first,\
+     next = channel->next;   \
+     channel;                \
+     channel = next,         \
+     next = next->next)
 
 
-int
-a_channel_link (a_channel_head_t *head, a_channel_t *link, uint8_t sort);
+int a_channel_link (a_channel_head_t *head, a_channel_t *link, uint8_t sort);
 
-int
-a_channel_unlink (a_channel_head_t *head, a_channel_t *node);
+int a_channel_unlink (a_channel_head_t *head, a_channel_t *node);
+
+void a_channel_remove (a_channel_t *desc);
+
+void a_paint_buffer (a_channel_head_t *chanlist, a_buf_t *abuf, int compratio);
+
+uint8_t a_chanlist_try_reject_all (a_channel_head_t *chanlist);
 
 #if USE_REVERB
 
 void
 a_rev_init (void);
 
-int
-a_rev_proc (snd_sample_t *dest);
-
-void
-a_rev_push (snd_sample_t s);
-
-snd_sample_t
-a_rev_pop (void);
-
-void
-a_rev2_push (snd_sample_t s);
-
-snd_sample_t
-a_rev2_pop (void);
-
 #endif /*USE_REVERB*/
 
 void
-a_chanlist_move_window (a_channel_t *desc,
-                           int size,
-                           snd_sample_t **pbuf,
-                           int *psize);
-
-#if (AUDIO_PLAY_SCHEME == 1)
-
-static inline uint8_t
-a_chanlist_move_window_all ( int size,
-                        uint16_t **pbuf,
-                        int *psize);
-
-#endif /*(AUDIO_PLAY_SCHEME == 1)*/
+a_mem_init (void);
 
 void
-a_mix_single_to_master (snd_sample_t *dest,
-                          snd_sample_t **ps,
-                          uint8_t *vol,
-                          int min_size);
+a_get_master_base (a_buf_t *master);
 
-void a_clear_master_idx (uint8_t idx, int force);
-void a_clear_master_all (void);
-void a_mark_master_idx (int idx);
+void
+a_get_master4idx (a_buf_t *master, int idx);
+
+
+void
+a_grab_mixdata (a_channel_t *channel, a_buf_t *track, mixdata_t *mixdata);
+
+void
+a_mix_single_to_master (snd_sample_t *dest, mixdata_t *mixdata, int compratio);
+
+void a_clear_abuf (a_buf_t *abuf);
+void a_clear_master (void);
 
 void error_handle (void);
 
