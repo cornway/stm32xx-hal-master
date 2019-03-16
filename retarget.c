@@ -18,6 +18,7 @@
 #if DEFINE_USER_IO
 
 #include "stm32f7xx.h"
+#include "debug.h"
 
 #pragma import(__use_no_semihosting_swi)
 
@@ -27,8 +28,11 @@ FILE __stdin;
 
 int fputc(int ch, FILE *f)
 {
+#if PRINTF_SERIAL
+  serial_putc(ch);
+#else
   ITM_SendChar(ch);
-
+#endif
   return(ch);
 }
 
@@ -47,7 +51,11 @@ int ferror(FILE *f)
 
 void _ttywrch(int ch)
 {
+#if PRINTF_SERIAL
+  serial_putc(ch);
+#else
   ITM_SendChar(ch);
+#endif
 }
 
 void _sys_exit(int return_code)
