@@ -23,8 +23,8 @@ typedef enum {false, true} bool;
        typedef int A_dummy_ ## name[(x) * 2 - 1]
 #endif
 
-#define AUDIO_MODULE_PRESENT 1
-#define MUSIC_MODULE_PRESENT 0
+#include "dev_conf.h"
+
 #define USE_STEREO 0
 #define USE_REVERB 0
 #define COMPRESSION 1

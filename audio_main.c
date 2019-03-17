@@ -3,6 +3,8 @@
 #include "audio_main.h"
 #include "audio_int.h"
 #include "wm8994.h"
+#include "nvic.h"
+#include "debug.h"
 
 #if AUDIO_MODULE_PRESENT
 
@@ -29,30 +31,11 @@ static a_channel_head_t chan_llist_ready;
 static bool a_force_stop        = false;
 static uint32_t a_enabled       = 0;
 
-static uint32_t audio_irq_saved;
+static irqmask_t audio_irq_mask;
 
 void error_handle (void)
 {
     for (;;) {}
-}
-
-void audio_irq_save (int *irq)
-{
-    if (audio_irq_saved != AUDIO_OUT_SAIx_DMAx_IRQ) {
-        HAL_NVIC_DisableIRQ(AUDIO_OUT_SAIx_DMAx_IRQ);
-        *irq = AUDIO_OUT_SAIx_DMAx_IRQ;
-    } else {
-        *irq = 0;
-    }
-    audio_irq_saved = AUDIO_OUT_SAIx_DMAx_IRQ;
-}
-
-void audio_irq_restore (int irq)
-{
-    if (irq) {
-        HAL_NVIC_EnableIRQ(irq);
-        audio_irq_saved = 0;
-    }
 }
 
 static inline void
@@ -140,8 +123,10 @@ DMA_on_tx_complete (isr_status_e status)
     isr_pending[status]++;
     if (chan_llist_ready.size > 0) {
         if (isr_pending[status] > 100) {
-            error_handle();
-        } else if (isr_pending[status] > 1) {
+            dprintf("audio_main.c, DMA_on_tx_complete : isr_pending[ %s ]= %d\n",
+                    status == A_ISR_HALF ? "A_ISR_HALF" :
+                    status == A_ISR_COMP ? "A_ISR_COMP" : "?");
+        } else if (isr_pending[status] == 2) {
             a_clear_master();
         }
     }
@@ -150,11 +135,15 @@ DMA_on_tx_complete (isr_status_e status)
 static void AUDIO_InitApplication(void)
 {
   a_buf_t master;
+  irqmask_t irq_flags;
+  irq_bmap(&irq_flags);
   BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, 75, AUDIO_SAMPLE_RATE);
   BSP_AUDIO_OUT_SetAudioFrameSlot(CODEC_AUDIOFRAME_SLOT_02);
 
   a_get_master_base(&master);
   BSP_AUDIO_OUT_Play((uint16_t *)master.buf, AUDIO_SAMPLES_2_BYTES(master.samples));
+  irq_bmap(&audio_irq_mask);
+  audio_irq_mask = audio_irq_mask & (~irq_flags);
 }
 
 void BSP_AUDIO_OUT_HalfTransfer_CallBack(void)
@@ -196,14 +185,14 @@ static void a_isr_clear_all (void)
 
 void audio_update (void)
 {
-    int irq;
+    irqmask_t irq_flags;
 
-    audio_irq_save(&irq);
+    irq_save_mask(&irq_flags, ~audio_irq_mask);
     if (isr_status) {
         a_paint_all(false);
     }
     a_isr_clear_all();
-    audio_irq_restore(irq);
+    irq_restore(irq_flags);
 
     if (a_force_stop) {
         a_clear_master();
@@ -290,16 +279,6 @@ void audio_change_sample_volume (audio_channel_t *achannel, uint8_t volume)
 }
 
 #else /*AUDIO_MODULE_PRESENT*/
-
-void audio_irq_save (int *irq)
-{
-    *irq = 0;
-}
-
-void audio_irq_restore (int irq)
-{
-
-}
 
 void audio_init (void)
 {

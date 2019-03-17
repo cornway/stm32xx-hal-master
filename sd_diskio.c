@@ -44,10 +44,12 @@
   */
 
 /* Includes ------------------------------------------------------------------*/
+#include "string.h"
 #include "ff_gen_drv.h"
 #include "sd_diskio.h"
 #include "stm32f769i_discovery_audio.h"
 #include "debug.h"
+#include "nvic.h"
 
 #define SD_MODE_DMA 0
 #define SD_UNALIGNED_WA 1
@@ -279,15 +281,13 @@ DRESULT _SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 {
     DRESULT res;
-    int irq, irq_serial;
+    irqmask_t irq_flags;
     hdd_led_on();
-    audio_irq_save(&irq);
-    serial_irq_save(&irq_serial);
 
+    irq_save(&irq_flags);
     res = _SD_read(lun, buff, sector, count * SD_BLOCK_SECTOR_CNT);
+    irq_restore(irq_flags);
 
-    serial_irq_restore(irq_serial);
-    audio_irq_restore(irq);
     hdd_led_off();
     return res;
 }
@@ -381,15 +381,13 @@ DRESULT _SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 {
     DRESULT res;
-    int irq, irq_serial;
+    irqmask_t irq_flags;
     hdd_led_on();
-    audio_irq_save(&irq);
-    serial_irq_save(&irq_serial);
+    irq_save(&irq_flags);
 
     res = _SD_write(lun, buff, sector, count);
 
-    serial_irq_restore(irq_serial);
-    audio_irq_restore(irq);
+    irq_restore(irq_flags);
     hdd_led_off();
     return res;
 }

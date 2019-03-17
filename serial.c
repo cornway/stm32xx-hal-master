@@ -3,13 +3,11 @@
 #include "stdarg.h"
 #include "debug.h"
 #include "main.h"
+#include "dev_conf.h"
 #include "stm32f7xx_it.h"
 
 #if DEBUG_SERIAL
 
-#define TX_STREAM_USE_DMA 1
-#define MAX_UARTS 1
-#define TX_STREAM_BUFERIZED 1
 #define TX_FLUSH_TIMEOUT 200 /*MS*/
 
 static void serial_fatal (void)
@@ -58,7 +56,9 @@ struct uart_desc_s {
 
 #if TX_STREAM_BUFERIZED
 
-#define STREAM_BUFSIZE 512
+#define STREAM_BUFSIZE 256
+#define STREAM_BUFCNT (1 << 2)
+#define STREAM_BUFCNT_MS (STREAM_BUFCNT - 1)
 
 typedef struct {
     char data[STREAM_BUFSIZE];
@@ -66,17 +66,13 @@ typedef struct {
     uint32_t timestamp;
 } streambuf_t;
 
-static streambuf_t streambuf[2];
+static streambuf_t streambuf[STREAM_BUFCNT];
 
-static void serial_tim_irq_save (void);
-static void serial_tim_irq_restore (void);
 static void serial_timer_init (void);
 
 #else /*TX_STREAM_BUFERIZED*/
 
 #define serial_tim_irq_save()
-#define serial_tim_irq_restore()
-#define serial_timer_init()
 
 #endif /*TX_STREAM_BUFERIZED*/
 
@@ -114,70 +110,12 @@ static uart_desc_t *debug_port (void)
 
 #if TX_STREAM_USE_DMA
 
+static irqmask_t timer_irq_mask = 0;
+
 static inline void dma_tx_sync (uart_desc_t *uart_desc)
 {
-    while (uart_desc->uart_tx_ready != SET)
-    {
-    }
-}
-
-#define SERIAL_IRQ_MAGIC 0x77ff
-volatile static int serial_irq_saved = 0;
-
-void serial_irq_save (int *irq)
-{
-    int i;
-    uart_desc_t *uart_desc;
-
-    if (serial_irq_saved != SERIAL_IRQ_MAGIC) {
-
-        for (i = 0; i < uart_desc_cnt; i++) {
-
-            uart_desc = uart_desc_pool[i];
-
-            HAL_NVIC_DisableIRQ(uart_desc->irq_txdma);
-            HAL_NVIC_DisableIRQ(uart_desc->irq_uart);
-        }
-        serial_tim_irq_save();
-        *irq = SERIAL_IRQ_MAGIC;
-    } else {
-        *irq = 0;
-    }
-    serial_irq_saved = SERIAL_IRQ_MAGIC;
-}
-
-void serial_irq_restore (int irq)
-{
-    int i;
-    uart_desc_t *uart_desc;
-
-    if (irq == SERIAL_IRQ_MAGIC) {
-
-
-        for (i = 0; i < uart_desc_cnt; i++) {
-
-            uart_desc = uart_desc_pool[i];
-
-            HAL_NVIC_EnableIRQ(uart_desc->irq_txdma);
-            HAL_NVIC_EnableIRQ(uart_desc->irq_uart);
-        }
-        serial_tim_irq_restore();
-        serial_irq_saved = 0;
-    } else {
-        irq = 0;
-    }
-}
-
-#else /*TX_STREAM_USE_DMA*/
-
-void serial_irq_save (int *irq)
-{
-    UNUSED(irq);
-}
-
-void serial_irq_restore (int irq)
-{
-    UNUSED(irq);
+    while (uart_desc->uart_tx_ready != SET) { }
+    uart_desc->uart_tx_ready = RESET;
 }
 
 #endif /*TX_STREAM_USE_DMA*/
@@ -293,7 +231,7 @@ static HAL_StatusTypeDef serial_submit_to_hw (uart_desc_t *uart_desc, void *data
     serial_led_on();
 
 #if TX_STREAM_USE_DMA
-    uart_desc->uart_tx_ready = RESET;
+    dma_tx_sync(uart_desc);
     status = HAL_UART_Transmit_DMA(&uart_desc->handle, (uint8_t *)data, cnt);
 
 #else
@@ -331,17 +269,15 @@ static void dbgstream_apend_data (streambuf_t *stbuf, void *data, size_t size)
 
 static inline int dbgstream_bufferize (uart_desc_t *uart_desc, void *data, size_t size)
 {
-    streambuf_t *active_stream = &streambuf[uart_desc->active_stream];
+    streambuf_t *active_stream = &streambuf[uart_desc->active_stream & STREAM_BUFCNT_MS];
 
     if (size >= STREAM_BUFSIZE) {
         return 0;
     }
 
     if (size >= (STREAM_BUFSIZE - active_stream->bufposition)) {
-        dma_tx_sync(uart_desc);
         dbgstream_send(uart_desc, active_stream);
-        uart_desc->active_stream = 1 - uart_desc->active_stream;
-        active_stream = &streambuf[uart_desc->active_stream];
+        active_stream = &streambuf[(++uart_desc->active_stream) & STREAM_BUFCNT_MS];
     }
 
     if (size >= (STREAM_BUFSIZE - active_stream->bufposition)) {
@@ -364,17 +300,17 @@ static inline void dbgstream_bufferize (uart_desc_t *uart_desc, void *data, size
 
 static HAL_StatusTypeDef _serial_send (void *data, size_t cnt)
 {
+    irqmask_t irq_flags;
     HAL_StatusTypeDef status = HAL_OK;
     uart_desc_t *uart_desc = debug_port();
 
-    serial_tim_irq_save();
+    irq_save_mask(&irq_flags, ~timer_irq_mask);
 
     if (dbgstream_bufferize(uart_desc, data, cnt) <= 0) {
-        dma_tx_sync(uart_desc);
         status = serial_submit_to_hw(uart_desc, data, cnt);
     }
 
-    serial_tim_irq_restore();
+    irq_restore(irq_flags);
 
     return status;
 }
@@ -516,7 +452,7 @@ static timer_desc_t serial_timer;
 static void serial_flush_handler (void)
 {
     uart_desc_t *uart_desc = debug_port();
-    streambuf_t *stbuf = &streambuf[0], *stbufnext = &streambuf[1];
+    streambuf_t *stbuf = &streambuf[0], *stbuflast = &streambuf[STREAM_BUFCNT - 1];
     uint32_t time;
 
     if (!uart_desc->uart_tx_ready) {
@@ -531,11 +467,14 @@ static void serial_flush_handler (void)
             (0 != stbuf->bufposition)) {
 
             dbgstream_send(uart_desc, stbuf);
+            if (stbuf->bufposition == 0) {
+                break;
+            }
         }
-        if (stbuf == stbufnext) {
+        if (stbuf == stbuflast) {
             break;
         }
-        stbuf = stbufnext;
+        stbuf++;
     }
 }
 
@@ -553,6 +492,7 @@ static void serial_timer_init (void)
 {
     TIM_HandleTypeDef *handle = &serial_timer.handle;
     uint32_t uwPrescalerValue = (uint32_t)((SystemCoreClock / 2) / 10000) - 1;
+    irqmask_t irq_flags;
     serial_timer.hw = TIM3;
     serial_timer.irq = TIM3_IRQn;
 
@@ -565,10 +505,13 @@ static void serial_timer_init (void)
     handle->Init.RepetitionCounter = 0;
     handle->Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
 
+    irq_bmap(&irq_flags);
     if (HAL_TIM_Base_Init(handle) != HAL_OK)
     {
         serial_fatal();
     }
+    irq_bmap(&timer_irq_mask);
+    timer_irq_mask = timer_irq_mask & (~irq_flags);
 
     if (HAL_TIM_Base_Start_IT(handle) != HAL_OK)
     {

@@ -178,7 +178,7 @@ void HAL_NVIC_SetPriorityGrouping(uint32_t PriorityGroup)
   *         A lower priority value indicates a higher priority.          
   * @retval None
   */
-void HAL_NVIC_SetPriority(IRQn_Type IRQn, uint32_t PreemptPriority, uint32_t SubPriority)
+__weak void HAL_NVIC_SetPriority(IRQn_Type IRQn, uint32_t PreemptPriority, uint32_t SubPriority)
 { 
   uint32_t prioritygroup = 0x00;
   

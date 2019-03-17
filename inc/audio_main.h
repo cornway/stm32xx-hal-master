@@ -64,9 +64,6 @@ typedef struct {
     int (*complete) (int);
 } audio_channel_t;
 
-void audio_irq_save (int *irq);
-void audio_irq_restore (int irq);
-
 void audio_init (void);
 
 audio_channel_t *audio_play_channel (Mix_Chunk *chunk, int channel);
