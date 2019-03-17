@@ -50,7 +50,7 @@ heap_check_margin (int size)
 {
     size = heap_size_total - HEAP_MALLOC_MARGIN - size - sizeof(mchunk_t);
     if (size < 0) {
-        fatal_error("");
+        fatal_error("heap_check_margin : exceeds by %d bytes\n", -size);
     }
 }
 
@@ -62,7 +62,7 @@ heap_malloc (int size, int freeable)
 
     p = (mchunk_t *)malloc(size);
     if (!p) {
-        fatal_error("");
+        fatal_error("heap_malloc : no free space left\n");
     }
     heap_size_total -= size;
     p->freeable = freeable;
@@ -78,7 +78,7 @@ heap_free (void *_p)
     
     p = p - 1;
     if (!p->freeable) {
-        fatal_error("");
+        fatal_error("heap_free : chunk cannot be freed\n");
     }
     heap_size_total += p->size;
     free(p);
@@ -160,7 +160,7 @@ void Sys_Free (void *p)
 void *Sys_HeapCacheTop (int size)
 {
     if (__heap_buf_cache_size < size) {
-        fatal_error("");
+        fatal_error("Sys_HeapCacheTop : left=%d, need=%d\n", __heap_buf_cache_size, size);
     }
 
     __heap_buf_cache_top -= size;
@@ -173,7 +173,7 @@ void *Sys_HeapCachePop (int size)
 {
     void *p;
     if (__heap_buf_cache_size < size) {
-        fatal_error("");
+        fatal_error("Sys_HeapCachePop : left=%d, need=%d\n", __heap_buf_cache_size, size);
     }
     p = __heap_buf_cache;
     __heap_buf_cache += size;

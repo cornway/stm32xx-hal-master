@@ -95,9 +95,10 @@ _alloc_fb_ondemand (int w, int h)
 
 void screen_init (void)
 {
-    if(BSP_LCD_Init())
+    uint32_t status = BSP_LCD_Init();
+    if(status)
     {
-        fatal_error("");
+        fatal_error("BSP_LCD_Init : fail, %d\n", status);
     }
 
     bsp_lcd_width = BSP_LCD_GetXSize();
