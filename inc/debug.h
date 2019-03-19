@@ -7,31 +7,31 @@
 
 #include "stdarg.h"
 
-#if DEBUG_SERIAL
+#define __func__ __FUNCTION__
 
-void serial_irq_save (int *irq);
-void serial_irq_restore (int irq);
+#if DEBUG_SERIAL
 
 void serial_init (void);
 void serial_putc (char c);
 char serial_getc (void);
 void serial_send_buf (void *data, size_t cnt);
+void serial_flush (void);
 
 void dprintf (char *fmt, ...);
 void dvprintf (char *fmt, va_list argptr);
+void hexdump (uint8_t *data, int len, int rowlength);
 
 #else /*DEBUG_SERIAL*/
-
-static inline void serial_irq_save (int *irq) {*irq = 0;}
-static inline void serial_irq_restore (int irq) {}
 
 static inline void serial_init (void) {}
 static inline void serial_putc (char c) {}
 static inline char serial_getc (void){return 0;}
 static inline void serial_send_buf (void *data, size_t cnt){}
+static inline void serial_flush (void){}
 
 static inline void dprintf (char *fmt, ...){}
 static inline void dvprintf (char *fmt, va_list argptr) {}
+void hexdump (uint8_t *data, int len, int rowlength) {}
 
 #endif /*DEBUG_SERIAL*/
 

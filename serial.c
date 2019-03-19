@@ -69,10 +69,7 @@ typedef struct {
 static streambuf_t streambuf[STREAM_BUFCNT];
 
 static void serial_timer_init (void);
-
-#else /*TX_STREAM_BUFERIZED*/
-
-#define serial_tim_irq_save()
+static void serial_flush_handler (int force);
 
 #endif /*TX_STREAM_BUFERIZED*/
 
@@ -343,6 +340,15 @@ void serial_send_buf (void *data, size_t cnt)
     }
 }
 
+void serial_flush (void)
+{
+    irqmask_t irq_flags;
+
+    irq_save_mask(&irq_flags, ~timer_irq_mask);
+    serial_flush_handler(1);
+    irq_restore(irq_flags);
+}
+
 void dprintf (char *fmt, ...)
 {
     va_list         argptr;
@@ -449,7 +455,7 @@ typedef struct {
 
 static timer_desc_t serial_timer;
 
-static void serial_flush_handler (void)
+static void serial_flush_handler (int force)
 {
     uart_desc_t *uart_desc = debug_port();
     streambuf_t *stbuf = &streambuf[0], *stbuflast = &streambuf[STREAM_BUFCNT - 1];
@@ -462,13 +468,15 @@ static void serial_flush_handler (void)
     time = HAL_GetTick();
 
     while (1) {
-        if (stbuf->timestamp &&
-            ((time - stbuf->timestamp) > TX_FLUSH_TIMEOUT) &&
-            (0 != stbuf->bufposition)) {
+        if (0 != stbuf->bufposition) {
 
-            dbgstream_send(uart_desc, stbuf);
-            if (stbuf->bufposition == 0) {
-                break;
+            if ((stbuf->timestamp && (time - stbuf->timestamp) > TX_FLUSH_TIMEOUT) ||
+                force) {
+
+                dbgstream_send(uart_desc, stbuf);
+                if (stbuf->bufposition == 0) {
+                    break;
+                }
             }
         }
         if (stbuf == stbuflast) {
@@ -476,16 +484,6 @@ static void serial_flush_handler (void)
         }
         stbuf++;
     }
-}
-
-static void serial_tim_irq_save (void)
-{
-    HAL_NVIC_DisableIRQ(serial_timer.irq);
-}
-
-static void serial_tim_irq_restore (void)
-{
-    HAL_NVIC_EnableIRQ(serial_timer.irq);
 }
 
 static void serial_timer_init (void)
@@ -540,12 +538,26 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (&serial_timer.handle == htim) {
 
-        serial_flush_handler();
+        serial_flush_handler(0);
     }
 }
 
 
 #endif /*TX_STREAM_BUFERIZED*/
+
+void hexdump (uint8_t *data, int len, int rowlength)
+{
+    int x, y, xn;
+    dprintf("%s :\n", __func__);
+    for (y = 0; y <= len / rowlength; y++) {
+        xn = len < rowlength ? len : rowlength;
+        dprintf("%d:%d    ", y, y + xn);
+        for (x = 0; x < xn; x++) {
+            dprintf("0x%02x, ", data[x + y * rowlength]);
+        }
+        dprintf("\n");
+    }
+}
 
 #endif /*DEBUG_SERIAL*/
 
