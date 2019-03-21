@@ -319,7 +319,15 @@ a_chan_try_reject (a_channel_t *desc)
             }
         }
 
-        if (!chan_complete(desc) || chan_complete(desc)(2)) {
+        if (chan_complete(desc)) {
+            if (chan_complete(desc)(2)) {
+                goto remove;
+            } else {
+                desc->bufposition = chan_buf(desc);
+                desc->loopsize = chan_len(desc);
+                desc->volume = chan_vol(desc);
+            }
+        } else {
             goto remove;
         }
     }

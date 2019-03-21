@@ -75,12 +75,16 @@ void audio_change_sample_volume (audio_channel_t *achannel, uint8_t volume);
 void audio_update (void);
 
 
-int music_play_song_num (int num, int repeat);
-int music_play_song_name (const char *name);
-int music_pause (void);
-int music_resume (void);
-int music_stop (void);
-int music_set_vol (uint8_t vol);
+typedef struct {
+    void *desc;
+} cd_track_t;
+
+cd_track_t *music_play_song_name (cd_track_t *track, const char *path);
+int music_pause (cd_track_t *track);
+int music_resume (cd_track_t *track);
+int music_stop (cd_track_t *track);
+int music_set_vol (cd_track_t *track, uint8_t vol);
+uint8_t music_get_volume (cd_track_t *track);
 int music_playing (void);
 
 

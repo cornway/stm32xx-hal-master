@@ -3,8 +3,6 @@
 #include "ff.h"
 #include <stdio.h>
 
-#define USE_QSPI 0
-
 #if MUSIC_MODULE_PRESENT
 
 extern int32_t systime;
@@ -16,11 +14,8 @@ static void error_handle (void)
 
 #define N(x) (sizeof(x) / sizeof(x[0]))
 
-static const char mus_dir_path[] =
-"/id1/music";
-
 #define MUS_BUF_GUARD_MS (AUDIO_MS_TO_SIZE(AUDIO_SAMPLE_RATE, AUDIO_OUT_BUFFER_SIZE) / 2)
-#define MUS_CHK_GUARD(mus) ((systime - (mus)->last_upd_tsf) > MUS_BUF_GUARD_MS)
+#define MUS_CHK_GUARD(cd) ((HAL_GetTick()- (cd)->last_upd_tsf) > MUS_BUF_GUARD_MS)
 
 #define MUS_BUF_LEN_MS 1000
 
@@ -31,21 +26,25 @@ static const char mus_dir_path[] =
 /*NOTE 2 : cache size of 'AUDIO_OUT_BUFFER_SIZE * 5' seems to be ok,
   but such size will cause less fps.
 */
-#define MUS_RAM_BUF_SIZE AUDIO_OUT_BUFFER_SIZE * 1
+#define MUS_RAM_BUF_SIZE AUDIO_OUT_BUFFER_SIZE * 5
 
 static snd_sample_t mus_ram_buf[2][MUS_RAM_BUF_SIZE];
 
+typedef struct song song_t;
+
+#define SONG_DESC(cd_track) ((song_t *)(cd_track)->desc)
+
 struct song {
-    int16_t num;
-    char path[64];
     FIL *file;
-    int32_t track_rem;
-    int32_t rem_buf;
+    int track_rem;
+    int rem_buf;
     snd_sample_t *buf;
     wave_t info;
-    uint8_t ready;
     uint32_t mem_offset;
     audio_channel_t *channel;
+    char path[64];
+    uint8_t ready;
+    uint8_t volume;
 };
 
 typedef enum {
@@ -62,175 +61,64 @@ typedef enum {
     SINGLE_LOOP,
 } mus_repeat_t;
 
-struct mus {
-    uint8_t volume;
-    int8_t rd_idx;
+typedef struct cdaudio_s cdaudio_t;
+
+struct cdaudio_s {
     mus_repeat_t repeat;
     mus_state_t state;
-    int32_t last_upd_tsf;
-#if USE_QSPI
-    uint32_t qspi_mem;
-#endif
-} mus;
+    int last_upd_tsf;
+    int8_t rd_idx;
+};
+
+FIL cd_tack_fhandle;
+song_t cd_track;
+cdaudio_t cdaudio;
+
+static void song_update_next_buf (cdaudio_t *cdaudio, song_t *song);
+static void song_setup (cdaudio_t *cd, song_t *song);
+static int chunk_setup (cdaudio_t *cd, song_t *song);
 
 
-#if !USE_QSPI
-static void song_update_next_buf (struct song *song, struct mus *mus);
-#endif
-
-FIL song_file;
-struct mus mus;
-struct song song_cur;
-
-static void song_reset (struct song *song)
+static void song_reset (song_t *song)
 {
-    song->num       = -1;
-    song->file      = NULL;
-    song->buf       = NULL;
-    song->track_rem       = 0;
-    song->rem_buf   = 0;
-    song->ready     = 0;
-    memset(&song->info, 0, sizeof(song->info));
-    memset(song->path, 0, sizeof(song->path));
+    memset(song, 0, sizeof(*song));
 }
 
-static void mus_reset (struct mus *mus)
+static void mus_reset (cdaudio_t *cd)
 {
-    mus->volume = 0;
-    mus->rd_idx = 0;
-    mus->repeat = SINGLE_LOOP;
-    mus->state = MUS_IDLE;
+    cd->rd_idx = 0;
+    cd->repeat = SINGLE_LOOP;
+    cd->state = MUS_IDLE;
 }
 
 static inline void
-song_alloc_file (struct song *song)
+song_alloc_file (song_t *song)
 {
-    song->file = &song_file;
-}
-
-#if USE_QSPI
-
-extern int qspi_flash_read (uint8_t *buf, int addr, int size);
-extern int qspi_flash_write (uint8_t *buf, int addr, int size);
-extern void qspi_erase (int addr, int size);
-extern void qspi_erase_all (void);
-
-static void mus_qspi_load_file (struct mus *mus, struct song *song)
-{
-    int32_t cnt = song->track_rem / sizeof(mus_ram_buf) + 1;
-    FRESULT res = FR_OK;
-    uint32_t btr;
-    uint32_t addr = mus->qspi_mem;
-#if 0
-    qspi_erase(addr, song->track_rem);
-#else
-    qspi_erase_all();
-#endif
-    while (cnt > 0) {
-        res = f_read(song->file, &mus_ram_buf[0], sizeof(mus_ram_buf), &btr);
-        if (res != FR_OK) {
-            break;
-        }
-        qspi_flash_write((uint8_t *)&mus_ram_buf[0], addr, btr);
-        addr += sizeof(mus_ram_buf);
-        cnt--;
-    }
-}
-
-static void mus_qspi_read (struct song *song, struct mus *mus)
-{
-    snd_sample_t *dest;
-    int32_t rem = song->track_rem;
-
-    dest = mus_ram_buf[mus->rd_idx ^ 1];
-
-    if (rem > MUS_RAM_BUF_SIZE)
-        rem = MUS_RAM_BUF_SIZE;
-    
-    qspi_flash_read((uint8_t *)dest, song->qspi_addr, rem * 2);
-    song->qspi_addr += rem;
-    
-}
-
-#endif /*USE_QSPI*/
-
-static void song_setup (struct mus *mus, struct song *song);
-
-static int
-chunk_setup (
-    struct mus *mus,
-    struct song *song,
-    Mix_Chunk *chunk
-    );
-
-static int music_scan_dir_for_num (int _num, char *name)
-{
-    FRESULT res;
-    DIR dir;
-    FILINFO fno;
-    static int songs_max = 0;
-    int cnt = 0;
-    int num = _num;
-    int cnt_max = 256;
-    if (songs_max) {
-        num = num % songs_max;
-    }
-
-    res = f_opendir(&dir, mus_dir_path);
-    if (res == FR_OK) {
-        for (;;) {
-            cnt++;
-            if (num) {
-                 num--;
-            }
-            res = f_readdir(&dir, &fno); 
-            if (res != FR_OK || fno.fname[0] == 0) {
-                songs_max = cnt;
-                num = num % cnt;
-                cnt = 0;
-                f_closedir(&dir);
-                f_opendir(&dir, mus_dir_path);
-            } else if ((fno.fattrib & AM_DIR) == 0) {
-                if (!num) {
-                    sprintf(name, "%s", fno.fname);
-                    break;
-                }
-            }
-            if (cnt_max) {
-                cnt_max--;
-            } else {
-                return -1;
-            }
-        }
-        f_closedir(&dir);
-    } else {
-        return -1;
-    }
-    return 0;
+    song->file = &cd_tack_fhandle;
 }
 
 static int mus_cplt_hdlr (int complete)
 {
     if (complete == 2) {
-        if (song_cur.track_rem <=  0) {
-            if (mus.repeat) {
-                mus.state = MUS_REPEAT;
+        if (cd_track.track_rem <=  0) {
+            if (cdaudio.repeat) {
+                cdaudio.state = MUS_REPEAT;
             }
             return 1;
         }
-        if (mus.state == MUS_PAUSE ||
-            mus.state == MUS_STOP ||
-            mus.state == MUS_REPEAT ||
-            !mus.volume) {
+        if (cdaudio.state == MUS_PAUSE ||
+            cdaudio.state == MUS_STOP ||
+            cdaudio.state == MUS_REPEAT ||
+            !cd_track.volume) {
             /*This will cause 'fake channel' - it will won't play, but still in 'ready'*/
             return 0;
         }
-        song_setup(&mus, &song_cur);
+        song_setup(&cdaudio, &cd_track);
     } else if (complete == 1) {
-        if (mus.state == MUS_PAUSE ||
-            mus.state == MUS_STOP ||
-            mus.state == MUS_REPEAT ||
-            !mus.volume) {
+        if (cdaudio.state == MUS_PAUSE ||
+            cdaudio.state == MUS_STOP ||
+            cdaudio.state == MUS_REPEAT ||
+            !cd_track.volume) {
             /*Skip this*/
             return 1;
         }
@@ -238,17 +126,17 @@ static int mus_cplt_hdlr (int complete)
     return 0;
 }
 
-static void mus_open_wav (struct song *song, const char *name)
+static int mus_open_wav (song_t *song, const char *path)
 {
     uint32_t btr;
     FRESULT res = FR_OK;
     if (song->file == NULL) {
         song_alloc_file(song);
     }
-    snprintf(song->path, sizeof(song->path), "%s/%s", mus_dir_path, name);
+    strcpy(song->path, path);
     res = f_open(song->file, song->path, FA_READ | FA_OPEN_EXISTING);
     if (res != FR_OK)
-        return;
+        return -1;
     res = f_read(song->file, &song->info, sizeof(song->info), &btr);
     if (res != FR_OK || btr != sizeof(song->info)) {
         error_handle();
@@ -264,49 +152,33 @@ static void mus_open_wav (struct song *song, const char *name)
     }
     song->track_rem = song->info.FileSize / sizeof(snd_sample_t);
     song->ready = 1;
-#if USE_QSPI
-    mus_qspi_load_file(&mus, song);
-#endif
 }
 
-static void mus_close_wav (struct song *song)
+static void mus_close_wav (cdaudio_t *cd, song_t *song)
 {
     f_close(song->file);
     song_reset(song);
+    mus_reset(cd);
 }
 
-static int music_play_helper (struct song *song, int num, int repeat)
+static int music_play_helper (cdaudio_t *cd, song_t *song, char *path, int repeat)
 {
-    char name[64];
     Mix_Chunk mixchunk;
-    if (music_scan_dir_for_num(num, name) < 0) {
-        mus.state = MUS_STOP;
+    if (cdaudio.state != MUS_IDLE) {
+        mus_close_wav(cd, song);
+    }
+
+    if (mus_open_wav(song, path) < 0) {
         return -1;
     }
-#if 0
-    num = (num) % MUS_SONGS_MAX;
-#endif
-    if (mus.state != MUS_IDLE) {
-        if ((mus.state == MUS_PLAYING || mus.state == MUS_UPDATING) &&
-            num == song->num) { 
-            return 0;
-        }
-        mus_close_wav(song);
-    }
-#if 0
-    mus_open_wav(song, mus_names[num]);
-#endif
-    mus_open_wav(song, name);
-    mus.state = MUS_PLAYING;
-    mus.repeat = repeat ? SINGLE_LOOP : NONE;
-    song->num = num;
-#if USE_QSPI
-    mus_qspi_read(song, &mus);
-#else
-    song_update_next_buf(song, &mus);
-#endif
+    cd->state = MUS_PLAYING;
+    cd->repeat = repeat ? SINGLE_LOOP : NONE;
+
+    song_update_next_buf(cd, song);
     /*Little hack - force channel reject to update it through callback*/
     mixchunk.alen = 0;
+    mixchunk.loopstart = -1;
+
     if (audio_is_playing(AUDIO_MUS_CHAN_START)) {
         audio_stop_channel(AUDIO_MUS_CHAN_START);
     }
@@ -318,81 +190,70 @@ static int music_play_helper (struct song *song, int num, int repeat)
     return 0;
 }
 
-uint8_t music_get_volume (void)
-{
-    return mus.volume;
-}
-
 static int
-chunk_setup (
-    struct mus *mus,
-    struct song *song,
-    Mix_Chunk *chunk
-    )
+chunk_setup (cdaudio_t *cd, song_t *song)
 {
     snd_sample_t *ram;
+    audio_channel_t *channel = song->channel;
+    Mix_Chunk *chunk = &channel->chunk;
     int32_t rem = song->track_rem;
 
-    ram = mus_ram_buf[mus->rd_idx];
+    ram = mus_ram_buf[cd->rd_idx];
 
     if (rem > MUS_RAM_BUF_SIZE) {
         rem = MUS_RAM_BUF_SIZE;
     }
     chunk->abuf = ram;
     chunk->alen = rem;
-    chunk->volume = mus->volume;
+    chunk->volume = song->volume;
     return rem;
 }
 
-static void song_setup (struct mus *mus, struct song *song)
+static void song_setup (cdaudio_t *cd, song_t *song)
 {
     int32_t rem = song->track_rem;
 
     if (song->channel) {
-        mus->rd_idx ^= 1;
-        rem = chunk_setup(mus, song, &song->channel->chunk);
+        cd->rd_idx ^= 1;
+        rem = chunk_setup(cd, song);
         song->track_rem -= rem;
-        mus->state = MUS_UPDATING;
+        cd->state = MUS_UPDATING;
     }
 }
 
-static void song_repeat (struct mus *mus, struct song *song)
+static void song_repeat (cdaudio_t *cd, song_t *song)
 {
-    music_play_helper(song, song->num, mus->repeat);
+    char path[128];
+    strcpy(path, song->path);
+    music_play_helper(cd, song, path, cd->repeat);
 }
 
 void music_tickle (void)
 {
-    if (mus.state == MUS_PLAYING) {
+    if (cdaudio.state == MUS_PLAYING) {
 
-    } else if (mus.state == MUS_UPDATING) {
-#if USE_QSPI
-        mus_qspi_read(&song_cur, &mus);
-#else
-        song_update_next_buf(&song_cur, &mus);
-#endif
-        mus.state = MUS_PLAYING;
-    } else if (mus.state == MUS_STOP) {
+    } else if (cdaudio.state == MUS_UPDATING) {
+        song_update_next_buf(&cdaudio, &cd_track);
+        cdaudio.state = MUS_PLAYING;
+    } else if (cdaudio.state == MUS_STOP) {
 
         audio_stop_channel(AUDIO_MUS_CHAN_START);
-        mus_close_wav(&song_cur);
-        mus_reset(&mus);
-    } else if (mus.state == MUS_REPEAT) {
+        mus_close_wav(&cdaudio, &cd_track);
+        mus_reset(&cdaudio);
+    } else if (cdaudio.state == MUS_REPEAT) {
 
-        song_repeat(&mus, &song_cur);
+        song_repeat(&cdaudio, &cd_track);
     }
 }
 
-#if USE_QSPI
-#else
-static void song_update_next_buf (struct song *song, struct mus *mus)
+static void song_update_next_buf (cdaudio_t *cd, song_t *song)
 {
     snd_sample_t *dest;
     uint32_t btr = 0;
     FRESULT res;
     int32_t rem = song->track_rem;
 
-    dest = mus_ram_buf[mus->rd_idx ^ 1];
+    dest = mus_ram_buf[cd->rd_idx ^ 1];
 
     if (rem > MUS_RAM_BUF_SIZE)
         rem = MUS_RAM_BUF_SIZE;
@@ -402,59 +263,62 @@ static void song_update_next_buf (struct song *song, struct mus *mus)
         error_handle();
     }
 }
-#endif /*USE_QSPI*/
 
 int music_playing (void)
 {
-    return (    (mus.state == MUS_PLAYING) || 
-                (mus.state == MUS_UPDATING)
-            ) && mus.volume ? 1 : 0;
+    return (    (cdaudio.state == MUS_PLAYING) || 
+                (cdaudio.state == MUS_UPDATING)
+            );
 }
 
-int music_play_song_num (int num, int repeat)
+cd_track_t *music_play_song_name (cd_track_t *track, const char *path)
 {
-    return music_play_helper(&song_cur, num - 1, repeat);
+    track->desc = &cd_track;
+    if (music_play_helper(&cdaudio, &cd_track, (char *)path, 1) < 0) {
+        return NULL;
+    }
+    return track;
 }
 
-int music_play_song_name (const char *name)
+int music_pause (cd_track_t *track)
 {
-    return music_play_helper(&song_cur, 0, 1);
-}
-
-int music_pause (void)
-{
-    mus.state = MUS_PAUSE;
+    cdaudio.state = MUS_PAUSE;
     return 1;
 }
 
-int music_resume (void)
+int music_resume (cd_track_t *track)
 {
-    if (mus.state == MUS_PAUSE) {
-        mus.state = MUS_PLAYING;
+    if (cdaudio.state == MUS_PAUSE) {
+        cdaudio.state = MUS_PLAYING;
         return 0;
     }
     return 1;
 }
 
-int music_stop (void)
+int music_stop (cd_track_t *track)
 {
-    if (mus.state != MUS_IDLE)
-        mus.state = MUS_STOP;
+    if (cdaudio.state != MUS_IDLE)
+        cdaudio.state = MUS_STOP;
     return 0;
 }
 
-int music_set_vol (uint8_t vol)
+int music_set_vol (cd_track_t *track, uint8_t vol)
 {
-    mus.volume = vol;
+    song_t *s = SONG_DESC(track);
+    s->volume = vol;
     return 0;
 }
 
+uint8_t music_get_volume (cd_track_t *track)
+{
+    return SONG_DESC(track)->volume;
+}
 
 int music_init (void)
 {
-    mus_reset(&mus);
-    song_reset(&song_cur);
-    mus.volume = MAX_VOL / 2;
+    mus_reset(&cdaudio);
+    song_reset(&cd_track);
+    cd_track.volume = MAX_VOL / 2;
     return 0;
 }
 
@@ -465,13 +329,33 @@ int music_init (void)
     return 0;
 }
 
+cd_track_t *music_play_song_name (cd_track_t *track, const char *path)
+{
+    return NULL;
+}
 
-int music_playing (void)
+int music_pause (cd_track_t *track)
 {
     return 0;
 }
 
-void music_tickle (void)
+int music_resume (cd_track_t *track)
+{
+    return 0;
+}
+
+int music_stop (cd_track_t *track)
+{
+    return 0;
+}
+
+
+int music_playing (cd_track_t *track)
+{
+    return 0;
+}
+
+void music_tickle (cd_track_t *track)
 {
 
 }

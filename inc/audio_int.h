@@ -35,8 +35,6 @@ typedef enum {false, true} bool;
 #define AUDIO_PLAY_SCHEME 0
 
 extern void music_tickle (void);
-extern snd_sample_t *music_get_next_chunk (int32_t *size);
-extern uint8_t music_get_volume (void);
 extern int music_init (void);
 
 #define AUDIO_TIMEOUT_MAX 2000 /*2 s*/

@@ -9,7 +9,7 @@
 #define TX_STREAM_BUFERIZED         (1)
 
 #define AUDIO_MODULE_PRESENT        (1)
-#define MUSIC_MODULE_PRESENT        (0)
+#define MUSIC_MODULE_PRESENT        (1)
 
 
 #endif /*__DEV_CONF_H__*/
