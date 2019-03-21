@@ -47,6 +47,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "usbh_hid.h"
 #include "usbh_hid_parser.h"
+#include "input_int.h"
 
 
 /** @addtogroup USBH_LIB
@@ -372,7 +373,7 @@ static USBH_StatusTypeDef USBH_HID_ClassRequest(USBH_HandleTypeDef *phost)
   return status; 
 }
 
-extern uint64_t gamepad_data_ev;
+extern usb_data_t gamepad_data;
 extern int8_t gamepad_data_ready;
 
 /**
@@ -426,7 +427,7 @@ static USBH_StatusTypeDef USBH_HID_Process(USBH_HandleTypeDef *phost)
 #if !USB_HID_HACK
     HID_Handle->DataReady = 0;
 #endif
-    gamepad_data_ev = *(uint64_t *)HID_Handle->pData;
+    memcpy(gamepad_data.data, HID_Handle->pData, sizeof(gamepad_data));
     gamepad_data_ready++;
     break;
     

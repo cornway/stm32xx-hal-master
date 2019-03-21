@@ -323,8 +323,6 @@ void fifo_init(FIFO_TypeDef * f, uint8_t * buf, uint16_t size);
 uint16_t  fifo_read(FIFO_TypeDef * f, void * buf, uint16_t  nbytes);
 
 uint16_t  fifo_write(FIFO_TypeDef * f, const void * buf, uint16_t  nbytes);
-
-void gamepad_init (void);
 /**
   * @}
   */ 

@@ -18,52 +18,66 @@ enum {
     TS_PRESS_ON,
 };
 
-#define PAD_FREQ_LOW   0x1
-#define PAD_FUNCTION     0x2
-#define PAD_SET_FLYLOOK   0x4
-#define PAD_LOOK_CONTROL 0x8
-#define PAD_LOOK_UP     0x10
-#define PAD_LOOK_DOWN  0x20
-#define PAD_LOOK_CENTRE 0x40
+#define PAD_FREQ_LOW        0x1
+#define PAD_FUNCTION        0x2
+#define PAD_SET_FLYLOOK     0x4
+#define PAD_LOOK_CONTROL    0x8
+#define PAD_LOOK_UP         0x10
+#define PAD_LOOK_DOWN       0x20
+#define PAD_LOOK_CENTRE     0x40
 
-struct usb_gamepad_to_kbd_map {
-    uint8_t key;
-    uint8_t flags;
-    uint8_t hit_cnt;
-    uint8_t lo_trig: 4,
-            hi_trig: 4;
-};
+typedef struct kbdmap_s {
+    int16_t key;
+    int16_t flags;
+} kbdmap_t;
+
+typedef enum {
+    keyup,
+    keydown,
+} i_key_state_t;
 
 typedef struct {
-    uint8_t type;
+    int sym;
+    i_key_state_t state;
 } i_event_t;
 
 enum {
-    K_UP = 0,
-    K_DOWN = 1,
-    K_LEFT = 2,
-    K_RIGHT = 3,
+    JOY_KEY_OFFSET  = 0,
+    JOY_K1          = JOY_KEY_OFFSET,
+    JOY_K2          = JOY_K1 + 1,
+    JOY_K3          = JOY_K2 + 1,
+    JOY_K4          = JOY_K3 + 1,
+    JOY_K5          = JOY_K4 + 1,
+    JOY_K6          = JOY_K5 + 1,
+    JOY_K7          = JOY_K6 + 1,
+    JOY_K8          = JOY_K7 + 1,
+    JOY_K9          = JOY_K8 + 1,
+    JOY_K10         = JOY_K9 + 1,
+    JOY_KMAX        = JOY_K10 + 1,
 
-    K_K1 = 4,
-    K_K2 = 5,
-    K_K3 = 6,
-    K_K4 = 7,
-    K_BL = 8,
-    K_BR = 9,
-    K_TL = 10,
-    K_TR = 11,
-    K_START = 12,
-    K_SELECT = 13,
-    K_MAX = 14,
-};
+    JOY_UPARROW     = JOY_KMAX,
+    JOY_DOWNARROW   = JOY_UPARROW + 1,
+    JOY_LEFTARROW   = JOY_DOWNARROW + 1,
+    JOY_RIGHTARROW  = JOY_LEFTARROW + 1,
+    JOY_STD_MAX         = JOY_RIGHTARROW + 1,
+    JOY_ANALOG      = JOY_STD_MAX,
+    JOY_MAX         = JOY_ANALOG + 1,
+}; /*regular keys*/
+
+enum {
+    K_EX_LOOKUP,
+    K_EX_LOOKDOWN,
+    K_EX_LOOKCENTER,
+    K_EX_MAX,
+}; /*extra keys (activsted by hold 'ctrl' key)*/
 
 
-void I_GetEvent (void);
-
-int gamepad_read (int8_t *pads);
-
-void gamepad_process (void);
-
+void input_bsp_init (void);
+void input_soft_init (const kbdmap_t kbdmap[JOY_STD_MAX]);
+void input_bind_extra (int type, int sym);
+void input_tickle (void);
+void input_proc_keys (void);
+void input_post_key (i_event_t event);
 
 
 #endif /*_INPUT_MAIN_H*/

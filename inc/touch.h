@@ -33,25 +33,16 @@ typedef struct
 	touch_status_t	status;
 	uint16_t		x;
 	uint16_t		y;
-} touch_state_t;
+} ts_status_t;
 
 /*---------------------------------------------------------------------*
  *  function prototypes                                                *
  *---------------------------------------------------------------------*/
 
-void touch_init (void);
-
-void touch_main (void);
-
-void touch_read (void);
-
-uint8_t touch_read_temperature (void);
 
 /*---------------------------------------------------------------------*
  *  global data                                                        *
  *---------------------------------------------------------------------*/
-
-extern touch_state_t touch_state;
 
 /*---------------------------------------------------------------------*
  *  inline functions and function-like macros                          *

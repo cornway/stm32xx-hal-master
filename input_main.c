@@ -1,98 +1,95 @@
-#include "input_main.h"
-#include "stm32f769i_discovery_ts.h"
 #include <stdlib.h>
+#include "input_main.h"
+#include "input_int.h"
+#include "stm32f769i_discovery_ts.h"
+
+
 
 #define TS_DEF_CD_COUNT 0
-touch_state_t touch_state;
-static TS_StateTypeDef  TS_State = {0};
+#define TSENS_SLEEP_TIME 250
+#define JOY_FREEZE_TIME 150/*ms*/
 
-static uint8_t touch_state_tbl[4][2];
-static uint8_t ts_state = TS_IDLE;
-static uint8_t ts_cd_count = 0;
-uint8_t int_received = 0;
-uint32_t int_timestamp = 0;
+/*
+extern bool menuactive;
+extern bool automapactive;
+extern int followplayer;
+FIXME :
+*/
 
-void touch_state_tbl_init (void)
+
+kbdmap_t input_kbdmap[JOY_STD_MAX];
+int      input_kbdmap_ex[K_EX_MAX];
+
+static uint8_t ts_states_map[4][2];
+static uint8_t ts_prev_state = TS_IDLE;
+static uint8_t ts_state_cooldown_cnt = 0;
+static uint8_t ts_freeze_ticks = 0;
+
+int joy_extrafreeze = 0;
+static uint32_t joypad_timestamp = 0;
+
+
+int8_t ctrl_key_action = -1;
+uint8_t extra_key_remaped = 0;
+uint8_t lookfly_key_action = 0;
+uint8_t lookfly_key_remaped = 0;
+uint8_t lookfly_key_trigger = 0;
+
+static int ts_screen_zones[2][3];
+static uint8_t ts_zones_keymap[3][4];
+
+static void input_fatal (char *msg)
 {
-    touch_state_tbl[TS_IDLE][TS_PRESS_ON] = TS_CLICK;
-    touch_state_tbl[TS_IDLE][TS_PRESS_OFF] = TS_IDLE;
-    touch_state_tbl[TS_CLICK][TS_PRESS_ON] = TS_PRESSED;
-    touch_state_tbl[TS_CLICK][TS_PRESS_OFF] = TS_RELEASED;
-    touch_state_tbl[TS_PRESSED][TS_PRESS_ON] = TS_PRESSED;
-    touch_state_tbl[TS_PRESSED][TS_PRESS_OFF] = TS_RELEASED;
-    touch_state_tbl[TS_RELEASED][TS_PRESS_ON] = TS_IDLE;
-    touch_state_tbl[TS_RELEASED][TS_PRESS_OFF] = TS_IDLE;
+    extern void fatal_error (char *message, ...);
+    fatal_error(msg);
 }
 
-void touch_init (void)
+void ts_init_states (void)
 {
-    BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
-    touch_state_tbl_init();
+    ts_states_map[TS_IDLE][TS_PRESS_ON]         = TS_CLICK;
+    ts_states_map[TS_IDLE][TS_PRESS_OFF]        = TS_IDLE;
+    ts_states_map[TS_CLICK][TS_PRESS_ON]        = TS_PRESSED;
+    ts_states_map[TS_CLICK][TS_PRESS_OFF]       = TS_RELEASED;
+    ts_states_map[TS_PRESSED][TS_PRESS_ON]      = TS_PRESSED;
+    ts_states_map[TS_PRESSED][TS_PRESS_OFF]     = TS_RELEASED;
+    ts_states_map[TS_RELEASED][TS_PRESS_ON]     = TS_IDLE;
+    ts_states_map[TS_RELEASED][TS_PRESS_OFF]    = TS_IDLE;
 }
 
-extern uint32_t systime;
-void touch_main (void)
+static void ts_read_status (ts_status_t *ts_status)
 {
-    touch_read ();
-}
-
-static inline void touch_clear ()
-{
-    touch_state.status = TOUCH_IDLE;
-    memset(&TS_State, 0, sizeof(TS_State));
-}
-
-void touch_read (void)
-{
-    touch_clear();
-    uint32_t ts_status = BSP_TS_GetState(&TS_State);
+    TS_StateTypeDef  TS_State;
     uint8_t state = 0;
-    state = touch_state_tbl[ts_state][TS_State.touchDetected ? TS_PRESS_ON : TS_PRESS_OFF];
+
+    if (BSP_TS_GetState(&TS_State) != TS_OK) {
+        input_fatal("BSP_TS_GetState != TS_OK\n");
+    }
+
+    ts_status->status = TOUCH_IDLE;
+    state = ts_states_map[ts_prev_state][TS_State.touchDetected ? TS_PRESS_ON : TS_PRESS_OFF];
     switch (state) {
         case TS_IDLE:
-            if (ts_cd_count) {
-                ts_cd_count--;
+            if (ts_state_cooldown_cnt) {
+                ts_state_cooldown_cnt--;
                 return;
             }
             break;
         case TS_PRESSED:
             break;
         case TS_CLICK:
-            touch_state.status = TOUCH_PRESSED;
-            touch_state.x = TS_State.touchX[0];
-            touch_state.y = TS_State.touchY[0];
+            ts_status->status = TOUCH_PRESSED;
+            ts_status->x = TS_State.touchX[0];
+            ts_status->y = TS_State.touchY[0];
             break;
         case TS_RELEASED:
-            touch_state.status = TOUCH_RELEASED;
-            ts_cd_count = TS_DEF_CD_COUNT;
+            ts_status->status = TOUCH_RELEASED;
+            ts_state_cooldown_cnt = TS_DEF_CD_COUNT;
             break;
         default:
             break;
     };
-    ts_state = state;
+    ts_prev_state = state;
 }
-
-uint8_t touch_read_temperature (void)
-{
-    return (uint8_t)(((float)30.0f * 3.0f) / 75.1f);
-}
-
-#if 0
-
-// Mouse acceleration
-//
-// This emulates some of the behavior of DOS mouse drivers by increasing
-// the speed when the mouse is moved fast.
-//
-// The mouse input values are input directly to the game, but when
-// the values exceed the value of mouse_threshold, they are multiplied
-// by mouse_acceleration to increase the speed.
-
-float mouse_acceleration = 2.0;
-int mouse_threshold = 10;
-
-int usemouse = 0;
-
 
 /*---1--- 2--- 3--- 4---*/
 /*
@@ -102,223 +99,238 @@ int usemouse = 0;
     |
 --3  down  fire  wpn r   map
 */
-static const int key_zones[2][3] =
+
+static int ts_attach_keys (uint8_t tsmap[3][4], const kbdmap_t kbdmap[JOY_STD_MAX])
 {
-        {200, 400, 600},
-        {160, 320, 0},
-};
+    int xmax, ymax, x_keyzone_size, y_keyzone_size;
 
+    tsmap[0][0] = kbdmap[JOY_UPARROW].key;
+    tsmap[0][1] = kbdmap[JOY_K10].key;
+    tsmap[0][2] = kbdmap[JOY_K9].key;
+    tsmap[0][3] = kbdmap[JOY_K8].key;
 
-static const uint8_t tousch_screen_key_map[3][4] =
-{
-    [0][0] = KEY_UPARROW,
-    [0][1] = KEY_ENTER,
-    [0][2] = KEY_ESCAPE,
-    [0][3] = KEY_STRAFE_R,
-    [1][0] = KEY_LEFTARROW,
-    [1][1] = KEY_STRAFE_L,
-    [1][2] = KEY_USE,
-    [1][3] = KEY_RIGHTARROW,
-    [2][0] = KEY_DOWNARROW,
-    [2][1] = KEY_FIRE,
-    [2][2] = KEY_WEAPON_ROR,
-    [2][3] = KEY_TAB,
-};
+    tsmap[1][0] = kbdmap[JOY_LEFTARROW].key;
+    tsmap[1][1] = kbdmap[JOY_K7].key;
+    tsmap[1][2] = kbdmap[JOY_K4].key;
+    tsmap[1][3] = kbdmap[JOY_RIGHTARROW].key;
 
-static int touch_screen_get_key (int x, int y)
+    tsmap[2][0] = kbdmap[JOY_DOWNARROW].key;
+    tsmap[2][1] = kbdmap[JOY_K1].key;
+    tsmap[2][2] = kbdmap[JOY_K3].key;
+    tsmap[2][3] = kbdmap[JOY_K2].key;
+
+    xmax = BSP_LCD_GetXSize();
+    ymax = BSP_LCD_GetYSize();
+    x_keyzone_size = xmax / 4;
+    y_keyzone_size = ymax / 3;
+
+    ts_screen_zones[0][0] = x_keyzone_size;
+    ts_screen_zones[0][1] = x_keyzone_size * 2;
+    ts_screen_zones[0][2] = x_keyzone_size * 3;
+
+    ts_screen_zones[1][0] = y_keyzone_size;
+    ts_screen_zones[1][1] = y_keyzone_size * 2;
+    ts_screen_zones[1][2] = 0; /*???*/
+}
+
+static int
+ts_get_key (int x, int y)
 {
     int row = 2, col = 3;
     for (int i = 0; i < 3; i++) {
-        if (x < key_zones[0][i]) {
+        if (x < ts_screen_zones[0][i]) {
             col = i;
             break;
         }
     }
     for (int i = 0; i < 2; i++) {
-        if (y < key_zones[1][i]) {
+        if (y < ts_screen_zones[1][i]) {
             row = i;
             break;
         }
     }
-    return tousch_screen_key_map[row][col];
+    return ts_zones_keymap[row][col];
 }
 
-extern boolean menuactive;
-extern boolean automapactive;
-extern int followplayer;
-
-#define TSENS_SLEEP_TIME 250
-#define JOY_FREEZE_TIME 150/*ms*/
-
-static uint32_t joy_freeze_tstamp = 0;
-static uint8_t touch_sensor_freeze_cnt = 0;
-
-
-int8_t function_key_act = -1;
-uint8_t function_key;
-uint8_t special_key = 0;
-uint8_t lookfly_act = 0;
-uint8_t lookfly_key = 0;
-uint8_t lookfly_key_trig = 0;
-
 static inline int
-is_joy_freezed ()
+joypad_freezed ()
 {
-    if (I_GetTimeMS() > joy_freeze_tstamp)
+    if (HAL_GetTick() > joypad_timestamp)
         return 0;
     return 1;
 }
 
 static inline void
-set_joy_freeze (uint8_t flags)
+joypad_freeze (uint8_t flags)
 {
-    if ((flags & PAD_FREQ_LOW) || menuactive) {
-        joy_freeze_tstamp = I_GetTimeMS() + JOY_FREEZE_TIME;
+    if ((flags & PAD_FREQ_LOW) || joy_extrafreeze) {
+        joypad_timestamp = HAL_GetTick() + JOY_FREEZE_TIME;
     }
 }
 
 static inline void
 post_key_up (uint8_t key)
 {
-    event_t event = {ev_keyup, key, -1, -1, -1};
-    D_PostEvent(&event);
+    i_event_t event = {key, keyup};
+    input_post_key(event);
 }
 
 static inline void
 post_key_down (uint8_t key)
 {
-    event_t event = {ev_keydown, key, -1, -1, -1};
-    D_PostEvent(&event);
+    i_event_t event = {key, keydown};
+    input_post_key(event);
 }
 
-static inline uint8_t
+static inline int
 get_lookfly_key (uint8_t flags)
 {
     if (flags & PAD_LOOK_CONTROL) {
         if (flags & PAD_LOOK_UP) {
-            return KEY_PGDN;
+            return input_kbdmap_ex[K_EX_LOOKUP];
         }
         if (flags & PAD_LOOK_DOWN) {
-            return KEY_DEL;
+            return input_kbdmap_ex[K_EX_LOOKDOWN];
         }
-        return KEY_END;
+        return input_kbdmap_ex[K_EX_LOOKCENTER];
     }
     return 0;
 }
 
+#if 0
 static inline void
 post_event (
-        event_t *event,
-        const struct usb_gamepad_to_kbd_map *kbd_key,
+        i_event_t *event,
+        kbdmap_t *kbd_key,
         int8_t action)
 {
     uint8_t key = kbd_key->key;
     uint8_t flags = kbd_key->flags;
-    boolean post_key = false;
+    int post_key = 0;
 
     if (action) {
         if (flags & PAD_FUNCTION) {
-            function_key_act = 2;
+            ctrl_key_action = 2;
         } else if (flags & PAD_SET_FLYLOOK) {
-            lookfly_act = 1;
+            lookfly_key_action = 1;
         } else {
-            if (lookfly_act > 0) {
-                lookfly_key = get_lookfly_key(flags);
-                if (lookfly_key) {
-                    lookfly_key_trig = key;
-                    key = lookfly_key;
+            if (lookfly_key_action > 0) {
+                lookfly_key_remaped = get_lookfly_key(flags);
+                if (lookfly_key_remaped) {
+                    lookfly_key_trigger = key;
+                    key = lookfly_key_remaped;
                 } else {
-                    lookfly_act = 0;
+                    lookfly_key_action = 0;
                 }
-            } else if (function_key_act > 0) {
+            } else if (ctrl_key_action > 0) {
                 if (flags & PAD_LOOK_CONTROL) {
-                    if (function_key && (function_key != KEY_RSHIFT)) {
-                        post_key_up(KEY_RSHIFT);
+                    if (extra_key_remaped && (extra_key_remaped != input_kbdmap[JOY_K4].key)) {
+                        post_key_up(input_kbdmap[JOY_K4].key);
                     }
-                    function_key = KEY_RSHIFT;
-                    post_key_down(KEY_RSHIFT);
+                    extra_key_remaped = input_kbdmap[JOY_K4].key;
+                    post_key_down(extra_key_remaped);
                 }
-                function_key_act--;
-            } else if (automapactive) {
-                if (key == KEY_STRAFE_L) {
-                    key = KEY_MAP_ZOOM_IN;
-                } else if (key == KEY_STRAFE_R) {
-                    key = KEY_MAP_ZOOM_OUT;
-                } else if (key == KEY_USE) {
-                    followplayer = 1 - followplayer;
-                }
+                ctrl_key_action--;
             }
-            post_key = true;
+            post_key = 1;
         }
-    } else if ((flags & PAD_SET_FLYLOOK) || (key == lookfly_key_trig)) {
-        post_key_up(lookfly_key);
-        lookfly_act = 0;
-        lookfly_key = 0;
-    } else {
-        if (automapactive) {
-            if (key == KEY_STRAFE_L) {
-                key = KEY_MAP_ZOOM_IN;
-            } else if (key == KEY_STRAFE_R) {
-                key = KEY_MAP_ZOOM_OUT;
-            }
-            post_key_up(key);
-        }
+    } else if ((flags & PAD_SET_FLYLOOK) || (key == lookfly_key_trigger)) {
+        post_key_up(lookfly_key_remaped);
+        lookfly_key_action = 0;
+        lookfly_key_remaped = 0;
     }
 
     if (post_key) {
         post_key_down(key);
     }
-    touch_sensor_freeze_cnt = TSENS_SLEEP_TIME;
-    set_joy_freeze(flags);
+    ts_freeze_ticks = TSENS_SLEEP_TIME;
+    joypad_freeze(flags);
 }
-
-void I_GetEvent (void)
+#else
+static inline void
+post_event (
+        i_event_t *event,
+        kbdmap_t *kbd_key,
+        int8_t action)
 {
-    event_t event;
-
-    event.data2 = -1;
-    event.data3 = -1;
-    if (!touch_sensor_freeze_cnt) {
-        /*Skip sensor processing while gamepad active*/
-        touch_main ();
+    if (action) {
+        post_key_down(kbd_key->key);
     }
-    if (touch_state.status)
-    {
-        event.type = (touch_state.status == TOUCH_PRESSED) ? ev_keydown : ev_keyup;
-        event.data1 = touch_screen_get_key(touch_state.x, touch_state.y);
-        D_PostEvent (&event);
-    } else {
-        uint8_t keys_cnt = 0;
-        int8_t joy_pads[16];
-        int joy_ret = gamepad_read(joy_pads);
-        const struct usb_gamepad_to_kbd_map *kbd_map = get_gamepad_to_kbd_map(&keys_cnt);
 
-        /*TODO : (keys_cnt <= N(joy_pads))*/
-        if (joy_ret <= 0 || is_joy_freezed()) {
-            return;
-        }
-        for (int i = 0; i < keys_cnt; i++) {
-            uint8_t key = kbd_map[i].key;
-
-            if (function_key_act == 0) {
-                post_key_up(function_key);
-                function_key_act--;
-                function_key = 0;
-            }
-
-            if (joy_pads[i] >= 0) {
-                post_event(&event, &kbd_map[i], joy_pads[i]);
-                continue;
-            }
-
-            post_key_up(key);
-
-            if (touch_sensor_freeze_cnt) {
-                touch_sensor_freeze_cnt--;
-            }
-        }
-    }
+    ts_freeze_ticks = TSENS_SLEEP_TIME;
+    joypad_freeze(kbd_key->flags);
 }
 
 #endif
+
+void input_proc_keys (void)
+{
+    i_event_t event = {0, 0};
+    ts_status_t ts_status = {TOUCH_IDLE, 0, 0};
+
+    if (!ts_freeze_ticks) {
+        /*Skip sensor processing while gamepad active*/
+        ts_read_status(&ts_status);
+    }
+    if (ts_status.status)
+    {
+        event.state = (ts_status.status == TOUCH_PRESSED) ? keydown : keyup;
+        event.sym = ts_get_key(ts_status.x, ts_status.y);
+        input_post_key(event);
+    } else {
+        int8_t joy_pads[JOY_STD_MAX];
+        int keys_cnt;
+
+        memset(joy_pads, -1, sizeof(joy_pads));
+        keys_cnt = joypad_read(joy_pads);
+        /*TODO : (keys_cnt <= N(joy_pads))*/
+        if (keys_cnt <= 0 || joypad_freezed()) {
+            return;
+        }
+        for (int i = 0; i < keys_cnt; i++) {
+
+            if (joy_pads[i] >= 0) {
+                post_event(&event, &input_kbdmap[i], joy_pads[i]);
+            } else {
+                post_key_up(input_kbdmap[i].key);
+            }
+            if (ts_freeze_ticks) {
+                ts_freeze_ticks--;
+            }
+        }
+    }
+}
+
+void input_bsp_init (void)
+{
+    BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
+    ts_init_states();
+
+    joypad_bsp_init();
+}
+
+void input_soft_init (const kbdmap_t kbdmap[JOY_STD_MAX])
+{
+    memcpy(&input_kbdmap[0], &kbdmap[0], sizeof(input_kbdmap));
+
+    ts_attach_keys(ts_zones_keymap, kbdmap);
+}
+
+void input_bind_extra (int type, int sym)
+{
+    if (type >= K_EX_MAX) {
+        input_fatal("input_bind_extra : type >= JOY_MAX\n");
+    }
+    input_kbdmap_ex[type] = sym;
+}
+
+void input_tickle (void)
+{
+    joypad_tickle();
+}
+
+__weak void input_post_key (i_event_t event)
+{
+    input_fatal("input_post_key : must be re-defined!\n");
+}
 
