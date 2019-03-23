@@ -46,7 +46,7 @@ a_chan_reset (a_channel_t *desc)
 
 static void a_chanlist_empty_clbk (struct a_channel_head_s *head)
 {
-    if (music_playing())
+    if (cd_playing())
         return;
 
     a_force_stop = true;
@@ -55,7 +55,7 @@ static void a_chanlist_empty_clbk (struct a_channel_head_s *head)
 
 static void a_chanlist_first_node_clbk (struct a_channel_head_s *head)
 {
-    if (music_playing())
+    if (cd_playing())
         return;
 }
 
@@ -78,12 +78,12 @@ a_channel_insert (Mix_Chunk *chunk, int channel)
     }
 
     desc->inst.chunk         = *chunk;
-    chan_len(desc) = AUDIO_BYTES_2_SAMPLES(chan_len(desc));
+    a_chunk_len(desc) = AUDIO_BYTES_2_SAMPLES(a_chunk_len(desc));
     desc->inst.id            = channel;
 
-    desc->loopsize =     chan_len(desc);
-    desc->bufposition =  chan_buf(desc);
-    desc->volume =       chan_vol(desc);
+    desc->loopsize =     a_chunk_len(desc);
+    desc->bufposition =  a_chunk_data(desc);
+    desc->volume =       a_chunk_vol(desc);
     
     return &desc->inst;
 }
@@ -99,8 +99,8 @@ a_paint_buff_helper (a_buf_t *abuf)
 {
     int compratio = chan_llist_ready.size + 2;
 
-    a_clear_abuf(abuf);
     if (a_chanlist_try_reject_all(&chan_llist_ready) == 0) {
+        a_clear_abuf(abuf);
         return;
     }
     a_paint_buffer(&chan_llist_ready, abuf, compratio);
@@ -111,7 +111,7 @@ static void a_shutdown (void)
     a_channel_t *cur, *next;
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_SW);
     a_enabled = 0;
-    chan_foreach_safe(&chan_llist_ready, cur, next) {
+    a_chan_foreach_safe(&chan_llist_ready, cur, next) {
         a_channel_remove(cur);
     }
 }
@@ -137,7 +137,7 @@ static void AUDIO_InitApplication(void)
   a_buf_t master;
   irqmask_t irq_flags;
   irq_bmap(&irq_flags);
-  BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, 75, AUDIO_SAMPLE_RATE);
+  BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, A_NITIAL_VOL, AUDIO_SAMPLE_RATE);
   BSP_AUDIO_OUT_SetAudioFrameSlot(CODEC_AUDIOFRAME_SLOT_02);
 
   a_get_master_base(&master);
@@ -213,7 +213,7 @@ void audio_init (void)
     a_rev_init();
 #endif
     a_enabled = 1;
-    music_init();
+    cd_init();
 }
 
 audio_channel_t *audio_play_channel (Mix_Chunk *chunk, int channel)
@@ -237,7 +237,7 @@ void audio_pause (int channel)
     if (!CHANNEL_NUM_VALID(channel)) {
         return;
     }
-    if (chan_is_play(&channels[channel])) {
+    if (a_chn_play(&channels[channel])) {
         a_channel_remove(&channels[channel]);
     }
 }
@@ -252,22 +252,22 @@ int audio_is_playing (int handle)
     if (!CHANNEL_NUM_VALID(handle)) {
         return 0;
     }
-    return chan_is_play(&channels[handle]);
+    return a_chn_play(&channels[handle]);
 }
 void audio_set_pan (int handle, int l, int r)
 {
     if (!CHANNEL_NUM_VALID(handle)) {
         return;
     }
-    if (chan_is_play(&channels[handle])) {
+    if (a_chn_play(&channels[handle])) {
 #if USE_STEREO
-        chan_vol(&channels[handle]) = ((l + r)) & MAX_VOL;
+        a_chunk_vol(&channels[handle]) = ((l + r)) & MAX_VOL;
         channels[handle].left = (uint8_t)l << 1;
         channels[handle].right = (uint8_t)r << 1;
-        channels[handle].volume = chan_vol(&channels[handle]);
+        channels[handle].volume = a_chunk_vol(&channels[handle]);
 #else
-        chan_vol(&channels[handle]) = ((l + r)) & MAX_VOL;
-        channels[handle].volume = chan_vol(&channels[handle]);
+        a_chunk_vol(&channels[handle]) = ((l + r)) & MAX_VOL;
+        channels[handle].volume = a_chunk_vol(&channels[handle]);
 #endif
     }
 }

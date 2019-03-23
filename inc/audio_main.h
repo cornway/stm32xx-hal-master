@@ -56,12 +56,17 @@ typedef struct Mix_Chunk {
     uint8_t volume;     /* Per-sample volume, 0-128 */
 } Mix_Chunk;
 
+typedef enum {
+    A_NONE,
+    A_HALF,
+    A_FULL
+} cplt_stat_t;
 
 typedef struct {
     Mix_Chunk chunk;
     int8_t is_playing;
     uint8_t id;
-    int (*complete) (int);
+    int (*complete) (cplt_stat_t);
 } audio_channel_t;
 
 void audio_init (void);
@@ -79,13 +84,13 @@ typedef struct {
     void *desc;
 } cd_track_t;
 
-cd_track_t *music_play_song_name (cd_track_t *track, const char *path);
-int music_pause (cd_track_t *track);
-int music_resume (cd_track_t *track);
-int music_stop (cd_track_t *track);
-int music_set_vol (cd_track_t *track, uint8_t vol);
-uint8_t music_get_volume (cd_track_t *track);
-int music_playing (void);
+cd_track_t *cd_play_name (cd_track_t *track, const char *path);
+int cd_pause (cd_track_t *track);
+int cd_resume (cd_track_t *track);
+int cd_stop (cd_track_t *track);
+int cd_volume (cd_track_t *track, uint8_t vol);
+uint8_t cd_getvol (cd_track_t *track);
+int cd_playing (void);
 
 
 #endif /*_AUDIO_MAIN_H*/

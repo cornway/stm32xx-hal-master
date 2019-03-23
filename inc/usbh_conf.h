@@ -83,8 +83,8 @@ extern void Sys_HeapFree (void *p);
 
 /* DEBUG macros */
 #if (USBH_DEBUG_LEVEL > 0)
-#define USBH_UsrLog(...)   printf(__VA_ARGS__);\
-                           printf("\n");
+#define USBH_UsrLog(...)   dprintf(__VA_ARGS__);\
+                           dprintf("\n");
 #else
 #define USBH_UsrLog(...)
 #endif

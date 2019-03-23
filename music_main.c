@@ -1,11 +1,9 @@
 #include "audio_main.h"
 #include "audio_int.h"
-#include "ff.h"
+#include "dev_io.h"
 #include <stdio.h>
 
 #if MUSIC_MODULE_PRESENT
-
-extern int32_t systime;
 
 static void error_handle (void)
 {
@@ -13,9 +11,6 @@ static void error_handle (void)
 }
 
 #define N(x) (sizeof(x) / sizeof(x[0]))
-
-#define MUS_BUF_GUARD_MS (AUDIO_MS_TO_SIZE(AUDIO_SAMPLE_RATE, AUDIO_OUT_BUFFER_SIZE) / 2)
-#define MUS_CHK_GUARD(cd) ((HAL_GetTick()- (cd)->last_upd_tsf) > MUS_BUF_GUARD_MS)
 
 #define MUS_BUF_LEN_MS 1000
 
@@ -30,154 +25,145 @@ static void error_handle (void)
 
 static snd_sample_t mus_ram_buf[2][MUS_RAM_BUF_SIZE];
 
-typedef struct song song_t;
+typedef struct track_s track_t;
 
-#define SONG_DESC(cd_track) ((song_t *)(cd_track)->desc)
+#define SONG_DESC(cd_track) ((track_t *)(cd_track)->desc)
 
-struct song {
-    FIL *file;
-    int track_rem;
-    int rem_buf;
-    snd_sample_t *buf;
-    wave_t info;
-    uint32_t mem_offset;
-    audio_channel_t *channel;
-    char path[64];
-    uint8_t ready;
-    uint8_t volume;
+struct track_s {
+    int                 file;
+    wave_t              stream;
+    audio_channel_t     *channel;
+    snd_sample_t        *cache;
+    int                 remain;
+    char                path[64];
+    uint8_t             volume;
 };
 
 typedef enum {
-    MUS_IDLE,
-    MUS_UPDATING,
-    MUS_PLAYING,
-    MUS_REPEAT,
-    MUS_PAUSE,
-    MUS_STOP,
-} mus_state_t;
+    CD_IDLE     = 0x1,
+    CD_PRELOAD  = 0x2,
+    CD_PLAY     = 0x4,
+    CD_REPEAT   = 0x8,
+    CD_PAUSE    = 0x10,
+    CD_RESUME   = 0x20,
+    CD_STOP     = 0x40,
+} cd_state_t;
+
+#define CD_IDLE_M (~(CD_PLAY | CD_PRELOAD))
 
 typedef enum {
-    NONE,
-    SINGLE_LOOP,
+    REPEAT_NONE,
+    REPEAT_LOOP,
 } mus_repeat_t;
 
 typedef struct cdaudio_s cdaudio_t;
 
 struct cdaudio_s {
     mus_repeat_t repeat;
-    mus_state_t state;
+    cd_state_t state;
     int last_upd_tsf;
     int8_t rd_idx;
 };
 
-FIL cd_tack_fhandle;
-song_t cd_track;
+track_t cd_track;
 cdaudio_t cdaudio;
 
-static void song_update_next_buf (cdaudio_t *cdaudio, song_t *song);
-static void song_setup (cdaudio_t *cd, song_t *song);
-static int chunk_setup (cdaudio_t *cd, song_t *song);
+static void cd_preload_next (cdaudio_t *cdaudio, track_t *song);
+static void cd_setup_track (cdaudio_t *cd, track_t *song);
+static int a_preload_next (cdaudio_t *cd, track_t *song);
 
 
-static void song_reset (song_t *song)
+static void cd_reset_track (track_t *song)
 {
     memset(song, 0, sizeof(*song));
 }
 
-static void mus_reset (cdaudio_t *cd)
+static void cd_reset (cdaudio_t *cd)
 {
     cd->rd_idx = 0;
-    cd->repeat = SINGLE_LOOP;
-    cd->state = MUS_IDLE;
+    cd->repeat = REPEAT_LOOP;
+    cd->state = CD_IDLE;
 }
 
-static inline void
-song_alloc_file (song_t *song)
+static int cd_cplt_hdlr (int complete)
 {
-    song->file = &cd_tack_fhandle;
-}
-
-static int mus_cplt_hdlr (int complete)
-{
-    if (complete == 2) {
-        if (cd_track.track_rem <=  0) {
-            if (cdaudio.repeat) {
-                cdaudio.state = MUS_REPEAT;
+    switch (complete) {
+        case A_HALF:
+            if ((CD_IDLE_M & cdaudio.state) || !cd_track.volume) {
+                /*Skip this*/
+                return 1;
             }
-            return 1;
-        }
-        if (cdaudio.state == MUS_PAUSE ||
-            cdaudio.state == MUS_STOP ||
-            cdaudio.state == MUS_REPEAT ||
-            !cd_track.volume) {
-            /*This will cause 'fake channel' - it will won't play, but still in 'ready'*/
-            return 0;
-        }
-        song_setup(&cdaudio, &cd_track);
-    } else if (complete == 1) {
-        if (cdaudio.state == MUS_PAUSE ||
-            cdaudio.state == MUS_STOP ||
-            cdaudio.state == MUS_REPEAT ||
-            !cd_track.volume) {
-            /*Skip this*/
-            return 1;
-        }
+        break;
+        case A_FULL:
+
+            if (cd_track.remain <=  0) {
+                if (cdaudio.repeat == REPEAT_LOOP) {
+                    cdaudio.state = CD_REPEAT;
+                }
+                return 1;
+            }
+            if ((CD_IDLE_M & cdaudio.state) || !cd_track.volume) {
+                /*This will cause 'fake channel' - it will won't play, but still in 'ready'*/
+                return 0;
+            }
+            cd_setup_track(&cdaudio, &cd_track);
+        break;
+        default:
+        break;
     }
     return 0;
 }
 
-static int mus_open_wav (song_t *song, const char *path)
+static int cd_open_stream (track_t *song, const char *path)
 {
-    uint32_t btr;
-    FRESULT res = FR_OK;
-    if (song->file == NULL) {
-        song_alloc_file(song);
-    }
+    song->file = -1;
     strcpy(song->path, path);
-    res = f_open(song->file, song->path, FA_READ | FA_OPEN_EXISTING);
-    if (res != FR_OK)
+    d_open(song->path, &song->file, "r");
+    if (song->file < 0)
         return -1;
-    res = f_read(song->file, &song->info, sizeof(song->info), &btr);
-    if (res != FR_OK || btr != sizeof(song->info)) {
+
+    if (d_read(song->file, &song->stream, sizeof(song->stream)) < 0) {
         error_handle();
     }
-    if (song->info.BitPerSample != 16) {
+    if (song->stream.BitPerSample != 16) {
         error_handle();
     }
-    if (song->info.NbrChannels != 2) {
+    if (song->stream.NbrChannels != 2) {
         error_handle();
     }
-    if (song->info.SampleRate != AUDIO_SAMPLE_RATE) {
+    if (song->stream.SampleRate != AUDIO_SAMPLE_RATE) {
         error_handle();
     }
-    song->track_rem = song->info.FileSize / sizeof(snd_sample_t);
-    song->ready = 1;
+    song->remain = song->stream.FileSize / sizeof(snd_sample_t);
 }
 
-static void mus_close_wav (cdaudio_t *cd, song_t *song)
+static void cd_close_stream (cdaudio_t *cd, track_t *song)
 {
-    f_close(song->file);
-    song_reset(song);
-    mus_reset(cd);
+    d_close(song->file);
+    song->cache = NULL;
+    cd_reset_track(song);
+    cd_reset(cd);
+    song->file = -1;
 }
 
-static int music_play_helper (cdaudio_t *cd, song_t *song, char *path, int repeat)
+static int _cd_play (cdaudio_t *cd, track_t *song, char *path, int repeat)
 {
     Mix_Chunk mixchunk;
-    if (cdaudio.state != MUS_IDLE) {
-        mus_close_wav(cd, song);
+    if (cdaudio.state != CD_IDLE) {
+        cd_close_stream(cd, song);
     }
 
-    if (mus_open_wav(song, path) < 0) {
+    if (cd_open_stream(song, path) < 0) {
         return -1;
     }
-    cd->state = MUS_PLAYING;
-    cd->repeat = repeat ? SINGLE_LOOP : NONE;
-
-    song_update_next_buf(cd, song);
+    cd->state = CD_PLAY;
+    cd->repeat = repeat ? REPEAT_LOOP : REPEAT_NONE;
+    cd_preload_next(cd, song);
     /*Little hack - force channel reject to update it through callback*/
-    mixchunk.alen = 0;
+    memset(&mixchunk, 0, sizeof(mixchunk));
     mixchunk.loopstart = -1;
+    song->cache = mus_ram_buf[0];
+    mixchunk.cache = (void **)&song->cache;
 
     if (audio_is_playing(AUDIO_MUS_CHAN_START)) {
         audio_stop_channel(AUDIO_MUS_CHAN_START);
@@ -186,17 +172,17 @@ static int music_play_helper (cdaudio_t *cd, song_t *song, char *path, int repea
     if (!song->channel) {
         error_handle();
     }
-    song->channel->complete = mus_cplt_hdlr;
+    song->channel->complete = cd_cplt_hdlr;
     return 0;
 }
 
 static int
-chunk_setup (cdaudio_t *cd, song_t *song)
+a_preload_next (cdaudio_t *cd, track_t *song)
 {
     snd_sample_t *ram;
     audio_channel_t *channel = song->channel;
     Mix_Chunk *chunk = &channel->chunk;
-    int32_t rem = song->track_rem;
+    int32_t rem = song->remain;
 
     ram = mus_ram_buf[cd->rd_idx];
 
@@ -209,148 +195,151 @@ chunk_setup (cdaudio_t *cd, song_t *song)
     return rem;
 }
 
-static void song_setup (cdaudio_t *cd, song_t *song)
+static void cd_setup_track (cdaudio_t *cd, track_t *song)
 {
-    int32_t rem = song->track_rem;
+    int32_t rem = song->remain;
 
     if (song->channel) {
         cd->rd_idx ^= 1;
-        rem = chunk_setup(cd, song);
-        song->track_rem -= rem;
-        cd->state = MUS_UPDATING;
+        rem = a_preload_next(cd, song);
+        song->remain -= rem;
+        cd->state = CD_PRELOAD;
     }
 }
 
-static void song_repeat (cdaudio_t *cd, song_t *song)
+static void cd_dorepeat (cdaudio_t *cd, track_t *song)
 {
     char path[128];
+    uint8_t volume = song->volume;
     strcpy(path, song->path);
-    music_play_helper(cd, song, path, cd->repeat);
+    _cd_play(cd, song, path, cd->repeat);
+    song->volume = volume;
 }
 
 void music_tickle (void)
 {
-    if (cdaudio.state == MUS_PLAYING) {
-
-    } else if (cdaudio.state == MUS_UPDATING) {
-        song_update_next_buf(&cdaudio, &cd_track);
-        cdaudio.state = MUS_PLAYING;
-    } else if (cdaudio.state == MUS_STOP) {
-
-        audio_stop_channel(AUDIO_MUS_CHAN_START);
-        mus_close_wav(&cdaudio, &cd_track);
-        mus_reset(&cdaudio);
-    } else if (cdaudio.state == MUS_REPEAT) {
-
-        song_repeat(&cdaudio, &cd_track);
+    switch (cdaudio.state) {
+        case CD_PLAY:
+        break;
+        case CD_PRELOAD:
+            cd_preload_next(&cdaudio, &cd_track);
+            cdaudio.state = CD_PLAY;
+        break;
+        case CD_STOP:
+            audio_stop_channel(AUDIO_MUS_CHAN_START);
+            cd_close_stream(&cdaudio, &cd_track);
+            cd_reset(&cdaudio);
+        break;
+        case CD_REPEAT:
+            cd_dorepeat(&cdaudio, &cd_track);
+        break;
+        default:
+        break;
     }
 }
 
-static void song_update_next_buf (cdaudio_t *cd, song_t *song)
+static void cd_preload_next (cdaudio_t *cd, track_t *song)
 {
     snd_sample_t *dest;
-    uint32_t btr = 0;
-    FRESULT res;
-    int32_t rem = song->track_rem;
+    int32_t rem = song->remain;
 
     dest = mus_ram_buf[cd->rd_idx ^ 1];
 
     if (rem > MUS_RAM_BUF_SIZE)
         rem = MUS_RAM_BUF_SIZE;
 
-    res = f_read(song->file, dest, rem * sizeof(snd_sample_t), &btr);
-    if (res != FR_OK) {
+    if (d_read(song->file, dest, rem * sizeof(snd_sample_t)) < 0) {
         error_handle();
     }
 }
 
-int music_playing (void)
+int cd_playing (void)
 {
-    return (    (cdaudio.state == MUS_PLAYING) || 
-                (cdaudio.state == MUS_UPDATING)
+    return (    (cdaudio.state == CD_PLAY) || 
+                (cdaudio.state == CD_PRELOAD)
             );
 }
 
-cd_track_t *music_play_song_name (cd_track_t *track, const char *path)
+cd_track_t *cd_play_name (cd_track_t *track, const char *path)
 {
     track->desc = &cd_track;
-    if (music_play_helper(&cdaudio, &cd_track, (char *)path, 1) < 0) {
+    if (_cd_play(&cdaudio, &cd_track, (char *)path, 1) < 0) {
         return NULL;
     }
     return track;
 }
 
-int music_pause (cd_track_t *track)
+int cd_pause (cd_track_t *track)
 {
-    cdaudio.state = MUS_PAUSE;
+    cdaudio.state = CD_PAUSE;
     return 1;
 }
 
-int music_resume (cd_track_t *track)
+int cd_resume (cd_track_t *track)
 {
-    if (cdaudio.state == MUS_PAUSE) {
-        cdaudio.state = MUS_PLAYING;
+    if (cdaudio.state == CD_PAUSE) {
+        cdaudio.state = CD_PLAY;
         return 0;
     }
     return 1;
 }
 
-int music_stop (cd_track_t *track)
+int cd_stop (cd_track_t *track)
 {
-    if (cdaudio.state != MUS_IDLE)
-        cdaudio.state = MUS_STOP;
+    if (cdaudio.state != CD_IDLE)
+        cdaudio.state = CD_STOP;
     return 0;
 }
 
-int music_set_vol (cd_track_t *track, uint8_t vol)
+int cd_volume (cd_track_t *track, uint8_t vol)
 {
-    song_t *s = SONG_DESC(track);
+    track_t *s = SONG_DESC(track);
     s->volume = vol;
     return 0;
 }
 
-uint8_t music_get_volume (cd_track_t *track)
+uint8_t cd_getvol (cd_track_t *track)
 {
     return SONG_DESC(track)->volume;
 }
 
-int music_init (void)
+int cd_init (void)
 {
-    mus_reset(&cdaudio);
-    song_reset(&cd_track);
+    cd_reset(&cdaudio);
+    cd_reset_track(&cd_track);
     cd_track.volume = MAX_VOL / 2;
     return 0;
 }
 
 #else
 
-int music_init (void)
+int cd_init (void)
 {
     return 0;
 }
 
-cd_track_t *music_play_song_name (cd_track_t *track, const char *path)
+cd_track_t *cd_play_name (cd_track_t *track, const char *path)
 {
     return NULL;
 }
 
-int music_pause (cd_track_t *track)
+int cd_pause (cd_track_t *track)
 {
     return 0;
 }
 
-int music_resume (cd_track_t *track)
+int cd_resume (cd_track_t *track)
 {
     return 0;
 }
 
-int music_stop (cd_track_t *track)
+int cd_stop (cd_track_t *track)
 {
     return 0;
 }
 
 
-int music_playing (cd_track_t *track)
+int cd_playing (cd_track_t *track)
 {
     return 0;
 }

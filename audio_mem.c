@@ -32,8 +32,8 @@ a_channel_link (a_channel_head_t *head, a_channel_t *link, uint8_t sort)
             head->first_link_handle(head);
         return head->size;
     }
-    chan_foreach_safe(head, cur, next) {
-        if ((chan_len(link) < chan_len(cur))) {
+    a_chan_foreach_safe(head, cur, next) {
+        if ((a_chunk_len(link) < a_chunk_len(cur))) {
             if (cur->prev != NULL) {
                 cur->prev->next = link;
                 link->next = cur;

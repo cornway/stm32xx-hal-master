@@ -35,11 +35,12 @@ typedef enum {false, true} bool;
 #define AUDIO_PLAY_SCHEME 0
 
 extern void music_tickle (void);
-extern int music_init (void);
+extern int cd_init (void);
 
 #define AUDIO_TIMEOUT_MAX 2000 /*2 s*/
 #define MAX_2BAND_VOL ((MAX_VOL) | (MAX_VOL << 8))
 #define MAX_4BAND_VOL ((MAX_2BAND_VOL) | (MAX_2BAND_VOL << 16))
+#define A_NITIAL_VOL (45)
 
 typedef struct {
     int size;
@@ -86,28 +87,28 @@ typedef enum {
     A_ISR_MAX,
 } isr_status_e;
 
-#define chan_len(chan) \
+#define a_chunk_len(chan) \
     ((chan)->inst.chunk.alen)
 
-#define chan_buf(chan) \
+#define a_chunk_data(chan) \
     ((chan)->inst.chunk.abuf)
 
-#define chan_vol(chan) \
+#define a_chunk_vol(chan) \
     ((chan)->inst.chunk.volume)
 
-#define chan_is_play(chan) \
+#define a_chn_play(chan) \
     ((chan)->inst.is_playing)
 
-#define chan_cache(chan) \
+#define a_chunk_cache(chan) \
     ((chan)->inst.chunk.cache)
 
-#define chan_complete(chan) \
+#define a_chn_cplt(chan) \
     (chan)->inst.complete
 
-#define chan_loopstart(chan) \
+#define a_chn_loopstart(chan) \
     (chan)->inst.chunk.loopstart
 
-#define chan_foreach_safe(head, channel, next) \
+#define a_chan_foreach_safe(head, channel, next) \
 for (channel = (head)->first,\
      next = channel->next;   \
      channel;                \

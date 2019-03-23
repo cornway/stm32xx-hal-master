@@ -207,7 +207,7 @@ a_grab_mixdata_all (a_channel_head_t *chanlist, a_buf_t *track, mixdata_t *mixda
         minsamples = track->samples;
     }
 
-    chan_foreach_safe(chanlist, cur, next) {
+    a_chan_foreach_safe(chanlist, cur, next) {
         a_grab_mixdata(cur, track, mixdata);
         mixdata->size = minsamples;
         mixdata++;
@@ -248,8 +248,8 @@ static void a_paint_buf_ex (a_channel_head_t *chanlist, a_buf_t *abuf, int compr
     int durty = 0;
     bool cnt = 0;
 
-    chan_foreach_safe(chanlist, cur, next) {
-        if (chan_complete(cur) && chan_complete(cur)(1)) {
+    a_chan_foreach_safe(chanlist, cur, next) {
+        if (a_chn_cplt(cur) && a_chn_cplt(cur)(A_HALF)) {
             durty++;
             cnt++;
             continue;
@@ -276,7 +276,7 @@ a_move_channel_window (a_channel_t *desc, a_buf_t *abuf, mixdata_t *mixdata)
 {
     int size;
 
-    if (chan_is_play(desc)== 0) {
+    if (a_chn_play(desc)== 0) {
         return;
     }
 
@@ -301,31 +301,31 @@ a_grab_mixdata (a_channel_t *channel, a_buf_t *track, mixdata_t *mixdata)
 static inline uint8_t
 a_chan_try_reject (a_channel_t *desc)
 {
-    void **cache = chan_cache(desc);
+    void **cache = a_chunk_cache(desc);
 
     if (cache && (*cache == NULL)) {
         goto remove;
     }
     if (desc->loopsize <= 0) {
 
-        if (chan_loopstart(desc) >= 0) {
+        if (a_chn_loopstart(desc) >= 0) {
 
-            desc->loopsize = chan_len(desc);
-            desc->bufposition = chan_buf(desc);
-            desc->bufposition += chan_loopstart(desc);
-            desc->loopsize -= chan_loopstart(desc);
+            desc->loopsize = a_chunk_len(desc);
+            desc->bufposition = a_chunk_data(desc);
+            desc->bufposition += a_chn_loopstart(desc);
+            desc->loopsize -= a_chn_loopstart(desc);
             if (desc->loopsize < 0) {
                 error_handle();
             }
         }
 
-        if (chan_complete(desc)) {
-            if (chan_complete(desc)(2)) {
+        if (a_chn_cplt(desc)) {
+            if (a_chn_cplt(desc)(A_FULL)) {
                 goto remove;
             } else {
-                desc->bufposition = chan_buf(desc);
-                desc->loopsize = chan_len(desc);
-                desc->volume = chan_vol(desc);
+                desc->bufposition = a_chunk_data(desc);
+                desc->loopsize = a_chunk_len(desc);
+                desc->volume = a_chunk_vol(desc);
             }
         } else {
             goto remove;
@@ -341,8 +341,8 @@ remove :
 uint8_t a_chanlist_try_reject_all (a_channel_head_t *chanlist)
 {
     a_channel_t *cur, *next;
-    chan_foreach_safe(chanlist, cur, next) {
-        if (chan_is_play(cur)) {
+    a_chan_foreach_safe(chanlist, cur, next) {
+        if (a_chn_play(cur)) {
             a_chan_try_reject(cur);
         }
     }
