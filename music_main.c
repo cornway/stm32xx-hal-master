@@ -5,11 +5,6 @@
 
 #if MUSIC_MODULE_PRESENT
 
-static void error_handle (void)
-{
-    for (;;) {}
-}
-
 #define N(x) (sizeof(x) / sizeof(x[0]))
 
 #define MUS_BUF_LEN_MS 1000

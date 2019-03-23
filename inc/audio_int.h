@@ -126,6 +126,9 @@ void a_paint_buffer (a_channel_head_t *chanlist, a_buf_t *abuf, int compratio);
 
 uint8_t a_chanlist_try_reject_all (a_channel_head_t *chanlist);
 
+void error_handle (void);
+
+
 #if USE_REVERB
 
 void
