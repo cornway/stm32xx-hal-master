@@ -5,6 +5,7 @@
 #include "main.h"
 #include "dev_conf.h"
 #include "stm32f7xx_it.h"
+#include "nvic.h"
 
 #if DEBUG_SERIAL
 

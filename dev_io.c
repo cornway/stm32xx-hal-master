@@ -1,9 +1,13 @@
-
 #include "main.h"
 #include "ff.h"
-
+#include "ff_gen_drv.h"
+#include "sd_diskio.h"
+#include "dev_io.h"
 
 #define MAX_HANDLES		3
+
+FATFS SDFatFs;  /* File system object for SD card logical drive */
+char SDPath[4]; /* SD card logical drive path */
 
 typedef struct {
     FIL file;
@@ -23,6 +27,7 @@ static inline FIL *allochandle (int *num)
             return &sys_handles[i].file;
         }
     }
+    *num = -1;
     return NULL;
 }
 
@@ -36,6 +41,18 @@ static inline void releasehandle (int handle)
     sys_handles[handle].is_owned = 0;
 }
 
+int dev_io_init (void)
+{
+    if(FATFS_LinkDriver(&SD_Driver, SDPath)) {
+        return -1;
+    }
+
+    if(f_mount(&SDFatFs, (TCHAR const*)SDPath, 0) != FR_OK) {
+        return -1;
+    }
+    return 0;
+}
+
 int d_open (char *path, int *hndl, char const * att)
 {
     int ret = -1;
@@ -44,11 +61,11 @@ int d_open (char *path, int *hndl, char const * att)
     if (!att) {
         return ret;
     }
+
     allochandle(hndl);
     if (*hndl < 0) {
         return ret;
     }
-
     while (att)
     switch (*att) {
         case 'r':
@@ -150,5 +167,36 @@ int d_mkdir (char *path)
 uint32_t d_time (void)
 {
     return HAL_GetTick();
+}
+
+int d_dirlist (char *path, flist_t *flist)
+{
+    FRESULT res;
+    DIR dir;
+    FILINFO fno;
+    ftype_t ftype;
+
+    res = f_opendir(&dir, path);
+    if (res == FR_OK) {
+        for (;;) {
+            res = f_readdir(&dir, &fno); 
+            if (res != FR_OK || fno.fname[0] == 0) {
+                break;
+            }
+
+            if ((fno.fattrib & AM_DIR) == 0) {
+                ftype = FTYPE_FILE;
+            } else {
+                ftype = FTYPE_DIR;
+            }
+            if (flist->clbk(fno.fname, ftype)) {
+                break;
+            }
+        }
+        f_closedir(&dir);
+    } else {
+        return -1;
+    }
+    return 0;
 }
 

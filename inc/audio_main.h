@@ -2,12 +2,15 @@
 #define _AUDIO_MAIN_H
 
 #include "stdint.h"
+#include "dev_conf.h"
 
 
 #define AUDIO_SIZE_TO_MS(rate, size) (((long long)(size) * 1000) / (rate))
 #define AUDIO_MS_TO_SIZE(rate, ms) (((((rate) << 2) / 1000) * (ms)) >> 2)
 
+#ifndef AUDIO_SAMPLE_RATE
 #define AUDIO_SAMPLE_RATE 11025U
+#endif
 #define AUDIO_MAX_CHANS 16
 #define AUDIO_MUS_CHAN_START AUDIO_MAX_CHANS + 1
 #define AUDIO_OUT_BUFFER_SIZE 0x800

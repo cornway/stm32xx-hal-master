@@ -22,7 +22,9 @@
 
 #endif /*USE_STM32F769I_DISCO*/
 
+#ifndef HEAP_CACHE_SIZE
 #define HEAP_CACHE_SIZE (0x0007ff00)
+#endif
 
 static uint8_t *__heap_buf_cache;
 static uint8_t *__heap_buf_cache_top;

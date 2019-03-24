@@ -12,8 +12,6 @@ typedef struct {
 
 static snd_cache_t snd_num_cache[128];
 
-//extern const char *snd_dir_path =
-//"doom/sound/";
 extern const char *snd_dir_path;
 
 
@@ -71,6 +69,10 @@ search_ext_sound (char *_name, int num)
     size = d_open(path, &file, "r");
 
     if (file < 0) {
+        return cache_num;
+    }
+    if (size < 0) {
+        d_close(file);
         return cache_num;
     }
     cache_num = snd_ext_alloc_slot();

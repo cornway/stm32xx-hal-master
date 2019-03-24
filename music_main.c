@@ -1,3 +1,4 @@
+#include "string.h"
 #include "audio_main.h"
 #include "audio_int.h"
 #include "dev_io.h"
@@ -80,7 +81,7 @@ static void cd_reset (cdaudio_t *cd)
     cd->state = CD_IDLE;
 }
 
-static int cd_cplt_hdlr (int complete)
+static int cd_cplt_hdlr (cplt_stat_t complete)
 {
     switch (complete) {
         case A_HALF:
@@ -130,6 +131,7 @@ static int cd_open_stream (track_t *song, const char *path)
         error_handle();
     }
     song->remain = song->stream.FileSize / sizeof(snd_sample_t);
+    return 0;
 }
 
 static void cd_close_stream (cdaudio_t *cd, track_t *song)

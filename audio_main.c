@@ -99,6 +99,7 @@ a_paint_buff_helper (a_buf_t *abuf)
 {
     int compratio = chan_llist_ready.size + 2;
 
+    a_clear_abuf(abuf);
     if (a_chanlist_try_reject_all(&chan_llist_ready) == 0) {
         a_clear_abuf(abuf);
         return;
