@@ -261,7 +261,7 @@ void NVIC_dump (void)
             continue;
         }
         if (irq_desc->irq < 0) {
-            dprintf("slot[%d] : %d :Cortex-M7 Processor Exception\n", irq_desc->irq);
+            dprintf("slot[%d] : %d :Cortex-M7 Processor Exception\n", i, irq_desc->irq);
             continue;
         }
         dprintf("slot[%d] : %s, num : %d, prio : %d, subprio : %d, group : %d\n",
