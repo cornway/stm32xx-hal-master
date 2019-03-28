@@ -270,9 +270,11 @@ void input_proc_keys (void)
     i_event_t event = {0, 0};
     ts_status_t ts_status = {TOUCH_IDLE, 0, 0};
 
-    if (!ts_freeze_ticks) {
-        /*Skip sensor processing while gamepad active*/
-        ts_read_status(&ts_status);
+    if (!BSP_LCD_UseHDMI()) {
+        if (!ts_freeze_ticks) {
+            /*Skip sensor processing while gamepad active*/
+            ts_read_status(&ts_status);
+        }
     }
     if (ts_status.status)
     {

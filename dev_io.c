@@ -4,6 +4,8 @@
 #include "sd_diskio.h"
 #include "dev_io.h"
 
+#define READONLY 1
+
 #define MAX_HANDLES		3
 
 FATFS SDFatFs;  /* File system object for SD card logical drive */
@@ -72,10 +74,12 @@ int d_open (char *path, int *hndl, char const * att)
             mode |= FA_READ | FA_OPEN_EXISTING;
             att = NULL;
         break;
+#if !READONLY
         case 'w':
             mode |= FA_WRITE | FA_OPEN_EXISTING;
             att = NULL;
         break;
+#endif
         case '+':
             att++;
             mode |= FA_CREATE_ALWAYS;
@@ -91,12 +95,22 @@ int d_open (char *path, int *hndl, char const * att)
     return f_size(gethandle(*hndl));
 }
 
+int d_size (int hndl)
+{
+    return f_size(gethandle(hndl));
+}
+
 void d_close (int h)
 {
     if (h < 0) {
         return;
     }
     releasehandle(h);
+}
+
+void d_unlink (char *path)
+{
+
 }
 
 void d_seek (int handle, int position)
@@ -141,6 +155,7 @@ char *d_gets (int handle, char *dst, int count)
 
 int d_write (int handle, void *src, int count)
 {
+#if !READONLY
     char *data;
     UINT done;
     FRESULT res = FR_NOT_READY;
@@ -153,14 +168,19 @@ int d_write (int handle, void *src, int count)
         return -1;
     }
     return done;
+#else
+    return count;
+#endif
 }
 
 int d_mkdir (char *path)
 {
+#if !READONLY
     static DIR dp;
     if (f_opendir(&dp, path)) {
         return -1;
     }
+#endif
     return 0;
 }
 

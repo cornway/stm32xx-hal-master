@@ -276,6 +276,15 @@ uint8_t BSP_LCD_Init(void)
   return (BSP_LCD_InitEx(LCD_ORIENTATION_LANDSCAPE));
 }
 
+static int bsp_lcd_driver_id = 0;
+
+int BSP_LCD_UseHDMI (void)
+{
+    if (bsp_lcd_driver_id == ADV7533_ID) {
+        return 1;
+    }
+    return 0;
+}
 /**
   * @brief  Initializes the DSI LCD. 
   * The ititialization is done as below:
@@ -309,7 +318,7 @@ uint8_t BSP_LCD_InitEx(LCD_OrientationTypeDef orientation)
 
   /* Check the connected monitor */
   read_id = LCD_IO_GetID();
-
+  bsp_lcd_driver_id = read_id;
 #if defined(USE_LCD_HDMI)   
   if(read_id == ADV7533_ID)
   {

@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include "dev_conf.h"
 #include "main.h"
 #include "gfx.h"
 
@@ -13,8 +14,13 @@
 
 #include "stm32f769i_discovery_lcd.h"
 
+#ifndef SDRAM_VOL_START
 #define SDRAM_VOL_START 0xC0000000
+#endif
+
+#ifndef SDRAM_VOL_END
 #define SDRAM_VOL_END   0xC1000000
+#endif
 
 #else /*USE_STM32F769I_DISCO*/
 

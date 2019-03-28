@@ -205,6 +205,7 @@ void audio_update (void)
 void audio_init (void)
 {
     memset(&chan_llist_ready, 0, sizeof(chan_llist_ready));
+    memset(channels, 0, sizeof(channels));
     chan_llist_ready.empty_handle = a_chanlist_empty_clbk;
     chan_llist_ready.first_link_handle = a_chanlist_first_node_clbk;
     chan_llist_ready.remove_handle = a_chanlist_node_remove_clbk;

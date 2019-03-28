@@ -11,7 +11,9 @@ typedef struct {
 } flist_t;
 
 int d_open (char *path, int *hndl, char const * att);
+int d_size (int hndl);
 void d_close (int h);
+void d_unlink (char *path);
 void d_seek (int handle, int position);
 int d_eof (int handle);
 int d_read (int handle, void *dst, int count);

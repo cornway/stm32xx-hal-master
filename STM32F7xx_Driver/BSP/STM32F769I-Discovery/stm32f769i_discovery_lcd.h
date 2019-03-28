@@ -323,6 +323,7 @@ typedef enum
 /** @addtogroup STM32F769I_DISCOVERY_LCD_Exported_Functions
   * @{
   */
+int BSP_LCD_UseHDMI (void);
 uint8_t  BSP_LCD_Init(void);
 uint8_t  BSP_LCD_InitEx(LCD_OrientationTypeDef orientation);
 uint8_t  BSP_LCD_HDMIInitEx(uint8_t format);
