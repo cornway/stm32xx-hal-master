@@ -9,7 +9,7 @@
 typedef struct {
     snd_sample_t *buf;
     int samples;
-    bool durty;
+    boolean durty;
 } a_master_t;
 
 static snd_sample_t master_buf_raw[2][AUDIO_OUT_BUFFER_SIZE] ALIGN(8);

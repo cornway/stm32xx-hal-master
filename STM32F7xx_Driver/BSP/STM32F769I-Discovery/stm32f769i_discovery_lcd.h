@@ -57,7 +57,7 @@
 #include "../../../Utilities/Fonts/fonts.h"
 
 #include <string.h> /* use of memset() */
-
+#include "hdmi_pub.h"
 /** @addtogroup BSP
   * @{
   */
@@ -326,7 +326,7 @@ typedef enum
 int BSP_LCD_UseHDMI (void);
 uint8_t  BSP_LCD_Init(void);
 uint8_t  BSP_LCD_InitEx(LCD_OrientationTypeDef orientation);
-uint8_t  BSP_LCD_HDMIInitEx(uint8_t format);
+uint8_t  BSP_LCD_HDMIInitEx(void);
 
 void     BSP_LCD_MspDeInit(void);
 void     BSP_LCD_MspInit(void);

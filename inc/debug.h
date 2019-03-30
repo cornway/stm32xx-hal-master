@@ -5,11 +5,18 @@
 #define PRINTF_SERIAL  1
 #define DEBUG_SERIAL 1
 
+#include "stddef.h"
 #include "stdarg.h"
+#include "dev_conf.h"
 
 #define __func__ __FUNCTION__
+#define PRINTF __attribute__((format(printf, 1, 2)))
 
 #if DEBUG_SERIAL
+
+#ifndef SERIAL_TSF
+#define SERIAL_TSF 1
+#endif
 
 void serial_init (void);
 void serial_putc (char c);
@@ -17,7 +24,7 @@ char serial_getc (void);
 void serial_send_buf (void *data, size_t cnt);
 void serial_flush (void);
 
-void dprintf (char *fmt, ...);
+void dprintf (char *fmt, ...) PRINTF;
 void dvprintf (char *fmt, va_list argptr);
 void hexdump (uint8_t *data, int len, int rowlength);
 

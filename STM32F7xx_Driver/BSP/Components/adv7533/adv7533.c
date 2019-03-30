@@ -35,6 +35,8 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "adv7533.h"
+#include "hdmi_pub.h"
+#include "debug.h"
 
 /** @addtogroup BSP
   * @{
@@ -92,6 +94,207 @@ AUDIO_DrvTypeDef adv7533_drv =
   * @{
   */
 
+#define RDY_INTR_BP 2
+#define HPD_INTR_BP 7
+#define MON_INTR_BP 6
+
+#define TXPWR_CTL_BP 6
+
+static uint8_t __read_group (uint8_t addr, uint8_t reg, uint8_t shift, uint8_t mask)
+{
+    uint8_t tmp;
+
+    tmp = HDMI_IO_Read(addr, reg);
+    return (tmp >> shift) & mask;
+}
+
+static uint8_t __read_val (uint8_t addr, uint8_t reg)
+{
+    return __read_group(addr, reg, 0, ~0);
+}
+
+static int __write_group (uint8_t addr, uint8_t reg, uint8_t shift, uint8_t mask, uint8_t value, int timeout)
+{
+    uint8_t tmp;
+
+    tmp = __read_group(addr, reg, 0, ~0);
+
+    value = value & mask;
+    tmp = tmp & ~(mask << shift);
+    tmp = tmp | (value << shift);
+
+    HDMI_IO_Write(addr, reg, tmp);
+    tmp = (tmp >> shift) & mask;
+    while ((timeout--) && (tmp != value)) {
+        HAL_Delay(1);
+        tmp = __read_group(addr, reg, shift, mask);
+    }
+    if (timeout == 0) {
+        return -1;
+    }
+    return 0;
+}
+
+static int __write_val (uint8_t addr, uint8_t reg, uint8_t val, int timeout)
+{
+    __write_group(addr, reg, 0, ~0, val, timeout);
+}
+
+static uint8_t __read_bit (uint8_t addr, uint8_t reg, uint8_t bit)
+{
+    return __read_group(addr, reg, bit, 0x1);
+}
+
+static int __write_bit (uint8_t addr, uint8_t reg, uint8_t bit, uint8_t value, int timeout)
+{
+    return __write_group(addr, reg, bit, 0x1, value, timeout);
+}
+
+static void adv7533_set_intr_ena (int value, uint8_t intr)
+{
+    __write_bit(ADV7533_MAIN_I2C_ADDR, 0x94, intr, value, -1);
+}
+
+static int adv7533_get_intr_ena (uint8_t intr)
+{
+    return __read_bit(ADV7533_MAIN_I2C_ADDR, 0x94, intr);
+}
+
+static void adv7533_set_intr_stat (int value, uint8_t intr)
+{
+    __write_bit(ADV7533_MAIN_I2C_ADDR, 0x96, intr, value, -1);
+}
+
+static int adv7533_get_intr_stat (uint8_t intr)
+{
+    return __read_bit(ADV7533_MAIN_I2C_ADDR, 0x96, intr);
+}
+
+static int adv7533_wait_intr (int timeout, uint8_t intr)
+{
+    adv7533_set_intr_ena(1, intr);
+
+    while ((timeout--) && !adv7533_get_intr_stat(intr)) {
+        HAL_Delay(1);
+    }
+
+    adv7533_set_intr_ena(0, intr);
+}
+
+#define floor2(v, a) ((v) & ~(a))
+
+#define _dump_hex(name, buf, len) __dump_hex(__func__, name, buf, len)
+
+void __dump_hex (const char *func, const char *name, uint8_t *buf, int len)
+{
+    int i;
+
+    dprintf("%s() : DUMP [0-%d] :\n", func, len);
+    for (i = 0; i < floor2(len, 4); i += 4) {
+        dprintf("%s[%02x-%02x] %02x %02x %02x %02x\n",
+        name,
+        i, i + 3,
+        buf[i], buf[i + 1],
+        buf[i + 2], buf[i + 3]);
+    }
+    if (i >= len) {
+        return;
+    }
+    dprintf("%s[%02x-%02x]", i, len);
+    for (; i < len; i++) {
+        dprintf("%02x ", buf[i]);
+    }
+    dprintf("\nDUMP Exit\n");
+}
+
+#define _dump_i2c_hex(name, addr, off, len) __dump_i2c_hex(__func__, name, addr, off, len)
+
+void __dump_i2c_hex (const char *func, const char *name, uint8_t addr, uint8_t offset, uint8_t len)
+{
+    int reg, i;
+    uint8_t buf[256];
+    len = len & 0xff;
+
+    for (i = 0, reg = offset; i < len; i++, reg++) {
+        buf[i] = __read_val(addr, reg);
+    }
+    __dump_hex(func, name, buf, len);
+}
+
+/*FIXME !!! : handle interrupt with care, remove delay(s)*/
+static int ADV7533_EDID_Read_Begin (void)
+{
+    /* initiate edid read in adv7533 */
+    uint8_t tmp;
+    int ret;
+
+    //adv7533_wait_intr(-1, HPD_INTR_BP);
+
+    ADV7533_PowerOn();
+
+    adv7533_wait_intr(-1, RDY_INTR_BP);
+
+    ret = __write_group(ADV7533_MAIN_I2C_ADDR, 0xC9, 0, 0x13, 0x13, -1);
+
+    return ret;
+}
+
+static int ADV7533_EDID_Read_End (void)
+{
+    __write_group(ADV7533_MAIN_I2C_ADDR, 0xC9, 0, 0x13, 0, -1);
+
+    ADV7533_PowerDown();
+
+    return 0;
+}
+
+static int ADV7533_Read_EDID (uint32_t size, char *edid_buf)
+{
+    uint8_t edid_addr;
+    int ndx;
+    if (!edid_buf)
+        return -1;
+
+    ADV7533_EDID_Read_Begin();
+    HAL_Delay(500);
+    dprintf("%s: size %d\n", __func__, size);
+
+    edid_addr = HDMI_IO_Read(ADV7533_MAIN_I2C_ADDR, 0x43);
+
+    dprintf("%s: edid address 0x%x\n", __func__, edid_addr);
+
+    HDMI_IO_Read_Buf(edid_addr, 0x00, edid_buf, size);
+
+    _dump_hex("EDID", edid_buf, size);
+
+    ADV7533_EDID_Read_End();
+
+    return size;
+}
+
+void ADV7533_DumpRegs (void)
+{
+    int i = 0;
+    uint8_t reg;
+
+    _dump_i2c_hex("MAIN_I2C_ADDR", ADV7533_MAIN_I2C_ADDR, 0, 0xff);
+    _dump_i2c_hex("DSI_I2C_ADDR", ADV7533_CEC_DSI_I2C_ADDR, 0, 0xff);
+}
+
+int ADV7533_EDID_Size (void)
+{
+    return EDID_SEG_SIZE;
+}
+
+int ADV7533_Get_EDID (hdmi_edid_seg_t *edid, int size)
+{
+    if (size < 0) {
+        size = ADV7533_EDID_Size();
+    }
+
+    return ADV7533_Read_EDID(size, edid->raw);
+}
+
 /**
   * @brief  Initializes the ADV7533 bridge.
   * @param  None
@@ -102,8 +305,8 @@ uint8_t ADV7533_Init(void)
   HDMI_IO_Init();
 
   /* Configure the IC2 address for CEC_DSI interface */
+  //__write_group(ADV7533_MAIN_I2C_ADDR, 0xE1, 0, ~0, ADV7533_CEC_DSI_I2C_ADDR, -1);
   HDMI_IO_Write(ADV7533_MAIN_I2C_ADDR, 0xE1, ADV7533_CEC_DSI_I2C_ADDR);
-
   return 0;
 }
 
@@ -114,10 +317,9 @@ uint8_t ADV7533_Init(void)
   */
 void ADV7533_PowerOn(void)
 {
-  uint8_t tmp;
-  
   /* Power on */
-  tmp = HDMI_IO_Read(ADV7533_MAIN_I2C_ADDR, 0x41);
+  //__write_bit(ADV7533_MAIN_I2C_ADDR, 0x41, TXPWR_CTL_BP, 0, -1);
+  uint8_t tmp = HDMI_IO_Read(ADV7533_MAIN_I2C_ADDR, 0x41);
   tmp &= ~0x40;
   HDMI_IO_Write(ADV7533_MAIN_I2C_ADDR, 0x41, tmp);
 }
@@ -129,10 +331,9 @@ void ADV7533_PowerOn(void)
   */
 void ADV7533_PowerDown(void)
 {
-   uint8_t tmp;
-   
    /* Power down */
-   tmp = HDMI_IO_Read(ADV7533_MAIN_I2C_ADDR, 0x41);
+   //__write_bit(ADV7533_MAIN_I2C_ADDR, 0x41, TXPWR_CTL_BP, 1, -1);
+   uint8_t tmp = HDMI_IO_Read(ADV7533_MAIN_I2C_ADDR, 0x41);
    tmp |= 0x40;
    HDMI_IO_Write(ADV7533_MAIN_I2C_ADDR, 0x41, tmp);
 }
@@ -143,7 +344,7 @@ void ADV7533_PowerDown(void)
   *                 video configuration parameters
   * @retval None
   */
-void ADV7533_Configure(adv7533ConfigTypeDef * config)
+void ADV7533_Configure(uint8_t dsi_lanes)
 {
   uint8_t tmp;
   
@@ -196,7 +397,7 @@ void ADV7533_Configure(adv7533ConfigTypeDef * config)
   HDMI_IO_Write(ADV7533_CEC_DSI_I2C_ADDR, 0x57, tmp);
   
   /* Configure the number of DSI lanes */
-  HDMI_IO_Write(ADV7533_CEC_DSI_I2C_ADDR, 0x1C, (config->DSI_LANES << 4));
+  HDMI_IO_Write(ADV7533_CEC_DSI_I2C_ADDR, 0x1C, (dsi_lanes << 4));
   
   /* Setup video output mode */
   /* Select HDMI mode */
@@ -225,6 +426,7 @@ void ADV7533_Configure(adv7533ConfigTypeDef * config)
   tmp &= ~0x80;
   HDMI_IO_Write(ADV7533_CEC_DSI_I2C_ADDR, 0x27, tmp);
 }
+
 
 /**
   * @brief  Enable video pattern generation.

@@ -790,6 +790,11 @@ uint8_t HDMI_IO_Read(uint8_t Addr, uint8_t Reg)
   return value;   
 }
 
+void HDMI_IO_Read_Buf (uint8_t Addr, uint8_t Regm, uint8_t *buf, size_t size)
+{
+    I2Cx_ReadMultiple(&hI2cAudioHandler, Addr, (uint16_t)Regm, I2C_MEMADD_SIZE_8BIT, buf, size);
+}
+
 /**
   * @brief  HDMI delay 
   * @param  Delay: Delay in ms

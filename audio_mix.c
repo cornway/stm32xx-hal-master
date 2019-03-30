@@ -107,7 +107,7 @@ a_write_single_to_master (snd_sample_t *dest, mixdata_t *mixdata, int compratio)
 }
 
 void
-a_mix_single_to_master (snd_sample_t *dest, mixdata_t *mixdata, int compratio, bool isfirst)
+a_mix_single_to_master (snd_sample_t *dest, mixdata_t *mixdata, int compratio, boolean isfirst)
 {
     int16_t *pdest = (int16_t *)dest;
     int16_t *psrc = (int16_t *)mixdata[0].buf;
@@ -246,7 +246,7 @@ static void a_paint_buf_ex (a_channel_head_t *chanlist, a_buf_t *abuf, int compr
     a_channel_t *cur, *next;
     mixdata_t mixdata;
     int durty = 0;
-    bool cnt = false;
+    int cnt = false;
 
     a_chan_foreach_safe(chanlist, cur, next) {
         if (a_chn_cplt(cur) && a_chn_cplt(cur)(A_HALF)) {

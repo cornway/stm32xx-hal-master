@@ -6,6 +6,7 @@
 #include "dev_conf.h"
 #include "stm32f7xx_it.h"
 #include "nvic.h"
+#include "misc_utils.h"
 
 #if DEBUG_SERIAL
 
@@ -57,8 +58,8 @@ struct uart_desc_s {
 
 #if TX_STREAM_BUFERIZED
 
-#define STREAM_BUFSIZE 256
-#define STREAM_BUFCNT (1 << 2)
+#define STREAM_BUFSIZE 512
+#define STREAM_BUFCNT 2
 #define STREAM_BUFCNT_MS (STREAM_BUFCNT - 1)
 
 typedef struct {
@@ -313,13 +314,37 @@ static HAL_StatusTypeDef _serial_send (void *data, size_t cnt)
     return status;
 }
 
+#if SERIAL_TSF
+static char prev_putc = 0xff;
+
+static inline boolean __newline_char (char c)
+{
+    if ('\n' == c ||
+        '\r' == c) {
+
+        return true;
+    }
+    return false;
+}
+#endif
+
 void serial_putc (char c)
 {
-    HAL_StatusTypeDef status;
+    HAL_StatusTypeDef status = HAL_OK;
     uint8_t buf[1] = {c};
 
-    status = _serial_send(buf, sizeof(buf));
+#if SERIAL_TSF
+    if (__newline_char(prev_putc) ||
+        prev_putc == 0xff) {
 
+        dprintf("%c", c);
+    } else {
+        status = _serial_send(buf, sizeof(buf));
+    }
+    prev_putc = c;
+#else
+    status = _serial_send(buf, sizeof(buf));
+#endif
     if (status != HAL_OK){
         serial_fatal();
     }
@@ -350,10 +375,73 @@ void serial_flush (void)
     irq_restore(irq_flags);
 }
 
+#if SERIAL_TSF
+
+#define MSEC 1000
+
+static void inline __set_newline (char *str)
+{
+    prev_putc = 0;
+    while (*str) {
+        if (__newline_char(*str)) {
+            prev_putc = *str;
+            break;
+        }
+        str++;
+    }
+}
+
+static inline int __insert_tsf (char *fmt, char *buf, int max)
+{
+    uint32_t msec, sec;
+
+    if (!__newline_char(prev_putc) &&
+        prev_putc != 0xff) {
+
+        return 0;
+    }
+    msec = HAL_GetTick();
+    sec = msec / MSEC;
+    return snprintf(buf, max, "[%10d.%3d] ", sec, msec % MSEC);
+}
+
 void dprintf (char *fmt, ...)
 {
     va_list         argptr;
     char            string[1024];
+    int size, max = sizeof(string);
+
+    va_start (argptr, fmt);
+    size = __insert_tsf(fmt, string, max);
+    size += vsnprintf (string + size, max - size, fmt, argptr);
+    va_end (argptr);
+
+    assert(size < arrlen(string));
+    serial_send_buf(string, size);
+    __set_newline(fmt);
+}
+
+void dvprintf (char *fmt, va_list argptr)
+{
+    char            string[1024];
+    int size, max = sizeof(string);
+
+    size = __insert_tsf(fmt, string, sizeof(string));
+    size += vsnprintf (string + size, max - size, fmt, argptr);
+
+    assert(size < arrlen(string));
+    serial_send_buf(string, size);
+    __set_newline(fmt);
+}
+
+
+#else /*SERIAL_TSF*/
+
+void dprintf (char *fmt, ...)
+{
+    va_list         argptr;
+    /*TODO : use local buf*/
+    static char            string[1024];
     int size;
 
     va_start (argptr, fmt);
@@ -373,6 +461,7 @@ void dvprintf (char *fmt, va_list argptr)
     serial_send_buf(string, size);
 }
 
+#endif /*SERIAL_TSF*/
 
 #if TX_STREAM_USE_DMA
 

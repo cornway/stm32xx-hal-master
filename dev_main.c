@@ -43,10 +43,7 @@
 #include "input_main.h"
 #include "dev_io.h"
 #include "debug.h"
-
-#ifndef arrlen
-#define arrlen(a) sizeof(a) / sizeof(a[0])
-#endif
+#include "misc_utils.h"
 
 #if (_USE_LFN == 3)
 #error "ff_malloc, ff_free must be redefined to Sys_HeapAlloc"

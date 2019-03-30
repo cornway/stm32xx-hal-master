@@ -28,7 +28,7 @@ static int isr_pending[A_ISR_MAX] = {0};
 static a_channel_t channels[AUDIO_MUS_CHAN_START + 1/*Music channel*/];
 static a_channel_head_t chan_llist_ready;
 
-static bool a_force_stop        = false;
+static boolean a_force_stop        = false;
 static uint32_t a_enabled       = 0;
 
 static irqmask_t audio_irq_mask;
@@ -163,7 +163,7 @@ void BSP_AUDIO_OUT_Error_CallBack(void)
     error_handle();
 }
 
-static void a_paint_all (bool force)
+static void a_paint_all (boolean force)
 {
     a_buf_t master;
 

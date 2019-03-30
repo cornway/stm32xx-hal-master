@@ -1,29 +1,8 @@
 #ifndef _AUDIO_INT_H
 #define _AUDIO_INT_H
 
-#ifndef bool
-typedef enum {false, true} bool;
-#endif
-
-#ifndef arrlen
-#define arrlen(a) sizeof(a) / sizeof(a[0])
-#endif
-
-#ifndef offsetof
-#define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
-#endif
-
-#ifndef container_of
-#define container_of(ptr, type, member)     \
-    (type *)((uint8_t *)(ptr) - offsetof(type,member))
-#endif
-
-#ifndef A_COMPILE_TIME_ASSERT
-#define A_COMPILE_TIME_ASSERT(name, x)               \
-       typedef int A_dummy_ ## name[(x) * 2 - 1]
-#endif
-
 #include "dev_conf.h"
+#include "misc_utils.h"
 
 #define USE_STEREO 0
 #define USE_REVERB 0
@@ -51,7 +30,7 @@ typedef struct {
 typedef struct {
     snd_sample_t *buf;
     int samples;
-    bool *durty;
+    boolean *durty;
 } a_buf_t;
 
 typedef struct a_channel_head_s a_channel_head_t;

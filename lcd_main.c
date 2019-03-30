@@ -37,6 +37,10 @@
 /* Includes ------------------------------------------------------------------*/
 #include "lcd_main.h"
 
+#ifndef SCREEN_MAX_SCALE
+#define SCREEN_MAX_SCALE 2
+#endif
+
 extern LTDC_HandleTypeDef  hltdc_discovery;
 
 extern void *Sys_HeapAllocFb (int *size);
@@ -114,12 +118,22 @@ void screen_win_cfg (screen_t *screen)
     int layer;
     uint32_t scale_w = (bsp_lcd_width / screen->width);
     uint32_t scale_h = (bsp_lcd_height / screen->height);
-    uint32_t w = screen->width * scale_w;
-    uint32_t h = screen->height * scale_h;
-    uint32_t x = (bsp_lcd_width - w) / scale_w;
-    uint32_t y = (bsp_lcd_height - h) / scale_h;
+    uint32_t x, y, w, h;
 
     LCD_LayerCfgTypeDef  Layercfg;
+
+    if (scale_w > SCREEN_MAX_SCALE) {
+        scale_w = SCREEN_MAX_SCALE;
+    }
+
+    if (scale_h > SCREEN_MAX_SCALE) {
+        scale_h = SCREEN_MAX_SCALE;
+    }
+
+    w = screen->width * scale_w;
+    h = screen->height * scale_h;
+    x = (bsp_lcd_width - w) / scale_w;
+    y = (bsp_lcd_height - h) / scale_h;
 
     _alloc_fb_ondemand(w, h);
 
@@ -188,6 +202,74 @@ void screen_set_clut (pal_t *palette, uint32_t clut_num_entries)
         screen_load_clut (palette, clut_num_entries, layer);
     }
 }
+
+typedef struct {
+    pix_t a[4];
+} scanline_t;
+
+typedef union {
+#if (GFX_COLOR_MODE == GFX_COLOR_MODE_CLUT)
+    uint32_t w;
+#elif (GFX_COLOR_MODE == GFX_COLOR_MODE_RGB565)
+    uint64_t w;
+#endif
+    scanline_t sl;
+} scanline_u;
+
+#define DST_NEXT_LINE(x, w) (((uint32_t)(x) + w * 2 * sizeof(pix_t)))
+#define W_STEP (sizeof(scanline_t) / sizeof(pix_t))
+
+void screen_update_2x2(screen_t *in)
+{
+    uint64_t *d_y0;
+    uint64_t *d_y1;
+    uint64_t pix;
+    int s_y, i;
+    scanline_t *scanline;
+    scanline_u d_yt0, d_yt1;
+    screen_t screen;
+
+    screen_sync (0);
+    SCB_CleanDCache();
+    screen_get_invis_screen(&screen);
+
+    d_y0 = (uint64_t *)screen.buf;
+    d_y1 = (uint64_t *)DST_NEXT_LINE(d_y0, in->width);
+
+    for (s_y = 0; s_y < (in->width * in->height); s_y += in->width) {
+
+        scanline = (scanline_t *)&in->buf[s_y];
+
+        for (i = 0; i < in->width; i += W_STEP) {
+
+            d_yt0.sl = *scanline++;
+            d_yt1    = d_yt0;
+
+            d_yt0.sl.a[3] = d_yt0.sl.a[1];
+            d_yt0.sl.a[2] = d_yt0.sl.a[1];
+            d_yt0.sl.a[1] = d_yt0.sl.a[0];
+
+            d_yt1.sl.a[0] = d_yt1.sl.a[2];
+            d_yt1.sl.a[1] = d_yt1.sl.a[2];
+            d_yt1.sl.a[2] = d_yt1.sl.a[3];
+
+#if (GFX_COLOR_MODE == GFX_COLOR_MODE_CLUT)
+            pix = (uint64_t)(((uint64_t)d_yt1.w << 32) | d_yt0.w);
+#elif (GFX_COLOR_MODE == GFX_COLOR_MODE_RGB565)
+            pix = d_yt0.w;
+            *d_y0++     = pix;
+            *d_y1++     = pix;
+
+            pix = d_yt1.w;
+#endif
+            *d_y0++     = pix;
+            *d_y1++     = pix;
+        }
+        d_y0 = d_y1;
+        d_y1 = (uint64_t *)DST_NEXT_LINE(d_y0, in->width);
+    }
+}
+
 
 
 /**

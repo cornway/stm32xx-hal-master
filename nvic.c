@@ -2,25 +2,22 @@
 #include "nvic.h"
 #include "dev_conf.h"
 #include "debug.h"
+#include "misc_utils.h"
 
 #ifndef USE_STM32F769I_DISCO
 #error "Not supported"
-#endif
-
-#ifndef arrlen
-#define arrlen(a) sizeof(a) / sizeof(a[0])
 #endif
 
 #define InvalidIrqNum (NonMaskableInt_IRQn - 1)
 
 typedef struct {
     IRQn_Type irq;
-    int preempt, preemptsub;
-    int group;
+    uint8_t preempt, preemptsub;
+    uint8_t group;
 } irq_desc_t;
 
 FlagStatus initialized = RESET;
-static irq_desc_t irq_maptable[NVIC_IRQ_MAX];
+static irq_desc_t irq_maptable[NVIC_IRQ_MAX] = {{0}};
 static int irq_maptable_index = 0;
 
 irqmask_t irq_active_mask = 0, irq_saved_mask = 0;
@@ -36,7 +33,7 @@ static void NVIC_init_table (void)
     initialized = SET;
 }
 
-static void NVIC_map_irq (IRQn_Type IRQn, int preempt, int preemptsub, int group)
+static void NVIC_map_irq (IRQn_Type IRQn, uint8_t preempt, uint8_t preemptsub, uint8_t group)
 {
     int i;
     if (irq_maptable_index >= NVIC_IRQ_MAX) {
@@ -142,6 +139,15 @@ const char *NVIC_CortexM7_name[] =
   "SysTick_IRQn",//                = -1,     /*!< 15 Cortex-M7 System Tick Interrupt                                */
 };
 
+static const IRQn_Type NVIC_Cortex_map[] =
+{
+    -14, -12, -11, -10,
+    -5, -4, -2, -1,
+};
+
+A_COMPILE_TIME_ASSERT(NvicCortexNames, arrlen(NVIC_CortexM7_name) == arrlen(NVIC_Cortex_map));
+
+
 const char *NVIC_STM32_name[] =
 {
 /******  STM32 specific Interrupt Numbers **********************************************************************/
@@ -245,6 +251,19 @@ const char *NVIC_STM32_name[] =
   "SPDIF_RX_IRQn",//               = 97,     /*!< SPDIF-RX global Interrupt                                         */
 };
 
+//NVIC_Cortex_map
+
+char * const CortexIrqName (IRQn_Type irq)
+{
+    int i;
+
+    for (i = 0; i < arrlen(NVIC_CortexM7_name); i++) {
+        if (NVIC_Cortex_map[i] == irq) {
+            return (char * const)NVIC_CortexM7_name[i];
+        }
+    }
+    return NULL;
+}
 
 void NVIC_dump (void)
 {
@@ -261,7 +280,14 @@ void NVIC_dump (void)
             continue;
         }
         if (irq_desc->irq < 0) {
-            dprintf("slot[%d] : %d :Cortex-M7 Processor Exception\n", i, irq_desc->irq);
+            char * const name = CortexIrqName(irq_desc->irq);
+            dprintf("slot[%d] : %d : %s (Cortex-M7 Processor Exception)\n",
+                    i, irq_desc->irq,
+                    name ? name : "Unknown");
+            continue;
+        }
+        if (irq_desc->irq >= arrlen(NVIC_STM32_name)) {
+            dprintf("slot[%d] : %d : Too large IRQ num\n", i, irq_desc->irq);
             continue;
         }
         dprintf("slot[%d] : %s, num : %d, prio : %d, subprio : %d, group : %d\n",

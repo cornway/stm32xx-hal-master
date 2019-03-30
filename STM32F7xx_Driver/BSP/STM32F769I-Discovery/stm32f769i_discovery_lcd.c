@@ -98,7 +98,8 @@ EndDependencies */
 #include "../../../Utilities/Fonts/font16.c"
 #include "../../../Utilities/Fonts/font12.c"
 #include "../../../Utilities/Fonts/font8.c"
-
+#include "misc_utils.h"
+#include "debug.h"
 /** @addtogroup BSP
   * @{
   */
@@ -121,6 +122,18 @@ EndDependencies */
 #define LCD_DSI_ID              0x11
 #define LCD_DSI_ID_REG          0xA8
 
+enum {
+    DBG_OFF,
+    DBG_ERR,
+    DBG_WARN,
+    DBG_INFO,
+};
+
+#define ADV_DBG_LVL DBG_INFO
+
+#define dbg_eval(lvl) \
+    if (ADV_DBG_LVL >= (lvl))
+
 static DSI_VidCfgTypeDef hdsivideo_handle;
 /**
   * @}
@@ -133,7 +146,7 @@ static DSI_VidCfgTypeDef hdsivideo_handle;
 /**
   * @brief  DSI timming params used for different HDMI adpater
   */
-typedef struct 
+typedef struct HDMI_Format_s
 {
   uint16_t      HACT;
   uint16_t      HSYNC;
@@ -145,6 +158,8 @@ typedef struct
   uint16_t      VFP;
   uint8_t       ASPECT_RATIO;
   uint8_t       RGB_CODING;
+  uint8_t       VPOL;
+  uint8_t       HPOL;
 } HDMI_FormatTypeDef;
 
 /**
@@ -176,8 +191,6 @@ typedef struct
   * @}
   */
 
-
-
 /** @defgroup STM32F769I_DISCOVERY_LCD_Private_Macros LCD Private Macros
   * @{
   */
@@ -201,6 +214,9 @@ uint32_t lcd_y_size = OTM8009A_800X480_HEIGHT;
   * @}
   */
 
+static void BSP_DumpDsiHandle (DSI_VidCfgTypeDef *hdsi);
+static void BSP_DumpLTDCHandle (LTDC_HandleTypeDef *ltdc);
+
 
 /** @defgroup STM32F769I_DISCOVERY_LCD_Private_Variables LCD Private Variables
   * @{
@@ -209,11 +225,13 @@ uint32_t lcd_y_size = OTM8009A_800X480_HEIGHT;
 /**
   * @brief  DSI timming used for different HDMI resolution (720x480 and 720x576)
   */
+#if 0
+
 HDMI_FormatTypeDef HDMI_Format[2] =
 {
 /* HA   HS  HB  HF  VA   VS VB  VF  ASPECT                BPP */
-  {720, 62, 60, 30, 480, 6, 19, 9, HDMI_ASPECT_RATIO_4_3, LCD_DSI_PIXEL_DATA_FMT_RBG888},
-  {720, 64, 68, 12, 576, 5, 39, 5, HDMI_ASPECT_RATIO_16_9, LCD_DSI_PIXEL_DATA_FMT_RBG888}
+  {1024, 13, 270, 5, 600, 3, 17, 2, HDMI_ASPECT_RATIO_4_3, LCD_DSI_PIXEL_DATA_FMT_RBG888},
+  {1024, 13, 270, 5, 600, 3, 17, 2, HDMI_ASPECT_RATIO_4_3, LCD_DSI_PIXEL_DATA_FMT_RBG888},
 
 };
 
@@ -223,8 +241,8 @@ HDMI_FormatTypeDef HDMI_Format[2] =
 HDMI_DSIPacketTypeDef HDMI_DSIPacket[2] =
 {
   /* NP NC VP */
-  {0, 1, 720},
-  {0, 1, 720}
+  {0, 1, 1024},
+  {0, 1, 1024}
 };
 
 /**
@@ -237,6 +255,35 @@ HDMI_PLLConfigTypeDef HDMI_PLLConfig[4] =
   {325, 6, 27083, DSI_PLL_IN_DIV5, 65, DSI_PLL_OUT_DIV1, 40625, 3}
 
 };
+
+
+#else
+HDMI_FormatTypeDef HDMI_Format =
+{
+/* HA   HS  HB  HF  VA   VS VB  VF  ASPECT                BPP */
+  1024, 13, 270, 5, 600, 3, 17, 2, HDMI_ASPECT_RATIO_4_3, LCD_DSI_PIXEL_DATA_FMT_RBG888
+};
+
+/**
+  * @brief  DSI packet size used for different HDMI resolution (720x480 and 720x576)
+  */
+HDMI_DSIPacketTypeDef HDMI_DSIPacket =
+{
+  /* NP NC VP */
+  0, 1, 1024
+};
+
+/**
+  * @brief  LTDC PLL settings used for different HDMI resolution (720x480 and 720x576)
+  */
+
+const HDMI_PLLConfigTypeDef HDMI_PLLConfig =
+{
+/* N   DIV Pclk   IDF              NDIV ODF               LBClk TXEscapeCkdiv*/
+  325, 6, 27083, DSI_PLL_IN_DIV5, 65, DSI_PLL_OUT_DIV1, 40625, 3
+};
+
+#endif
 #endif /* USE_LCD_HDMI */
 /**
   * @brief  Default Active LTDC Layer in which drawing is made is LTDC Layer Background
@@ -322,7 +369,7 @@ uint8_t BSP_LCD_InitEx(LCD_OrientationTypeDef orientation)
 #if defined(USE_LCD_HDMI)   
   if(read_id == ADV7533_ID)
   {
-    return BSP_LCD_HDMIInitEx(HDMI_FORMAT_720_576); 
+    return BSP_LCD_HDMIInitEx(); 
   }  
   else if(read_id != LCD_DSI_ID)
   {
@@ -426,6 +473,10 @@ uint8_t BSP_LCD_InitEx(LCD_OrientationTypeDef orientation)
   hdsivideo_handle.LPVerticalBackPorchEnable = DSI_LP_VBP_ENABLE;   /* Allow sending LP commands during VBP period */
   hdsivideo_handle.LPVerticalSyncActiveEnable = DSI_LP_VSYNC_ENABLE; /* Allow sending LP commands during VSync = VSA period */
 
+  dbg_eval(DBG_INFO) {
+    BSP_DumpDsiHandle(&hdsivideo_handle);
+  }
+
   /* Configure DSI Video mode timings with settings set above */
   HAL_DSI_ConfigVideoMode(&(hdsi_discovery), &(hdsivideo_handle));
 
@@ -433,7 +484,6 @@ uint8_t BSP_LCD_InitEx(LCD_OrientationTypeDef orientation)
   
   
 /************************LTDC Initialization***********************************/  
-
   /* Timing Configuration */    
   hltdc_discovery.Init.HorizontalSync = (HSA - 1);
   hltdc_discovery.Init.AccumulatedHBP = (HSA + HBP - 1);
@@ -499,6 +549,68 @@ uint8_t BSP_LCD_InitEx(LCD_OrientationTypeDef orientation)
 }
 
 #if defined(USE_LCD_HDMI)
+
+int BSP_HDMI_QerryTiming (hdmi_timing_t *timing)
+{
+    hdmi_edid_seg_t edid;
+    int size;
+
+    dbg_eval(DBG_INFO) {
+        ADV7533_DumpRegs();
+    }
+    size = ADV7533_Get_EDID(&edid, -1);
+
+    if (size < 0) {
+        return -1;
+    }
+    return hdmi_parse_edid(timing, &edid, size);
+}
+
+int HDMI_GetConf (hdmi_timing_t *timing)
+{
+    int hfp, hbp, hsync;
+    int vfp, vbp, vsync;
+    uint32_t pclk_mhz = (uint32_t)timing->pclk_mhz;
+    HDMI_FormatTypeDef *fmt = &HDMI_Format;
+    HDMI_DSIPacketTypeDef *dsipack = &HDMI_DSIPacket;
+
+
+    hfp = timing->hstart - timing->hres;
+    hbp = timing->htotal - timing->hend;
+
+    vfp = timing->vstart - timing->vres;
+    vbp = timing->vtotal - timing->vend;
+
+    hsync = timing->hend - timing->hstart;
+    vsync = timing->vend - timing->vstart;
+
+    assert(hsync > 0);
+    assert(vsync > 0);
+
+    fmt->HACT = timing->hres;
+    fmt->HBP = hbp;
+    fmt->HFP = hfp;
+    fmt->HSYNC = hsync;
+
+    fmt->VACT = timing->vres;
+    fmt->VBP = vbp;
+    fmt->VFP = vfp;
+    fmt->VSYNC = vsync;
+
+    /*ASPECT_RATIO Not used*/
+    fmt->ASPECT_RATIO = HDMI_ASPECT_RATIO_4_3;
+    fmt->RGB_CODING = LCD_DSI_PIXEL_DATA_FMT_RBG888;
+
+    fmt->HPOL = timing->hpol == '+' ? DSI_HSYNC_ACTIVE_HIGH : DSI_HSYNC_ACTIVE_LOW;
+    fmt->VPOL = timing->hpol == '+' ? DSI_VSYNC_ACTIVE_HIGH : DSI_VSYNC_ACTIVE_LOW;
+
+    dsipack->NullPacketSize = 0;
+    dsipack->NumberOfChunks = 1;
+    dsipack->PacketSize = timing->hres;
+
+    return 0;
+}
+
 /**
   * @brief  Initializes the DSI for HDMI monitor. 
   * The ititialization is done as below:
@@ -509,165 +621,176 @@ uint8_t BSP_LCD_InitEx(LCD_OrientationTypeDef orientation)
   * @param  format : HDMI format could be HDMI_FORMAT_720_480 or HDMI_FORMAT_720_576
   * @retval LCD state
   */
-uint8_t BSP_LCD_HDMIInitEx(uint8_t format)
+uint8_t BSP_LCD_HDMIInitEx(void)
 { 
   /************************ADV7533 Initialization********************************/  
 
   /* Initialize the ADV7533 HDMI Bridge
   *  depending on configuration set in 'hdsivideo_handle'.
   */
-  adv7533ConfigTypeDef adv7533_config;
+  int ret = 0;
+  const uint8_t dsi_lanes = 2;
 
-  adv7533_config.DSI_LANES = 2;
-  adv7533_config.HACT = HDMI_Format[format].HACT;
-  adv7533_config.HSYNC = HDMI_Format[format].HSYNC;
-  adv7533_config.HBP = HDMI_Format[format].HBP;
-  adv7533_config.HFP = HDMI_Format[format].HFP;
-  adv7533_config.VACT = HDMI_Format[format].VACT;
-  adv7533_config.VSYNC = HDMI_Format[format].VSYNC;
-  adv7533_config.VBP = HDMI_Format[format].VBP;
-  adv7533_config.VFP = HDMI_Format[format].VFP;  
+  hdmi_timing_t timing;
 
-  ADV7533_Init();  
-  ADV7533_Configure(&adv7533_config);
+  ADV7533_Init();
+ /*TODO : as hdmi devices able to be hot-plugged,
+    i have to add initialisation on demand, + handle HPD event from adv.
+  */
+  ADV7533_Configure(dsi_lanes);
+
+  ret = BSP_HDMI_QerryTiming(&timing);
+  if (ret < 0) {
+    fatal_error("BSP_HDMI_QerryTiming() : Fail\n");
+  }
+
+  ret = HDMI_GetConf(&timing);
+  if (ret < 0) {
+    fatal_error("HDMI_GetConf() : Fail\n");
+  }
+
   ADV7533_PowerOn();
 
-/************************ Update hdmi_x_size and hdmi_y_size *****************/
-  lcd_x_size = HDMI_Format[format].HACT;
-  lcd_y_size = HDMI_Format[format].VACT;
-
-/***********************End ADV7533 Initialization****************************/  
-  DSI_PLLInitTypeDef dsiPllInit;
-  DSI_PHY_TimerTypeDef dsiPhyInit;
-  static RCC_PeriphCLKInitTypeDef  PeriphClkInitStruct;
-
-  /* Call first MSP Initialize only in case of first initialization
-  * This will set IP blocks LTDC and DSI
-  * - out of reset
-  * - clocked
-  * - NVIC IRQ related to IP blocks enabled
-  */
-  BSP_LCD_MspInit();
-
-/*************************DSI Initialization***********************************/  
-
-  /* Base address of DSI Host/Wrapper registers to be set before calling De-Init */
-  hdsi_discovery.Instance = DSI;
-
-  HAL_DSI_DeInit(&(hdsi_discovery));
-
-  /* Configure the DSI PLL */
-  dsiPllInit.PLLNDIV    = HDMI_PLLConfig[format].NDIV;
-  dsiPllInit.PLLIDF     = HDMI_PLLConfig[format].IDF;
-  dsiPllInit.PLLODF     = HDMI_PLLConfig[format].ODF;
-
-  /* Set number of Lanes */
-  hdsi_discovery.Init.NumberOfLanes = DSI_TWO_DATA_LANES;
-  /* Set the TX escape clock division ratio */
-  hdsi_discovery.Init.TXEscapeCkdiv = HDMI_PLLConfig[format].TXEscapeCkdiv;
-  /* Disable the automatic clock lane control (the ADV7533 must be clocked) */
-  hdsi_discovery.Init.AutomaticClockLaneControl = DSI_AUTO_CLK_LANE_CTRL_DISABLE;
-
-  /* Init the DSI */
-  HAL_DSI_Init(&hdsi_discovery, &dsiPllInit);
-
-  /* Configure the D-PHY Timings */
-  dsiPhyInit.ClockLaneHS2LPTime = 0x14;
-  dsiPhyInit.ClockLaneLP2HSTime = 0x14;
-  dsiPhyInit.DataLaneHS2LPTime = 0x0A;
-  dsiPhyInit.DataLaneLP2HSTime = 0x0A;
-  dsiPhyInit.DataLaneMaxReadTime = 0x00;
-  dsiPhyInit.StopWaitTime = 0x0;
-  HAL_DSI_ConfigPhyTimer(&hdsi_discovery, &dsiPhyInit);
-
-  /* Virutal channel used by the ADV7533 */
-  hdsivideo_handle.VirtualChannelID     = HDMI_ADV7533_ID;
-
-  /* Timing parameters for Video modes
-     Set Timing parameters of DSI depending on its chosen format */
-  hdsivideo_handle.ColorCoding          = HDMI_Format[format].RGB_CODING;
-  hdsivideo_handle.LooselyPacked        = DSI_LOOSELY_PACKED_DISABLE;
-  hdsivideo_handle.VSPolarity           = DSI_VSYNC_ACTIVE_LOW;
-  hdsivideo_handle.HSPolarity           = DSI_HSYNC_ACTIVE_LOW;
-  hdsivideo_handle.DEPolarity           = DSI_DATA_ENABLE_ACTIVE_HIGH;  
-  hdsivideo_handle.Mode                 = DSI_VID_MODE_NB_PULSES;
-  hdsivideo_handle.NullPacketSize       = HDMI_DSIPacket[format].NullPacketSize;
-  hdsivideo_handle.NumberOfChunks       = HDMI_DSIPacket[format].NumberOfChunks;
-  hdsivideo_handle.PacketSize           = HDMI_DSIPacket[format].PacketSize; 
-  hdsivideo_handle.HorizontalSyncActive = HDMI_Format[format].HSYNC*HDMI_PLLConfig[format].LaneByteClock/HDMI_PLLConfig[format].PCLK;
-  hdsivideo_handle.HorizontalBackPorch  = HDMI_Format[format].HBP*HDMI_PLLConfig[format].LaneByteClock/HDMI_PLLConfig[format].PCLK;
-  hdsivideo_handle.HorizontalLine       = (HDMI_Format[format].HACT + HDMI_Format[format].HSYNC + HDMI_Format[format].HBP + HDMI_Format[format].HFP)*HDMI_PLLConfig[format].LaneByteClock/HDMI_PLLConfig[format].PCLK;
-  hdsivideo_handle.VerticalSyncActive   = HDMI_Format[format].VSYNC;
-  hdsivideo_handle.VerticalBackPorch    = HDMI_Format[format].VBP;
-  hdsivideo_handle.VerticalFrontPorch   = HDMI_Format[format].VFP;
-  hdsivideo_handle.VerticalActive       = HDMI_Format[format].VACT;
-
-  /* Enable or disable sending LP command while streaming is active in video mode */
-  hdsivideo_handle.LPCommandEnable      = DSI_LP_COMMAND_DISABLE; /* Enable sending commands in mode LP (Low Power) */
-
-  /* Largest packet size possible to transmit in LP mode in VSA, VBP, VFP regions */
-  /* Only useful when sending LP packets is allowed while streaming is active in video mode */
-  hdsivideo_handle.LPLargestPacketSize          = 4;
-
-  /* Largest packet size possible to transmit in LP mode in HFP region during VACT period */
-  /* Only useful when sending LP packets is allowed while streaming is active in video mode */
-  hdsivideo_handle.LPVACTLargestPacketSize      = 4;
-
-  /* Specify for each region, if the going in LP mode is allowed */
-  /* while streaming is active in video mode                     */
-  hdsivideo_handle.LPHorizontalFrontPorchEnable = DSI_LP_HFP_DISABLE;
-  hdsivideo_handle.LPHorizontalBackPorchEnable  = DSI_LP_HBP_DISABLE;
-  hdsivideo_handle.LPVerticalActiveEnable       = DSI_LP_VACT_DISABLE;
-  hdsivideo_handle.LPVerticalFrontPorchEnable   = DSI_LP_VFP_DISABLE;
-  hdsivideo_handle.LPVerticalBackPorchEnable    = DSI_LP_VBP_DISABLE;
-  hdsivideo_handle.LPVerticalSyncActiveEnable   = DSI_LP_VSYNC_DISABLE;
-
-  /* No acknoledge at the end of a frame */
-  hdsivideo_handle.FrameBTAAcknowledgeEnable    = DSI_FBTAA_DISABLE;
-
-  /* Configure DSI Video mode timings with settings set above */
-  HAL_DSI_ConfigVideoMode(&hdsi_discovery, &hdsivideo_handle);
-
-  /* Enable the DSI host and wrapper : but LTDC is not started yet at this stage */
-  HAL_DSI_Start(&hdsi_discovery);
-
-/*************************End DSI Initialization*******************************/ 
+  /************************ Update hdmi_x_size and hdmi_y_size *****************/
+    lcd_x_size = HDMI_Format.HACT;
+    lcd_y_size = HDMI_Format.VACT;
   
+  /***********************End ADV7533 Initialization****************************/  
+    DSI_PLLInitTypeDef dsiPllInit;
+    DSI_PHY_TimerTypeDef dsiPhyInit;
+    static RCC_PeriphCLKInitTypeDef  PeriphClkInitStruct;
   
-/************************LTDC Initialization***********************************/ 
+    /* Call first MSP Initialize only in case of first initialization
+    * This will set IP blocks LTDC and DSI
+    * - out of reset
+    * - clocked
+    * - NVIC IRQ related to IP blocks enabled
+    */
+    BSP_LCD_MspInit();
+  
+  /*************************DSI Initialization***********************************/  
+  
+    /* Base address of DSI Host/Wrapper registers to be set before calling De-Init */
+    hdsi_discovery.Instance = DSI;
+  
+    HAL_DSI_DeInit(&(hdsi_discovery));
+  
+    /* Configure the DSI PLL */
+    dsiPllInit.PLLNDIV    = HDMI_PLLConfig.NDIV;
+    dsiPllInit.PLLIDF     = HDMI_PLLConfig.IDF;
+    dsiPllInit.PLLODF     = HDMI_PLLConfig.ODF;
+  
+    /* Set number of Lanes */
+    hdsi_discovery.Init.NumberOfLanes = DSI_TWO_DATA_LANES;
+    /* Set the TX escape clock division ratio */
+    hdsi_discovery.Init.TXEscapeCkdiv = HDMI_PLLConfig.TXEscapeCkdiv;
+    /* Disable the automatic clock lane control (the ADV7533 must be clocked) */
+    hdsi_discovery.Init.AutomaticClockLaneControl = DSI_AUTO_CLK_LANE_CTRL_DISABLE;
+  
+    /* Init the DSI */
+    HAL_DSI_Init(&hdsi_discovery, &dsiPllInit);
+  
+    /* Configure the D-PHY Timings */
+    dsiPhyInit.ClockLaneHS2LPTime = 0x14;
+    dsiPhyInit.ClockLaneLP2HSTime = 0x14;
+    dsiPhyInit.DataLaneHS2LPTime = 0x0A;
+    dsiPhyInit.DataLaneLP2HSTime = 0x0A;
+    dsiPhyInit.DataLaneMaxReadTime = 0x00;
+    dsiPhyInit.StopWaitTime = 0x0;
+    HAL_DSI_ConfigPhyTimer(&hdsi_discovery, &dsiPhyInit);
+  
+    /* Virutal channel used by the ADV7533 */
+    hdsivideo_handle.VirtualChannelID     = HDMI_ADV7533_ID;
+  
+    /* Timing parameters for Video modes
+       Set Timing parameters of DSI depending on its chosen format */
+    hdsivideo_handle.ColorCoding          = HDMI_Format.RGB_CODING;
+    hdsivideo_handle.LooselyPacked        = DSI_LOOSELY_PACKED_DISABLE;
+    hdsivideo_handle.VSPolarity           = HDMI_Format.VPOL;
+    hdsivideo_handle.HSPolarity           = HDMI_Format.HPOL;
+    hdsivideo_handle.DEPolarity           = DSI_DATA_ENABLE_ACTIVE_HIGH;  
+    hdsivideo_handle.Mode                 = DSI_VID_MODE_NB_PULSES;
+    hdsivideo_handle.NullPacketSize       = HDMI_DSIPacket.NullPacketSize;
+    hdsivideo_handle.NumberOfChunks       = HDMI_DSIPacket.NumberOfChunks;
+    hdsivideo_handle.PacketSize           = HDMI_DSIPacket.PacketSize; 
+    hdsivideo_handle.HorizontalSyncActive = HDMI_Format.HSYNC*HDMI_PLLConfig.LaneByteClock/HDMI_PLLConfig.PCLK;
+    hdsivideo_handle.HorizontalBackPorch  = HDMI_Format.HBP*HDMI_PLLConfig.LaneByteClock/HDMI_PLLConfig.PCLK;
+    hdsivideo_handle.HorizontalLine       = (HDMI_Format.HACT + HDMI_Format.HSYNC + HDMI_Format.HBP + HDMI_Format.HFP)*HDMI_PLLConfig.LaneByteClock/HDMI_PLLConfig.PCLK;
+    hdsivideo_handle.VerticalSyncActive   = HDMI_Format.VSYNC;
+    hdsivideo_handle.VerticalBackPorch    = HDMI_Format.VBP;
+    hdsivideo_handle.VerticalFrontPorch   = HDMI_Format.VFP;
+    hdsivideo_handle.VerticalActive       = HDMI_Format.VACT;
+  
+    /* Enable or disable sending LP command while streaming is active in video mode */
+    hdsivideo_handle.LPCommandEnable      = DSI_LP_COMMAND_DISABLE; /* Enable sending commands in mode LP (Low Power) */
+  
+    /* Largest packet size possible to transmit in LP mode in VSA, VBP, VFP regions */
+    /* Only useful when sending LP packets is allowed while streaming is active in video mode */
+    hdsivideo_handle.LPLargestPacketSize          = 4;
+  
+    /* Largest packet size possible to transmit in LP mode in HFP region during VACT period */
+    /* Only useful when sending LP packets is allowed while streaming is active in video mode */
+    hdsivideo_handle.LPVACTLargestPacketSize      = 4;
+  
+    /* Specify for each region, if the going in LP mode is allowed */
+    /* while streaming is active in video mode                     */
+    hdsivideo_handle.LPHorizontalFrontPorchEnable = DSI_LP_HFP_DISABLE;
+    hdsivideo_handle.LPHorizontalBackPorchEnable  = DSI_LP_HBP_DISABLE;
+    hdsivideo_handle.LPVerticalActiveEnable       = DSI_LP_VACT_DISABLE;
+    hdsivideo_handle.LPVerticalFrontPorchEnable   = DSI_LP_VFP_DISABLE;
+    hdsivideo_handle.LPVerticalBackPorchEnable    = DSI_LP_VBP_DISABLE;
+    hdsivideo_handle.LPVerticalSyncActiveEnable   = DSI_LP_VSYNC_DISABLE;
+  
+    /* No acknoledge at the end of a frame */
+    hdsivideo_handle.FrameBTAAcknowledgeEnable    = DSI_FBTAA_DISABLE;
+  
+    /* Configure DSI Video mode timings with settings set above */
+    HAL_DSI_ConfigVideoMode(&hdsi_discovery, &hdsivideo_handle);
+  
+    /* Enable the DSI host and wrapper : but LTDC is not started yet at this stage */
+    HAL_DSI_Start(&hdsi_discovery);
+  
+  /*************************End DSI Initialization*******************************/ 
+    
+    
+  /************************LTDC Initialization***********************************/ 
+  
+    /* LTDC clock configuration */
+    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_LTDC;
+    PeriphClkInitStruct.PLLSAI.PLLSAIN = HDMI_PLLConfig.PLLSAIN;
+    PeriphClkInitStruct.PLLSAI.PLLSAIR = HDMI_PLLConfig.PLLSAIR;
+    PeriphClkInitStruct.PLLSAIDivR = RCC_PLLSAIDIVR_2;
+    HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct); 
+  
+    /* Base address of LTDC registers to be set before calling De-Init */
+    hltdc_discovery.Instance = LTDC;
+  
+    HAL_LTDC_DeInit(&(hltdc_discovery));
+  
+    /* Timing Configuration */    
+    hltdc_discovery.Init.HorizontalSync = (HDMI_Format.HSYNC - 1);
+    hltdc_discovery.Init.AccumulatedHBP = (HDMI_Format.HSYNC + HDMI_Format.HBP - 1);
+    hltdc_discovery.Init.AccumulatedActiveW = (HDMI_Format.HACT + HDMI_Format.HSYNC + HDMI_Format.HBP - 1);
+    hltdc_discovery.Init.TotalWidth = (HDMI_Format.HACT + HDMI_Format.HSYNC + HDMI_Format.HBP + HDMI_Format.HFP - 1);
+    hltdc_discovery.Init.VerticalSync = (HDMI_Format.VSYNC - 1);
+    hltdc_discovery.Init.AccumulatedVBP = (HDMI_Format.VSYNC + HDMI_Format.VBP - 1);
+    hltdc_discovery.Init.AccumulatedActiveH = (HDMI_Format.VACT + HDMI_Format.VSYNC + HDMI_Format.VBP - 1);
+    hltdc_discovery.Init.TotalHeigh = (HDMI_Format.VACT + HDMI_Format.VSYNC + HDMI_Format.VBP + HDMI_Format.VFP - 1);
+  
+    /* background value */
+    hltdc_discovery.Init.Backcolor.Blue = 0xFF;
+    hltdc_discovery.Init.Backcolor.Green = 0xFF;
+    hltdc_discovery.Init.Backcolor.Red = 0xFF;
+  
+    /* Polarity */
+    hltdc_discovery.Init.HSPolarity = LTDC_HSPOLARITY_AL;
+    hltdc_discovery.Init.VSPolarity = LTDC_VSPOLARITY_AL;
+    hltdc_discovery.Init.DEPolarity = LTDC_DEPOLARITY_AL;
+    hltdc_discovery.Init.PCPolarity = LTDC_PCPOLARITY_IPC;
 
-  /* LTDC clock configuration */
-  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_LTDC;
-  PeriphClkInitStruct.PLLSAI.PLLSAIN = HDMI_PLLConfig[format].PLLSAIN;
-  PeriphClkInitStruct.PLLSAI.PLLSAIR = HDMI_PLLConfig[format].PLLSAIR;
-  PeriphClkInitStruct.PLLSAIDivR = RCC_PLLSAIDIVR_2;
-  HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct); 
-
-  /* Base address of LTDC registers to be set before calling De-Init */
-  hltdc_discovery.Instance = LTDC;
-
-  HAL_LTDC_DeInit(&(hltdc_discovery));
-
-  /* Timing Configuration */    
-  hltdc_discovery.Init.HorizontalSync = (HDMI_Format[format].HSYNC - 1);
-  hltdc_discovery.Init.AccumulatedHBP = (HDMI_Format[format].HSYNC + HDMI_Format[format].HBP - 1);
-  hltdc_discovery.Init.AccumulatedActiveW = (HDMI_Format[format].HACT + HDMI_Format[format].HSYNC + HDMI_Format[format].HBP - 1);
-  hltdc_discovery.Init.TotalWidth = (HDMI_Format[format].HACT + HDMI_Format[format].HSYNC + HDMI_Format[format].HBP + HDMI_Format[format].HFP - 1);
-  hltdc_discovery.Init.VerticalSync = (HDMI_Format[format].VSYNC - 1);
-  hltdc_discovery.Init.AccumulatedVBP = (HDMI_Format[format].VSYNC + HDMI_Format[format].VBP - 1);
-  hltdc_discovery.Init.AccumulatedActiveH = (HDMI_Format[format].VACT + HDMI_Format[format].VSYNC + HDMI_Format[format].VBP - 1);
-  hltdc_discovery.Init.TotalHeigh = (HDMI_Format[format].VACT + HDMI_Format[format].VSYNC + HDMI_Format[format].VBP + HDMI_Format[format].VFP - 1);
-
-  /* background value */
-  hltdc_discovery.Init.Backcolor.Blue = 0x00;
-  hltdc_discovery.Init.Backcolor.Green = 0xFF;
-  hltdc_discovery.Init.Backcolor.Red = 0xFF;
-
-  /* Polarity */
-  hltdc_discovery.Init.HSPolarity = LTDC_HSPOLARITY_AL;
-  hltdc_discovery.Init.VSPolarity = LTDC_VSPOLARITY_AL;
-  hltdc_discovery.Init.DEPolarity = LTDC_DEPOLARITY_AL;
-  hltdc_discovery.Init.PCPolarity = LTDC_PCPOLARITY_IPC;
+  dbg_eval(DBG_INFO) {
+    BSP_DumpLTDCHandle(&hltdc_discovery);
+  }
 
   /* Initialize & Start the LTDC */  
   HAL_LTDC_Init(&hltdc_discovery);     
@@ -684,6 +807,39 @@ uint8_t BSP_LCD_HDMIInitEx(uint8_t format)
     return LCD_OK; 
 }
 #endif /* USE_LCD_HDMI */
+
+static void BSP_DumpDsiHandle (DSI_VidCfgTypeDef *hdsi)
+{
+    int wcnt = sizeof(*hdsi) / sizeof(uint32_t);
+    uint32_t *pdata = (uint32_t *)hdsi;
+
+    int i;
+
+    dprintf("%s() Enter :\n", __func__);
+
+    for (i = 0; i < wcnt; i++) {
+        dprintf("hdsi[%d]= 0x%08x\n", i, pdata[i]);
+    }
+
+    dprintf("%s() Exit :\n\n", __func__);
+}
+
+static void BSP_DumpLTDCHandle (LTDC_HandleTypeDef *ltdc)
+{
+    int wcnt = sizeof(*ltdc) / sizeof(uint32_t);
+    uint32_t *pdata = (uint32_t *)ltdc;
+
+    int i;
+
+    dprintf("%s() Enter :\n", __func__);
+
+    for (i = 0; i < wcnt; i++) {
+        dprintf("ltdc[%d]= 0x%08x\n", i, pdata[i]);
+    }
+
+    dprintf("%s() Exit :\n\n", __func__);
+}
+
 
 /**
   * @brief  BSP LCD Reset

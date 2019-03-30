@@ -41,7 +41,10 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "../Common/audio.h"
+#include "hdmi_pub.h"
 
+/*NOTE ! NOTE !NOTE ! - seems that ADV7511 has the same register file as ADV7533*/
+/*NOTE 2 : As i found - ADV7533 is under NDA, is it possible to put here some info about regs ?*/
 /** @addtogroup BSP
   * @{
   */
@@ -179,7 +182,7 @@ typedef struct {
 uint8_t ADV7533_Init(void);
 void ADV7533_PowerOn(void);
 void ADV7533_PowerDown(void);
-void ADV7533_Configure(adv7533ConfigTypeDef * config);
+void ADV7533_Configure(uint8_t dsi_lanes);
 void ADV7533_PatternEnable(void);
 void ADV7533_PatternDisable(void);
 
@@ -206,6 +209,10 @@ void     HDMI_IO_Write(uint8_t addr, uint8_t reg, uint8_t value);
 uint8_t  HDMI_IO_Read(uint8_t addr, uint8_t reg);
 void     HDMI_IO_Delay(uint32_t delay);
 void     AUDIO_IO_DeInit(void);
+
+void ADV7533_DumpRegs (void);
+int ADV7533_Get_EDID (hdmi_edid_seg_t *edid, int size);
+int ADV7533_EDID_Size (void);
 
 /**
   * @}

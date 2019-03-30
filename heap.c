@@ -29,7 +29,7 @@
 #endif /*USE_STM32F769I_DISCO*/
 
 #ifndef HEAP_CACHE_SIZE
-#define HEAP_CACHE_SIZE (0x0007ff00)
+#define HEAP_CACHE_SIZE (0x01000000)
 #endif
 
 static uint8_t *__heap_buf_cache;
@@ -44,11 +44,13 @@ static size_t __heap_buf_cache_size;
 
 #ifdef DATA_IN_ExtSDRAM
 
-#define HEAP_MALLOC_MARGIN 0x1000
+#define MALLOC_MAGIC       0x75738910
+#define HEAP_MALLOC_MARGIN 0x1800
 
 typedef struct {
-    int size;
-    int freeable;
+    int32_t magic;
+    int32_t size;
+    int32_t freeable;
 } mchunk_t;
 
 static int heap_size_total = HEAP_BUF_SIZE;
@@ -73,6 +75,7 @@ heap_malloc (int size, int freeable)
         fatal_error("heap_malloc : no free space left\n");
     }
     heap_size_total -= size;
+    p->magic = MALLOC_MAGIC;
     p->freeable = freeable;
     p->size = size;
     return (void *)(p + 1);
@@ -87,6 +90,10 @@ heap_free (void *_p)
     p = p - 1;
     if (!p->freeable) {
         fatal_error("heap_free : chunk cannot be freed\n");
+    }
+    if (p->magic != MALLOC_MAGIC) {
+        fatal_error("heap_free : magic fail, expected= 0x%08x, token= 0x%08x\n",
+                    MALLOC_MAGIC, p->magic);
     }
     heap_size_total += p->size;
     free(p);
