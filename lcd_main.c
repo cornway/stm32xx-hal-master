@@ -36,14 +36,17 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "lcd_main.h"
-
-#ifndef SCREEN_MAX_SCALE
-#define SCREEN_MAX_SCALE 2
-#endif
+#include "misc_utils.h"
 
 extern LTDC_HandleTypeDef  hltdc_discovery;
 
 extern void *Sys_HeapAllocFb (int *size);
+
+static void (*screen_update_handle) (screen_t *in);
+
+static void screen_update_2x2 (screen_t *in);
+static void screen_update_3x3 (screen_t *in);
+
 
 static int bsp_lcd_width = -1;
 static int bsp_lcd_height = -1;
@@ -116,18 +119,29 @@ void screen_init (void)
 void screen_win_cfg (screen_t *screen)
 {
     int layer;
-    uint32_t scale_w = (bsp_lcd_width / screen->width);
-    uint32_t scale_h = (bsp_lcd_height / screen->height);
+    uint32_t scale_w = bsp_lcd_width / screen->width;
+    float scale_h = bsp_lcd_height / screen->height;;
     uint32_t x, y, w, h;
 
     LCD_LayerCfgTypeDef  Layercfg;
 
-    if (scale_w > SCREEN_MAX_SCALE) {
-        scale_w = SCREEN_MAX_SCALE;
+    if (scale_w < scale_h) {
+        scale_h = scale_w;
+    } else {
+        scale_w = scale_h;
     }
 
-    if (scale_h > SCREEN_MAX_SCALE) {
-        scale_h = SCREEN_MAX_SCALE;
+    switch (scale_w) {
+        case 2:
+            screen_update_handle = screen_update_2x2;
+        break;
+        case 3:
+            screen_update_handle = screen_update_3x3;
+        break;
+
+        default:
+            fatal_error("%s() : Scale not supported yet!\n", __func__);
+        break;
     }
 
     w = screen->width * scale_w;
@@ -178,7 +192,7 @@ static inline void lcd_wait_ready ()
     while (!(LTDC->CDSR & LTDC_CDSR_VSYNCS));
 }
 
-void screen_sync (int wait)
+static void screen_sync (int wait)
 {
     if (wait) {
         lcd_wait_ready();
@@ -188,7 +202,7 @@ void screen_sync (int wait)
     }
 }
 
-void screen_get_invis_screen (screen_t *screen)
+static void screen_get_invis_screen (screen_t *screen)
 {
     screen->width = bsp_lcd_width;
     screen->height = bsp_lcd_height;
@@ -198,9 +212,16 @@ void screen_get_invis_screen (screen_t *screen)
 void screen_set_clut (pal_t *palette, uint32_t clut_num_entries)
 {
     int layer;
+
+    screen_sync(1);
     for (layer = 0; layer < (int)LCD_MAX_LAYER; layer++) {
         screen_load_clut (palette, clut_num_entries, layer);
     }
+}
+
+void screen_update (screen_t *in)
+{
+    screen_update_handle(in);
 }
 
 typedef struct {
@@ -216,14 +237,18 @@ typedef union {
     scanline_t sl;
 } scanline_u;
 
-#define DST_NEXT_LINE(x, w) (((uint32_t)(x) + w * 2 * sizeof(pix_t)))
 #define W_STEP (sizeof(scanline_t) / sizeof(pix_t))
+#define DST_NEXT_LINE(x, w, lines) (((x) + (lines) * ((w) / sizeof(scanline_u))))
 
-void screen_update_2x2(screen_t *in)
+typedef struct {
+    scanline_u a[2];
+} pix_outx2_t;
+
+static void screen_update_2x2 (screen_t *in)
 {
-    uint64_t *d_y0;
-    uint64_t *d_y1;
-    uint64_t pix;
+    pix_outx2_t *d_y0;
+    pix_outx2_t *d_y1;
+    pix_outx2_t pix;
     int s_y, i;
     scanline_t *scanline;
     scanline_u d_yt0, d_yt1;
@@ -233,8 +258,8 @@ void screen_update_2x2(screen_t *in)
     SCB_CleanDCache();
     screen_get_invis_screen(&screen);
 
-    d_y0 = (uint64_t *)screen.buf;
-    d_y1 = (uint64_t *)DST_NEXT_LINE(d_y0, in->width);
+    d_y0 = (pix_outx2_t *)screen.buf;
+    d_y1 = DST_NEXT_LINE(d_y0, in->width, 1);
 
     for (s_y = 0; s_y < (in->width * in->height); s_y += in->width) {
 
@@ -254,8 +279,10 @@ void screen_update_2x2(screen_t *in)
             d_yt1.sl.a[2] = d_yt1.sl.a[3];
 
 #if (GFX_COLOR_MODE == GFX_COLOR_MODE_CLUT)
-            pix = (uint64_t)(((uint64_t)d_yt1.w << 32) | d_yt0.w);
+            pix.a[0] = d_yt0;
+            pix.a[1] = d_yt1;
 #elif (GFX_COLOR_MODE == GFX_COLOR_MODE_RGB565)
+            fatal_error("%s() : needs fix\n");
             pix = d_yt0.w;
             *d_y0++     = pix;
             *d_y1++     = pix;
@@ -265,11 +292,76 @@ void screen_update_2x2(screen_t *in)
             *d_y0++     = pix;
             *d_y1++     = pix;
         }
-        d_y0 = d_y1;
-        d_y1 = (uint64_t *)DST_NEXT_LINE(d_y0, in->width);
+        d_y0 = DST_NEXT_LINE(d_y0, in->width, 1);
+        d_y1 = DST_NEXT_LINE(d_y1, in->width, 1);
     }
 }
 
+typedef struct {
+    scanline_u a[3];
+} pix_outx3_t;
+
+static void screen_update_3x3(screen_t *in)
+{
+    pix_outx3_t *d_y0, *d_y1, *d_y2;
+    pix_outx3_t pix;
+    int s_y, i;
+    scanline_t *scanline;
+    scanline_u d_yt0, d_yt1, d_yt2;
+    screen_t screen;
+
+    screen_sync (0);
+    SCB_CleanDCache();
+    screen_get_invis_screen(&screen);
+
+    d_y0 = (pix_outx3_t *)screen.buf;
+    d_y1 = DST_NEXT_LINE(d_y0, in->width, 1);
+    d_y2 = DST_NEXT_LINE(d_y1, in->width, 1);
+
+    for (s_y = 0; s_y < (in->width * in->height); s_y += in->width) {
+
+        scanline = (scanline_t *)&in->buf[s_y];
+
+        for (i = 0; i < in->width; i += W_STEP) {
+
+            d_yt0.sl = *scanline++;
+            d_yt1    = d_yt0;
+            d_yt2    = d_yt1;
+
+            d_yt2.sl.a[2] = d_yt0.sl.a[3];
+            d_yt2.sl.a[1] = d_yt0.sl.a[3];
+
+            d_yt2.sl.a[0] = d_yt0.sl.a[2];
+            d_yt1.sl.a[3] = d_yt0.sl.a[2];
+
+            d_yt1.sl.a[0] = d_yt0.sl.a[1];
+            d_yt0.sl.a[3] = d_yt0.sl.a[1];
+
+            d_yt0.sl.a[2] = d_yt0.sl.a[0];
+            d_yt0.sl.a[1] = d_yt0.sl.a[0];
+#if (GFX_COLOR_MODE == GFX_COLOR_MODE_CLUT)
+            pix.a[0] = d_yt0;
+            pix.a[1] = d_yt1;
+            pix.a[2] = d_yt2;
+#elif (GFX_COLOR_MODE == GFX_COLOR_MODE_RGB565)
+            fatal_error("%s() : needs fix\n");
+            pix = d_yt0.w;
+            *d_y0++     = pix;
+            *d_y1++     = pix;
+            *d_y2++     = pix;
+
+            pix = d_yt1.w;
+#endif
+            *d_y0++     = pix;
+            *d_y1++     = pix;
+            *d_y2++     = pix;
+        }
+
+        d_y0 = DST_NEXT_LINE(d_y0, in->width, 2);
+        d_y1 = DST_NEXT_LINE(d_y1, in->width, 2);
+        d_y2 = DST_NEXT_LINE(d_y2, in->width, 2);
+    }
+}
 
 
 /**

@@ -42,4 +42,15 @@
 
 extern void fatal_error (char *message, ...);
 
+extern void Sys_AllocInit (void);
+extern void *Sys_AllocShared (int *size);
+extern void *Sys_AllocVideo (int *size);
+extern int Sys_AllocBytesLeft (void);
+extern void *Sys_Malloc (int size);
+extern void Sys_Free (void *p);
+extern void *Sys_HeapCacheTop (int size);
+extern void *Sys_HeapCachePop (int size);
+extern void Sys_HeapCachePush (int size);
+
+
 #endif /*__MISC_UTILS_H__*/

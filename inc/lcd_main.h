@@ -33,9 +33,7 @@ typedef struct {
  *---------------------------------------------------------------------*/
 void screen_init (void);
 void screen_win_cfg (screen_t *screen);
-void screen_get_invis_screen (screen_t *screen);
-void screen_sync (int wait);
 void screen_set_clut (pal_t *palette, uint32_t clut_num_entries);
-void screen_update_2x2 (screen_t *in);
+void screen_update (screen_t *in);
 
 #endif /*_LCD_MAIN_H*/
