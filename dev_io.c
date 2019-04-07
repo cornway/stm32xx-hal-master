@@ -4,7 +4,9 @@
 #include "sd_diskio.h"
 #include "dev_io.h"
 
-#define READONLY 1
+#ifndef DEVIO_READONLY
+#define DEVIO_READONLY 1
+#endif
 
 #define MAX_HANDLES		3
 
@@ -74,7 +76,7 @@ int d_open (char *path, int *hndl, char const * att)
             mode |= FA_READ | FA_OPEN_EXISTING;
             att = NULL;
         break;
-#if !READONLY
+#if !DEVIO_READONLY
         case 'w':
             mode |= FA_WRITE | FA_OPEN_EXISTING;
             att = NULL;
@@ -155,7 +157,7 @@ char *d_gets (int handle, char *dst, int count)
 
 int d_write (int handle, void *src, int count)
 {
-#if !READONLY
+#if !DEVIO_READONLY
     char *data;
     UINT done;
     FRESULT res = FR_NOT_READY;
@@ -175,7 +177,7 @@ int d_write (int handle, void *src, int count)
 
 int d_mkdir (char *path)
 {
-#if !READONLY
+#if !DEVIO_READONLY
     static DIR dp;
     if (f_opendir(&dp, path)) {
         return -1;

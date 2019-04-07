@@ -1,9 +1,6 @@
 #ifndef SD_MAIN_H
 #define SD_MAIN_H
 
-#include "ff.h"
-
-
 extern FRESULT f_readn (
 	FIL *fp, 		/* Pointer to the file object */
 	void *buff,		/* Pointer to data buffer */

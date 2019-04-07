@@ -8,6 +8,7 @@ typedef int (*list_clbk_t)(char *name, ftype_t type);
 
 typedef struct {
     list_clbk_t clbk;
+    void *user;
 } flist_t;
 
 int d_open (char *path, int *hndl, char const * att);
