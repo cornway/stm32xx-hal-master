@@ -11,6 +11,7 @@
 
 #define __func__ __FUNCTION__
 #define PRINTF __attribute__((format(printf, 1, 2)))
+#define PRINTF_ATTR(a, b) __attribute__((format(printf, a, b)))
 
 #if DEBUG_SERIAL
 
