@@ -29,8 +29,6 @@ static a_channel_t channels[AUDIO_MUS_CHAN_START + 1/*Music channel*/];
 static a_channel_head_t chan_llist_ready;
 
 static boolean a_force_stop        = false;
-static uint32_t a_enabled       = 0;
-
 static irqmask_t audio_irq_mask;
 
 void error_handle (void)
@@ -111,7 +109,6 @@ static void a_shutdown (void)
 {
     a_channel_t *cur, *next;
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_SW);
-    a_enabled = 0;
     a_chan_foreach_safe(&chan_llist_ready, cur, next) {
         a_channel_remove(cur);
     }
@@ -126,7 +123,7 @@ DMA_on_tx_complete (isr_status_e status)
         if (isr_pending[status] > 100) {
             dprintf("audio_main.c, DMA_on_tx_complete : isr_pending[ %s ]= %d\n",
                     status == A_ISR_HALF ? "A_ISR_HALF" :
-                    status == A_ISR_COMP ? "A_ISR_COMP" : "?");
+                    status == A_ISR_COMP ? "A_ISR_COMP" : "?", isr_pending[status]);
         } else if (isr_pending[status] == 2) {
             a_clear_master();
         }
@@ -214,7 +211,6 @@ void audio_init (void)
 #if (USE_REVERB)
     a_rev_init();
 #endif
-    a_enabled = 1;
     cd_init();
 }
 

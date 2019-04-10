@@ -160,16 +160,18 @@ static uint8_t sd_local_buf[_MAX_SS];
 
 DRESULT SD_Uread(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 {
-    DRESULT res = RES_ERROR;
+    uint8_t ret = MSD_OK;
     DWORD end = sector + count;
 
     for (; sector < end;) {
-        res = BSP_SD_ReadBlocks((uint32_t *)sd_local_buf,
+        ret = BSP_SD_ReadBlocks((uint32_t *)sd_local_buf,
                                 (uint32_t)sector,
                                 SD_BLOCK_SECTOR_CNT,
-                                100);
-        if (res != MSD_OK) {
-            return RES_ERROR;
+                                SD_TIMEOUT);
+        if (ret == MSD_OK) {
+           while(BSP_SD_GetCardState()!= MSD_OK) {} 
+        } else {
+           return RES_ERROR;
         }
         memcpy(buff, sd_local_buf, _MIN_SS);
         sector += SD_BLOCK_SECTOR_CNT;
@@ -253,25 +255,34 @@ DRESULT _SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 
 DRESULT _SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 {
-  DRESULT res = RES_ERROR;
+  uint8_t ret = MSD_OK;
+  DRESULT res = RES_OK;
 #if SD_UNALIGNED_WA
   int unaligned = ((uint32_t)buff) & 0x3;
 
   if (unaligned) {
-     res = SD_Uread(lun, buff, sector, count);
+     ret = SD_Uread(lun, buff, sector, count);
   } else {
-     res = BSP_SD_ReadBlocks((uint32_t *)buff,
+     ret = BSP_SD_ReadBlocks((uint32_t *)buff,
                           (uint32_t)sector,
                           count,
                           SD_TIMEOUT);
-     res = (res == MSD_OK) ? RES_OK : RES_ERROR;
+     if (ret == MSD_OK) {
+        while(BSP_SD_GetCardState()!= MSD_OK) {} 
+     } else {
+        res = RES_ERROR;
+     }
   }
 #else
-  res = BSP_SD_ReadBlocks((uint32_t *)buff,
+  ret = BSP_SD_ReadBlocks((uint32_t *)buff,
                           (uint32_t)sector,
                           count,
                           SD_TIMEOUT);
-  res = (res == MSD_OK) ? RES_OK : RES_ERROR;
+  if (ret == MSD_OK) {
+    while(BSP_SD_GetCardState()!= MSD_OK) {} 
+  } else {
+    res = RES_ERROR;
+  }
 #endif /*SD_UNALIGNED_WA*/
   return res;
 }
@@ -365,14 +376,18 @@ DRESULT _SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 
 DRESULT _SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 {
-  DRESULT res = RES_ERROR;
-
-  res = BSP_SD_WriteBlocks((uint32_t*)buff,
+  uint8_t ret = RES_ERROR;
+  DRESULT res = RES_OK;
+  ret = BSP_SD_WriteBlocks((uint32_t*)buff,
                            (uint32_t)sector,
                            count,
                            SD_TIMEOUT);
 
-  res = (res == MSD_OK) ? RES_OK : RES_ERROR;
+  if (ret == MSD_OK) {
+    while(BSP_SD_GetCardState()!= MSD_OK) {} 
+  } else {
+    res = RES_ERROR;
+  }
   return res;
 }
 

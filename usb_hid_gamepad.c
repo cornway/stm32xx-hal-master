@@ -87,8 +87,7 @@ set_key_state (int pad_idx, int state)
 
 int _joypad_read_std (usb_data_t *data, int8_t *pads)
 {
-    int i = 0, bit, outcnt = 0, state = 0;
-    int offset = 0;
+    int i = 0, bit;
     uint32_t keys;
     uint8_t temp;
 

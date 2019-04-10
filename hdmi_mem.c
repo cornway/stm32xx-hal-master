@@ -1069,7 +1069,7 @@ print_edid1(hdmi_timing_t *timing, const struct edid * const edid)
     if (edid->feature_support.preferred_timing_mode) { 
 
         //_edid_timing_string(string, sizeof(string), &edid->detailed_timings[0].timing);
-        dprintf("  Native/preferred timing.. %s\n");
+        dprintf("  Native/preferred timing..\n");
         __edid_timing_extract(timing, &edid->detailed_timings[0].timing);
         __edid_timing_print(timing);
 

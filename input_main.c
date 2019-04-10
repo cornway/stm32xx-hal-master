@@ -15,7 +15,7 @@ extern bool automapactive;
 extern int followplayer;
 FIXME :
 */
-
+extern int joypad_read (int8_t *pads);
 
 kbdmap_t input_kbdmap[JOY_STD_MAX];
 int      input_kbdmap_ex[K_EX_MAX];
@@ -131,6 +131,7 @@ static int ts_attach_keys (uint8_t tsmap[3][4], const kbdmap_t kbdmap[JOY_STD_MA
     ts_screen_zones[1][0] = y_keyzone_size;
     ts_screen_zones[1][1] = y_keyzone_size * 2;
     ts_screen_zones[1][2] = 0; /*???*/
+    return 0;
 }
 
 static int
@@ -184,6 +185,8 @@ post_key_down (uint8_t key)
     input_post_key(event);
 }
 
+#if 0
+
 static inline int
 get_lookfly_key (uint8_t flags)
 {
@@ -199,7 +202,7 @@ get_lookfly_key (uint8_t flags)
     return 0;
 }
 
-#if 0
+
 static inline void
 post_event (
         i_event_t *event,
@@ -267,7 +270,7 @@ post_event (
 
 void input_proc_keys (void)
 {
-    i_event_t event = {0, 0};
+    i_event_t event = {0, keyup};
     ts_status_t ts_status = {TOUCH_IDLE, 0, 0};
 
     if (!BSP_LCD_UseHDMI()) {

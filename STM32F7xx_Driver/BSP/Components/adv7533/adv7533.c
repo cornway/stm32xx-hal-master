@@ -37,6 +37,7 @@
 #include "adv7533.h"
 #include "hdmi_pub.h"
 #include "debug.h"
+#include "main.h"
 
 /** @addtogroup BSP
   * @{
@@ -100,6 +101,8 @@ AUDIO_DrvTypeDef adv7533_drv =
 
 #define TXPWR_CTL_BP 6
 
+extern void HDMI_IO_Read_Buf (uint8_t Addr, uint8_t Regm, uint8_t *buf, size_t size);
+
 static uint8_t __read_group (uint8_t addr, uint8_t reg, uint8_t shift, uint8_t mask)
 {
     uint8_t tmp;
@@ -138,6 +141,7 @@ static int __write_group (uint8_t addr, uint8_t reg, uint8_t shift, uint8_t mask
 static int __write_val (uint8_t addr, uint8_t reg, uint8_t val, int timeout)
 {
     __write_group(addr, reg, 0, ~0, val, timeout);
+    return 0;
 }
 
 static uint8_t __read_bit (uint8_t addr, uint8_t reg, uint8_t bit)
@@ -179,6 +183,7 @@ static int adv7533_wait_intr (int timeout, uint8_t intr)
     }
 
     adv7533_set_intr_ena(0, intr);
+    return timeout ? 0 : -1;
 }
 
 #define floor2(v, a) ((v) & ~(a))
@@ -200,7 +205,7 @@ void __dump_hex (const char *func, const char *name, uint8_t *buf, int len)
     if (i >= len) {
         return;
     }
-    dprintf("%s[%02x-%02x]", i, len);
+    dprintf("%s[%02x-%02x]", name, i, len);
     for (; i < len; i++) {
         dprintf("%02x ", buf[i]);
     }
@@ -225,7 +230,6 @@ void __dump_i2c_hex (const char *func, const char *name, uint8_t addr, uint8_t o
 static int ADV7533_EDID_Read_Begin (void)
 {
     /* initiate edid read in adv7533 */
-    uint8_t tmp;
     int ret;
 
     //adv7533_wait_intr(-1, HPD_INTR_BP);
@@ -248,10 +252,9 @@ static int ADV7533_EDID_Read_End (void)
     return 0;
 }
 
-static int ADV7533_Read_EDID (uint32_t size, char *edid_buf)
+static int ADV7533_Read_EDID (uint32_t size, uint8_t *edid_buf)
 {
     uint8_t edid_addr;
-    int ndx;
     if (!edid_buf)
         return -1;
 
@@ -274,9 +277,6 @@ static int ADV7533_Read_EDID (uint32_t size, char *edid_buf)
 
 void ADV7533_DumpRegs (void)
 {
-    int i = 0;
-    uint8_t reg;
-
     _dump_i2c_hex("MAIN_I2C_ADDR", ADV7533_MAIN_I2C_ADDR, 0, 0xff);
     _dump_i2c_hex("DSI_I2C_ADDR", ADV7533_CEC_DSI_I2C_ADDR, 0, 0xff);
 }
@@ -305,8 +305,7 @@ uint8_t ADV7533_Init(void)
   HDMI_IO_Init();
 
   /* Configure the IC2 address for CEC_DSI interface */
-  //__write_group(ADV7533_MAIN_I2C_ADDR, 0xE1, 0, ~0, ADV7533_CEC_DSI_I2C_ADDR, -1);
-  HDMI_IO_Write(ADV7533_MAIN_I2C_ADDR, 0xE1, ADV7533_CEC_DSI_I2C_ADDR);
+  __write_group(ADV7533_MAIN_I2C_ADDR, 0xE1, 0, ~0, ADV7533_CEC_DSI_I2C_ADDR, -1);
   return 0;
 }
 
@@ -318,10 +317,7 @@ uint8_t ADV7533_Init(void)
 void ADV7533_PowerOn(void)
 {
   /* Power on */
-  //__write_bit(ADV7533_MAIN_I2C_ADDR, 0x41, TXPWR_CTL_BP, 0, -1);
-  uint8_t tmp = HDMI_IO_Read(ADV7533_MAIN_I2C_ADDR, 0x41);
-  tmp &= ~0x40;
-  HDMI_IO_Write(ADV7533_MAIN_I2C_ADDR, 0x41, tmp);
+  __write_bit(ADV7533_MAIN_I2C_ADDR, 0x41, TXPWR_CTL_BP, 0, -1);
 }
 
 /**
@@ -332,10 +328,7 @@ void ADV7533_PowerOn(void)
 void ADV7533_PowerDown(void)
 {
    /* Power down */
-   //__write_bit(ADV7533_MAIN_I2C_ADDR, 0x41, TXPWR_CTL_BP, 1, -1);
-   uint8_t tmp = HDMI_IO_Read(ADV7533_MAIN_I2C_ADDR, 0x41);
-   tmp |= 0x40;
-   HDMI_IO_Write(ADV7533_MAIN_I2C_ADDR, 0x41, tmp);
+   __write_bit(ADV7533_MAIN_I2C_ADDR, 0x41, TXPWR_CTL_BP, 1, -1);
 }
 
 /**

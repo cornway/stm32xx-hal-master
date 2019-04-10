@@ -19,7 +19,7 @@ extern int cd_init (void);
 #define AUDIO_TIMEOUT_MAX 2000 /*2 s*/
 #define MAX_2BAND_VOL ((MAX_VOL) | (MAX_VOL << 8))
 #define MAX_4BAND_VOL ((MAX_2BAND_VOL) | (MAX_2BAND_VOL << 16))
-#define A_NITIAL_VOL (45)
+#define A_NITIAL_VOL (60)
 
 typedef struct {
     int size;

@@ -11,6 +11,7 @@ typedef struct {
     void *user;
 } flist_t;
 
+int dev_io_init (void);
 int d_open (char *path, int *hndl, char const * att);
 int d_size (int hndl);
 void d_close (int h);

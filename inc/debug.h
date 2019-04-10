@@ -1,21 +1,31 @@
 #ifndef _SERIAL_DEBUG_H_
 #define _SERIAL_DEBUG_H_
 
-
-#define PRINTF_SERIAL  1
-#define DEBUG_SERIAL 1
-
 #include "stddef.h"
 #include "stdarg.h"
 #include "dev_conf.h"
 
+#ifndef DEBUG_SERIAL
+#warning "DEBUG_SERIAL undefined, using TRUE"
+#define DEBUG_SERIAL 1
+#endif
+
+#if DEBUG_SERIAL
+#define PRINTF_SERIAL  1
+#else
+#define PRINTF_SERIAL  0
+#endif
+
 #define __func__ __FUNCTION__
 #define PRINTF __attribute__((format(printf, 1, 2)))
+#ifndef PRINTF_ATTR
 #define PRINTF_ATTR(a, b) __attribute__((format(printf, a, b)))
+#endif
 
 #if DEBUG_SERIAL
 
 #ifndef SERIAL_TSF
+#warning "SERIAL_TSF undefined, using TRUE"
 #define SERIAL_TSF 1
 #endif
 

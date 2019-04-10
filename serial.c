@@ -18,10 +18,10 @@ static void serial_fatal (void)
 }
 
 
-#if !TX_STREAM_USE_DMA
-#undef TX_STREAM_BUFERIZED
-#define TX_STREAM_BUFERIZED 0
-#endif /*!TX_STREAM_USE_DMA*/
+#if !DEBUG_SERIAL_USE_DMA
+#undef DEBUG_SERIAL_BUFERIZED
+#define DEBUG_SERIAL_BUFERIZED 0
+#endif /*!DEBUG_SERIAL_USE_DMA*/
 
 #ifndef USE_STM32F769I_DISCO
 #error "Not supported"
@@ -44,19 +44,19 @@ struct uart_desc_s {
     UART_HandleTypeDef      handle;
     UART_InitTypeDef  const * cfg;
     uart_msp_init_t         msp_init;
-#if TX_STREAM_USE_DMA
+#if DEBUG_SERIAL_USE_DMA
     DMA_HandleTypeDef       hdma_tx;
     FlagStatus              uart_tx_ready;
     IRQn_Type               irq_txdma, irq_uart;
 #endif
     serial_type_t           type;
-#if TX_STREAM_BUFERIZED
+#if DEBUG_SERIAL_BUFERIZED
     int                     active_stream;
 #endif
     FlagStatus              initialized;
 };
 
-#if TX_STREAM_BUFERIZED
+#if DEBUG_SERIAL_BUFERIZED
 
 #define STREAM_BUFSIZE 512
 #define STREAM_BUFCNT 2
@@ -70,11 +70,10 @@ typedef struct {
 
 static streambuf_t streambuf[STREAM_BUFCNT];
 
+#endif /*DEBUG_SERIAL_BUFERIZED*/
+
 static void serial_timer_init (void);
 static void serial_flush_handler (int force);
-
-#endif /*TX_STREAM_BUFERIZED*/
-
 
 static int          uart_desc_cnt = 0;
 static uart_desc_t *uart_desc_pool[MAX_UARTS];
@@ -107,7 +106,7 @@ static uart_desc_t *debug_port (void)
     return NULL;
 }
 
-#if TX_STREAM_USE_DMA
+#if DEBUG_SERIAL_USE_DMA
 
 static irqmask_t timer_irq_mask = 0;
 
@@ -117,7 +116,7 @@ static inline void dma_tx_sync (uart_desc_t *uart_desc)
     uart_desc->uart_tx_ready = RESET;
 }
 
-#endif /*TX_STREAM_USE_DMA*/
+#endif /*DEBUG_SERIAL_USE_DMA*/
 
 static void uart1_msp_init (uart_desc_t *uart_desc)
 {
@@ -143,7 +142,7 @@ static void uart1_msp_init (uart_desc_t *uart_desc)
     if (huart->Init.Mode & UART_MODE_RX) {
         HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
     }
-#if TX_STREAM_USE_DMA
+#if DEBUG_SERIAL_USE_DMA
     /*DMA2_Stream7*/
     __HAL_RCC_DMA2_CLK_ENABLE();
 
@@ -201,7 +200,7 @@ static uart_desc_t uart1_desc;
 
 static void _serial_debug_setup (uart_desc_t *uart_desc)
 {
-#if TX_STREAM_BUFERIZED
+#if DEBUG_SERIAL_BUFERIZED
     memset(streambuf, 0, sizeof(streambuf));
     uart_desc->active_stream = 0;
 #endif
@@ -229,19 +228,19 @@ static HAL_StatusTypeDef serial_submit_to_hw (uart_desc_t *uart_desc, void *data
     HAL_StatusTypeDef status;
     serial_led_on();
 
-#if TX_STREAM_USE_DMA
+#if DEBUG_SERIAL_USE_DMA
     dma_tx_sync(uart_desc);
     status = HAL_UART_Transmit_DMA(&uart_desc->handle, (uint8_t *)data, cnt);
 
 #else
     status = HAL_UART_Transmit(&uart_desc->handle, (uint8_t *)data, cnt, 1000);
-#endif /*TX_STREAM_USE_DMA*/
+#endif /*DEBUG_SERIAL_USE_DMA*/
 
     serial_led_off();
     return status;
 }
 
-#if TX_STREAM_BUFERIZED
+#if DEBUG_SERIAL_BUFERIZED
 
 static void dbgstream_send (uart_desc_t *uart_desc, streambuf_t *stbuf)
 {
@@ -286,16 +285,16 @@ static inline int dbgstream_bufferize (uart_desc_t *uart_desc, void *data, size_
     return size;
 }
 
-#else /*TX_STREAM_BUFERIZED*/
+#else /*DEBUG_SERIAL_BUFERIZED*/
 
-static inline void dbgstream_bufferize (uart_desc_t *uart_desc, void *data, size_t size)
+static inline int dbgstream_bufferize (uart_desc_t *uart_desc, void *data, size_t size)
 {
     UNUSED(uart_desc);
     UNUSED(data);
     UNUSED(size);
 }
 
-#endif /*TX_STREAM_BUFERIZED*/
+#endif /*DEBUG_SERIAL_BUFERIZED*/
 
 static HAL_StatusTypeDef _serial_send (void *data, size_t cnt)
 {
@@ -463,7 +462,7 @@ void dvprintf (char *fmt, va_list argptr)
 
 #endif /*SERIAL_TSF*/
 
-#if TX_STREAM_USE_DMA
+#if DEBUG_SERIAL_USE_DMA
 
 static void dma_tx_handle_irq (const DMA_Stream_TypeDef *source)
 {
@@ -522,7 +521,7 @@ void USART1_IRQHandler (void)
     uart_handle_irq(USART1);
 }
 
-#endif /*TX_STREAM_USE_DMA*/
+#endif /*DEBUG_SERIAL_USE_DMA*/
 
 void HAL_UART_MspInit(UART_HandleTypeDef *huart)
 {
@@ -533,7 +532,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef *huart)
     }
 }
 
-#if TX_STREAM_BUFERIZED
+#if DEBUG_SERIAL_BUFERIZED
 
 extern uint32_t SystemCoreClock;
 
@@ -633,7 +632,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 }
 
 
-#endif /*TX_STREAM_BUFERIZED*/
+#endif /*DEBUG_SERIAL_BUFERIZED*/
 
 void hexdump (uint8_t *data, int len, int rowlength)
 {

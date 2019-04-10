@@ -3,8 +3,10 @@
 #include "ff_gen_drv.h"
 #include "sd_diskio.h"
 #include "dev_io.h"
+#include "dev_conf.h"
 
 #ifndef DEVIO_READONLY
+#warning "DEVIO_READONLY is undefined, using TRUE"
 #define DEVIO_READONLY 1
 #endif
 
@@ -61,6 +63,7 @@ int d_open (char *path, int *hndl, char const * att)
 {
     int ret = -1;
     BYTE mode = 0;
+    FRESULT res;
 
     if (!att) {
         return ret;
@@ -90,8 +93,17 @@ int d_open (char *path, int *hndl, char const * att)
             att = NULL;
         break;
     }
-    if (f_open(gethandle(*hndl), path, mode)) {
+    if (mode & FA_CREATE_ALWAYS) {
+        res = f_open(gethandle(*hndl), path, FA_READ);
+        if (res == FR_OK) {
+            f_close(gethandle(*hndl));
+            f_unlink(path);
+        }
+    }
+    res = f_open(gethandle(*hndl), path, mode);
+    if (res != FR_OK) {
         releasehandle(*hndl);
+        *hndl = -1;
         return -1;
     }
     return f_size(gethandle(*hndl));
@@ -107,6 +119,7 @@ void d_close (int h)
     if (h < 0) {
         return;
     }
+    f_close(gethandle(h));
     releasehandle(h);
 }
 
@@ -178,8 +191,8 @@ int d_write (int handle, void *src, int count)
 int d_mkdir (char *path)
 {
 #if !DEVIO_READONLY
-    static DIR dp;
-    if (f_opendir(&dp, path)) {
+    FRESULT res = f_mkdir(path);
+    if ((res != FR_OK) && (res != FR_EXIST)) {
         return -1;
     }
 #endif

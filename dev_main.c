@@ -44,6 +44,7 @@
 #include "dev_io.h"
 #include "debug.h"
 #include "misc_utils.h"
+#include "nvic.h"
 
 #if (_USE_LFN == 3)
 #error "ff_malloc, ff_free must be redefined to Sys_HeapAlloc"
@@ -54,6 +55,8 @@ int const __cache_line_size = 32;
 #else
 #error "Cache line size unknown"
 #endif
+
+extern void VID_PreConfig (void);
 
 static void SystemDump (void);
 
@@ -103,6 +106,11 @@ void serial_led_off (void)
     BSP_LED_Off(LED1);
 }
 
+void dev_tickle (void)
+{
+    audio_update();
+    input_tickle();
+}
 
 const char *argv[] =
 {

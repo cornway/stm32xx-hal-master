@@ -15,10 +15,12 @@
 #include "stm32f769i_discovery_lcd.h"
 
 #ifndef SDRAM_VOL_START
+#warning "SDRAM_VOL_START not defined, using 0xC0000000"
 #define SDRAM_VOL_START 0xC0000000
 #endif
 
 #ifndef SDRAM_VOL_END
+#warning "SDRAM_VOL_END not defined, using 0xC1000000"
 #define SDRAM_VOL_END   0xC1000000
 #endif
 
@@ -29,6 +31,7 @@
 #endif /*USE_STM32F769I_DISCO*/
 
 #ifndef HEAP_CACHE_SIZE
+#warning "HEAP_CACHE_SIZE not defined, using 0x01000000"
 #define HEAP_CACHE_SIZE (0x01000000)
 #endif
 
@@ -45,7 +48,11 @@ static size_t __heap_buf_cache_size;
 #ifdef DATA_IN_ExtSDRAM
 
 #define MALLOC_MAGIC       0x75738910
-#define HEAP_MALLOC_MARGIN 0x1800
+
+#ifndef HEAP_MALLOC_MARGIN
+#warning "HEAP_MALLOC_MARGIN not defined, using 0x1000"
+#define HEAP_MALLOC_MARGIN 0x1000
+#endif
 
 typedef struct {
     int32_t magic;
@@ -135,6 +142,10 @@ void Sys_Free (void *p)
 }
 
 #else /*DATA_IN_ExtSDRAM*/
+
+#if deficned(USE_LCD_HDMI)
+#error "Possible only with pre-defined max lcd resolution : BSP_LCD_FB_MEM_SIZE_MAX"
+#endif
 
 void Sys_AllocInit (void)
 {
