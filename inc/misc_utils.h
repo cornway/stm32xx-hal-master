@@ -40,6 +40,8 @@
 #define false 0
 #endif
 
+#define ATTR_UNUSED __attribute__((unused))
+
 extern void fatal_error (char *message, ...);
 
 extern void Sys_AllocInit (void);

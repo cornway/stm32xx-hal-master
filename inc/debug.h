@@ -1,9 +1,10 @@
 #ifndef _SERIAL_DEBUG_H_
 #define _SERIAL_DEBUG_H_
 
-#include "stddef.h"
-#include "stdarg.h"
-#include "dev_conf.h"
+#include <stddef.h>
+#include <stdarg.h>
+#include <dev_conf.h>
+#include <stdint.h>
 
 #ifndef DEBUG_SERIAL
 #warning "DEBUG_SERIAL undefined, using TRUE"

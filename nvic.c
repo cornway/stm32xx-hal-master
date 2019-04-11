@@ -8,7 +8,7 @@
 #error "Not supported"
 #endif
 
-#define InvalidIrqNum (NonMaskableInt_IRQn - 1)
+#define InvalidIrqNum ((IRQn_Type)(NonMaskableInt_IRQn - 1))
 
 typedef struct {
     IRQn_Type irq;
@@ -17,7 +17,7 @@ typedef struct {
 } irq_desc_t;
 
 FlagStatus initialized = RESET;
-static irq_desc_t irq_maptable[NVIC_IRQ_MAX] = {{0}};
+static irq_desc_t irq_maptable[NVIC_IRQ_MAX];
 static int irq_maptable_index = 0;
 
 irqmask_t irq_active_mask = 0, irq_saved_mask = 0;
@@ -141,8 +141,8 @@ const char *NVIC_CortexM7_name[] =
 
 static const IRQn_Type NVIC_Cortex_map[] =
 {
-    -14, -12, -11, -10,
-    -5, -4, -2, -1,
+    (IRQn_Type)-14, (IRQn_Type)-12, (IRQn_Type)-11, (IRQn_Type)-10,
+    (IRQn_Type)-5, (IRQn_Type)-4, (IRQn_Type)-2, (IRQn_Type)-1,
 };
 
 A_COMPILE_TIME_ASSERT(NvicCortexNames, arrlen(NVIC_CortexM7_name) == arrlen(NVIC_Cortex_map));
@@ -253,13 +253,13 @@ const char *NVIC_STM32_name[] =
 
 //NVIC_Cortex_map
 
-char * const CortexIrqName (IRQn_Type irq)
+char *CortexIrqName (IRQn_Type irq)
 {
     int i;
 
     for (i = 0; i < arrlen(NVIC_CortexM7_name); i++) {
         if (NVIC_Cortex_map[i] == irq) {
-            return (char * const)NVIC_CortexM7_name[i];
+            return (char *)NVIC_CortexM7_name[i];
         }
     }
     return NULL;

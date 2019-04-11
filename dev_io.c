@@ -10,7 +10,10 @@
 #define DEVIO_READONLY 1
 #endif
 
-#define MAX_HANDLES		3
+#ifndef MAX_HANDLES
+#warning "MAX_HANDLES is undefined, using 3"
+#define MAX_HANDLES    3
+#endif
 
 FATFS SDFatFs;  /* File system object for SD card logical drive */
 char SDPath[4]; /* SD card logical drive path */

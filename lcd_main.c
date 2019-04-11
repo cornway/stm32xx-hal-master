@@ -106,7 +106,7 @@ void screen_win_cfg (screen_t *screen)
     uint32_t scale;
     uint32_t x, y, w, h;
     uint32_t bsp_lcd_fb;
-    uint32_t fb_size = 0;
+    int fb_size = 0;
 
     LCD_LayerCfgTypeDef  Layercfg;
 

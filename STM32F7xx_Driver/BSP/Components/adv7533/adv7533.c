@@ -38,6 +38,7 @@
 #include "hdmi_pub.h"
 #include "debug.h"
 #include "main.h"
+#include "misc_utils.h"
 
 /** @addtogroup BSP
   * @{
@@ -102,6 +103,25 @@ AUDIO_DrvTypeDef adv7533_drv =
 #define TXPWR_CTL_BP 6
 
 extern void HDMI_IO_Read_Buf (uint8_t Addr, uint8_t Regm, uint8_t *buf, size_t size);
+
+static uint8_t __read_group (uint8_t addr, uint8_t reg, uint8_t shift, uint8_t mask) ATTR_UNUSED;
+static uint8_t __read_val (uint8_t addr, uint8_t reg) ATTR_UNUSED;
+static int __write_group 
+    (uint8_t addr, uint8_t reg, uint8_t shift,
+    uint8_t mask, uint8_t value, int timeout) ATTR_UNUSED;
+
+static int __write_val (uint8_t addr, uint8_t reg, uint8_t val, int timeout) ATTR_UNUSED;
+static uint8_t __read_bit (uint8_t addr, uint8_t reg, uint8_t bit) ATTR_UNUSED;
+static int __write_bit 
+    (uint8_t addr, uint8_t reg, uint8_t bit,
+    uint8_t value, int timeout) ATTR_UNUSED;
+
+static void adv7533_set_intr_ena (int value, uint8_t intr) ATTR_UNUSED;
+static int adv7533_get_intr_ena (uint8_t intr) ATTR_UNUSED;
+static void adv7533_set_intr_stat (int value, uint8_t intr) ATTR_UNUSED;
+static int adv7533_get_intr_stat (uint8_t intr) ATTR_UNUSED;
+static int adv7533_wait_intr (int timeout, uint8_t intr) ATTR_UNUSED;
+
 
 static uint8_t __read_group (uint8_t addr, uint8_t reg, uint8_t shift, uint8_t mask)
 {
