@@ -76,8 +76,9 @@ void input_bsp_init (void);
 void input_soft_init (const kbdmap_t kbdmap[JOY_STD_MAX]);
 void input_bind_extra (int type, int sym);
 void input_tickle (void);
-void input_proc_keys (void);
-void input_post_key (i_event_t event);
+void input_proc_keys (i_event_t *evts);
+i_event_t *input_post_key (i_event_t  *evts, i_event_t event);
+
 
 
 #endif /*_INPUT_MAIN_H*/

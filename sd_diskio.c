@@ -51,6 +51,7 @@
 #include "debug.h"
 #include "nvic.h"
 #include "heap.h"
+#include <misc_utils.h>
 
 #define SD_MODE_DMA 0
 #define SD_UNALIGNED_WA 1
@@ -158,14 +159,6 @@ DSTATUS SD_status(BYTE lun)
 #endif
 
 static uint8_t sd_local_buf[_MAX_SS] ALIGN(4);
-
-static inline void d_memcpy(void *_dst, void *_src, int cnt)
-{
-    uint8_t *src = (uint8_t *)_src, *dst = (uint8_t *)_dst;
-    while (cnt--) {
-        *dst++ = *src++;
-    }
-}
 
 DRESULT SD_Uread(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 {

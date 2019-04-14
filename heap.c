@@ -93,7 +93,9 @@ static inline void
 heap_free (void *_p)
 {
     mchunk_t *p = (mchunk_t *)_p;
-    
+    if (!_p) {
+        return;
+    }
     p = p - 1;
     if (!p->freeable) {
         fatal_error("heap_free : chunk cannot be freed\n");

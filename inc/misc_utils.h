@@ -1,7 +1,8 @@
 #ifndef __MISC_UTILS_H__
 #define __MISC_UTILS_H__
 
-#include "dev_conf.h"
+#include <dev_conf.h>
+#include <stdint.h>
 
 #ifndef assert
 #define assert(exp) \
@@ -61,6 +62,15 @@ extern void Sys_Free (void *p);
 extern void *Sys_HeapCacheTop (int size);
 extern void *Sys_HeapCachePop (int size);
 extern void Sys_HeapCachePush (int size);
+
+
+static inline void d_memcpy(void *_dst, void *_src, int cnt)
+{
+    uint8_t *src = (uint8_t *)_src, *dst = (uint8_t *)_dst;
+    while (cnt--) {
+        *dst++ = *src++;
+    }
+}
 
 
 #endif /*__MISC_UTILS_H__*/

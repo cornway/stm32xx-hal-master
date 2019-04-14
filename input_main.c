@@ -172,17 +172,17 @@ joypad_freeze (uint8_t flags)
 }
 
 static inline void
-post_key_up (uint8_t key)
+post_key_up (uint16_t key)
 {
     i_event_t event = {key, keyup};
-    input_post_key(event);
+    input_post_key(NULL, event);
 }
 
 static inline void
-post_key_down (uint8_t key)
+post_key_down (uint16_t key)
 {
     i_event_t event = {key, keydown};
-    input_post_key(event);
+    input_post_key(NULL, event);
 }
 
 #if 0
@@ -268,7 +268,7 @@ post_event (
 
 #endif
 
-void input_proc_keys (void)
+void input_proc_keys (i_event_t *evts)
 {
     i_event_t event = {0, keyup};
     ts_status_t ts_status = {TOUCH_IDLE, 0, 0};
@@ -283,7 +283,7 @@ void input_proc_keys (void)
     {
         event.state = (ts_status.status == TOUCH_PRESSED) ? keydown : keyup;
         event.sym = ts_get_key(ts_status.x, ts_status.y);
-        input_post_key(event);
+        input_post_key(evts, event);
     } else {
         int8_t joy_pads[JOY_STD_MAX];
         int keys_cnt;
@@ -336,8 +336,11 @@ void input_tickle (void)
     joypad_tickle();
 }
 
-__weak void input_post_key (i_event_t event)
+__weak i_event_t *input_post_key (i_event_t  *evts, i_event_t event)
 {
-    input_fatal("input_post_key : must be re-defined!\n");
+    if (evts) {
+        *evts = event;
+        return evts + 1;
+    }
 }
 
