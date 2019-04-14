@@ -1,8 +1,21 @@
+#include <stdint.h>
+
+#ifndef __DEVIO_H__
+#define __DEVIO_H__
+
+#include <arch.h>
 
 typedef enum {
     FTYPE_FILE,
     FTYPE_DIR,
 } ftype_t;
+
+typedef struct {
+    ftype_t type;
+    int h;
+    char name[128];
+    void *ptr;
+} fobj_t;
 
 typedef int (*list_clbk_t)(char *name, ftype_t type);
 
@@ -18,11 +31,16 @@ void d_close (int h);
 void d_unlink (char *path);
 void d_seek (int handle, int position);
 int d_eof (int handle);
-int d_read (int handle, void *dst, int count);
-char *d_gets (int handle, char *dst, int count);
-int d_write (int handle, void *src, int count);
+int d_read (int handle, PACKED void *dst, int count);
+char *d_gets (int handle, PACKED char *dst, int count);
+int d_write (int handle, PACKED void *src, int count);
+int d_printf (int handle, char *fmt, ...);
 int d_mkdir (char *path);
+int d_opendir (char *path);
+int d_closedir (int dir);
+int d_readdir (int dir, fobj_t *fobj);
 uint32_t d_time (void);
 int d_dirlist (char *path, flist_t *flist);
 
 
+#endif

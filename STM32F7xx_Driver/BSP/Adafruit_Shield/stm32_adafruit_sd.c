@@ -356,7 +356,7 @@ uint8_t BSP_SD_ReadBlocks(uint32_t *pData, uint32_t ReadAddr, uint32_t NumOfBloc
      goto error;
   }
   
-  ptr = malloc(sizeof(uint8_t)*BlockSize);
+  ptr = Sys_Malloc(sizeof(uint8_t)*BlockSize);
   if( ptr == NULL )
   {
      goto error;
@@ -435,7 +435,7 @@ uint8_t BSP_SD_WriteBlocks(uint32_t *pData, uint32_t WriteAddr, uint32_t NumOfBl
     goto error;
   }
   
-  ptr = malloc(sizeof(uint8_t)*BlockSize);
+  ptr = Sys_Malloc(sizeof(uint8_t)*BlockSize);
   if (ptr == NULL)
   {
     goto error;

@@ -28,6 +28,7 @@ typedef uint8_t       arch_byte_t;
 
 #define V_PREPACK
 #define V_POSTPACK __attribute__((packed))
+#define PACKED __packed
 
 #define _VALUES_IN_REGS     __value_in_regs
 

@@ -112,13 +112,6 @@ void dev_tickle (void)
     input_tickle();
 }
 
-const char *argv[] =
-{
-    __FILE__,
-};
-
-const int argc = arrlen(argv);
-
 int dev_main (void)
 {
     CPU_CACHE_Enable();
@@ -137,7 +130,7 @@ int dev_main (void)
     SystemDump();
 
     VID_PreConfig();
-    mainloop(argc, argv);
+    mainloop(0, NULL);
 
     return 0;
 }
