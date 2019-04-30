@@ -20,8 +20,9 @@ extern int cd_init (void);
 #define MAX_2BAND_VOL ((MAX_VOL) | (MAX_VOL << 8))
 #define MAX_4BAND_VOL ((MAX_2BAND_VOL) | (MAX_2BAND_VOL << 16))
 #define A_NITIAL_VOL (60)
-
-typedef struct {
+#define A_MAX_MIX_SAMPLES 8
+typedef struct mixdata_s {
+    struct mixdata_s *next;
     int size;
     snd_sample_t *buf;
     uint8_t volume;
@@ -48,6 +49,7 @@ struct a_channel_s {
     uint8_t left, right;
 #endif
     uint8_t effect;
+    uint8_t priority;
 };
 
 struct a_channel_head_s {

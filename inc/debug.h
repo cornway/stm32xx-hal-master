@@ -33,24 +33,24 @@
 void serial_init (void);
 void serial_putc (char c);
 char serial_getc (void);
-void serial_send_buf (void *data, size_t cnt);
+void serial_send_buf (const void *data, size_t cnt);
 void serial_flush (void);
 
-void dprintf (char *fmt, ...) PRINTF;
-void dvprintf (char *fmt, va_list argptr);
-void hexdump (uint8_t *data, int len, int rowlength);
+void dprintf (const char *fmt, ...) PRINTF;
+void dvprintf (const char *fmt, va_list argptr);
+void hexdump (const uint8_t *data, int len, int rowlength);
 
 #else /*DEBUG_SERIAL*/
 
 static inline void serial_init (void) {}
 static inline void serial_putc (char c) {}
-static inline char serial_getc (void){return 0;}
-static inline void serial_send_buf (void *data, size_t cnt){}
+static inline char serial_getc (void) {return 0;}
+static inline void serial_send_buf (const void *data, size_t cnt){}
 static inline void serial_flush (void){}
 
-static inline void dprintf (char *fmt, ...){}
-static inline void dvprintf (char *fmt, va_list argptr) {}
-void hexdump (uint8_t *data, int len, int rowlength) {}
+static inline void dprintf (const char *fmt, ...){}
+static inline void dvprintf (const char *fmt, va_list argptr) {}
+void hexdump (const uint8_t *data, int len, int rowlength) {}
 
 #endif /*DEBUG_SERIAL*/
 

@@ -2,6 +2,7 @@
 #define __MACH_M4_H__
 
 #include <stdint.h>
+#include "main.h"
 
 #ifdef __cplusplus
     extern "C" {
@@ -239,7 +240,7 @@ typedef struct {
     arch_word_t MMAR;    /*MemManage Fault Address Register                      */
     arch_word_t BFAR;    /*BusFault Address Register                             */
     arch_word_t AFSR;    /*Auxiliary Fault Status Register                       */
-} SCB_M4_TypeDef;   /*system control block for cortex m4 core               */
+} SCB_M7_TypeDef;   /*system control block for cortex m4 core               */
 
 
 void mach_m4_init_core_callback (void);
@@ -264,6 +265,38 @@ _EXTERN _VALUES_IN_REGS ARG_STRUCT_T export_mach_m4_svc (ARG_STRUCT_T);
 #define arch_swrst_alias                export_mach_m4_swrst
 #define arch_upcall_alias               export_mach_m4_svc
 #define arch_boot_alias                 export_mach_m4_boot
+
+#define arch_get_stack __arch_get_stack
+#define arch_get_heap __arch_get_heap
+
+extern void __arch_get_stack (void *sp, void *size);
+extern void __arch_get_heap (void *sp, void *size);
+
+static inline arch_word_t __msp (void)
+{
+    arch_word_t sp;
+    __asm
+    {
+        MRS     sp, MSP
+    }
+    return sp;
+}
+
+static inline arch_word_t __psp (void)
+{
+    return __current_sp();
+}
+
+static inline arch_word_t __pc (void)
+{
+    return __current_pc();
+}
+
+static inline arch_word_t __lr (void)
+{
+    return __return_address();
+}
+
 
 #ifdef __cplusplus
     }

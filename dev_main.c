@@ -45,6 +45,7 @@
 #include "debug.h"
 #include "misc_utils.h"
 #include "nvic.h"
+#include <mpu.h>
 
 #if (_USE_LFN == 3)
 #error "ff_malloc, ff_free must be redefined to Sys_HeapAlloc"
@@ -62,6 +63,15 @@ static void SystemDump (void);
 
 volatile uint32_t systime = 0;
 
+void dumpstack (void)
+{
+}
+
+void bug (void)
+{
+    for (;;) {}
+}
+
 void fatal_error (char *message, ...)
 {
     va_list argptr;
@@ -69,14 +79,13 @@ void fatal_error (char *message, ...)
     va_start (argptr, message);
     dvprintf (message, argptr);
     va_end (argptr);
-
-    serial_flush();
-    for (;;) {}
+    
+    bug();
 }
 
 static void clock_fault (void)
 {
-    for (;;) {}
+    bug();
 }
 
 /** The prototype for the application's main() function */

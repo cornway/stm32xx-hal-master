@@ -223,7 +223,7 @@ void serial_init (void)
     serial_timer_init();
 }
 
-static HAL_StatusTypeDef serial_submit_to_hw (uart_desc_t *uart_desc, void *data, size_t cnt)
+static HAL_StatusTypeDef serial_submit_to_hw (uart_desc_t *uart_desc, const void *data, size_t cnt)
 {
     HAL_StatusTypeDef status;
     serial_led_on();
@@ -255,7 +255,7 @@ static void dbgstream_send (uart_desc_t *uart_desc, streambuf_t *stbuf)
     stbuf->timestamp = 0;
 }
 
-static void dbgstream_apend_data (streambuf_t *stbuf, void *data, size_t size)
+static void dbgstream_apend_data (streambuf_t *stbuf, const void *data, size_t size)
 {
     char *p = stbuf->data + stbuf->bufposition;
     memcpy(p, data, size);
@@ -265,7 +265,7 @@ static void dbgstream_apend_data (streambuf_t *stbuf, void *data, size_t size)
     stbuf->bufposition += size;
 }
 
-static inline int dbgstream_bufferize (uart_desc_t *uart_desc, void *data, size_t size)
+static inline int dbgstream_bufferize (uart_desc_t *uart_desc, const void *data, size_t size)
 {
     streambuf_t *active_stream = &streambuf[uart_desc->active_stream & STREAM_BUFCNT_MS];
 
@@ -287,7 +287,7 @@ static inline int dbgstream_bufferize (uart_desc_t *uart_desc, void *data, size_
 
 #else /*DEBUG_SERIAL_BUFERIZED*/
 
-static inline int dbgstream_bufferize (uart_desc_t *uart_desc, void *data, size_t size)
+static inline int dbgstream_bufferize (uart_desc_t *uart_desc, const void *data, size_t size)
 {
     UNUSED(uart_desc);
     UNUSED(data);
@@ -296,13 +296,13 @@ static inline int dbgstream_bufferize (uart_desc_t *uart_desc, void *data, size_
 
 #endif /*DEBUG_SERIAL_BUFERIZED*/
 
-static HAL_StatusTypeDef _serial_send (void *data, size_t cnt)
+static HAL_StatusTypeDef _serial_send (const void *data, size_t cnt)
 {
-    irqmask_t irq_flags;
+    irqmask_t irq_flags = timer_irq_mask;
     HAL_StatusTypeDef status = HAL_OK;
     uart_desc_t *uart_desc = debug_port();
 
-    irq_save_mask(&irq_flags, ~timer_irq_mask);
+    irq_save(&irq_flags);
 
     if (dbgstream_bufferize(uart_desc, data, cnt) <= 0) {
         status = serial_submit_to_hw(uart_desc, data, cnt);
@@ -354,7 +354,7 @@ char serial_getc (void)
     return 0;
 }
 
-void serial_send_buf (void *data, size_t cnt)
+void serial_send_buf (const void *data, size_t cnt)
 {
     HAL_StatusTypeDef status;
 
@@ -367,9 +367,9 @@ void serial_send_buf (void *data, size_t cnt)
 
 void serial_flush (void)
 {
-    irqmask_t irq_flags;
+    irqmask_t irq_flags = timer_irq_mask;
 
-    irq_save_mask(&irq_flags, ~timer_irq_mask);
+    irq_save(&irq_flags);
     serial_flush_handler(1);
     irq_restore(irq_flags);
 }
@@ -378,7 +378,7 @@ void serial_flush (void)
 
 #define MSEC 1000
 
-static void inline __set_newline (char *str)
+static void inline __set_newline (const char *str)
 {
     prev_putc = 0;
     while (*str) {
@@ -390,12 +390,12 @@ static void inline __set_newline (char *str)
     }
 }
 
-static inline int __insert_tsf (char *fmt, char *buf, int max)
+static inline int __insert_tsf (const char *fmt, char *buf, int max)
 {
     uint32_t msec, sec;
 
     if (!__newline_char(prev_putc) &&
-        prev_putc != 0xff) {
+        prev_putc != -1) {
 
         return 0;
     }
@@ -404,7 +404,7 @@ static inline int __insert_tsf (char *fmt, char *buf, int max)
     return snprintf(buf, max, "[%10d.%3d] ", sec, msec % MSEC);
 }
 
-void dprintf (char *fmt, ...)
+void dprintf (const char *fmt, ...)
 {
     va_list         argptr;
     char            string[1024];
@@ -420,7 +420,7 @@ void dprintf (char *fmt, ...)
     __set_newline(fmt);
 }
 
-void dvprintf (char *fmt, va_list argptr)
+void dvprintf (const char *fmt, va_list argptr)
 {
     char            string[1024];
     int size, max = sizeof(string);
@@ -436,7 +436,7 @@ void dvprintf (char *fmt, va_list argptr)
 
 #else /*SERIAL_TSF*/
 
-void dprintf (char *fmt, ...)
+void dprintf (const char *fmt, ...)
 {
     va_list         argptr;
     /*TODO : use local buf*/
@@ -450,7 +450,7 @@ void dprintf (char *fmt, ...)
     serial_send_buf(string, size);
 }
 
-void dvprintf (char *fmt, va_list argptr)
+void dvprintf (const char *fmt, va_list argptr)
 {
     char            string[1024];
     int size;
@@ -634,7 +634,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
 #endif /*DEBUG_SERIAL_BUFERIZED*/
 
-void hexdump (uint8_t *data, int len, int rowlength)
+void hexdump (const uint8_t *data, int len, int rowlength)
 {
     int x, y, xn;
     dprintf("%s :\n", __func__);

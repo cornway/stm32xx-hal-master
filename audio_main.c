@@ -5,6 +5,7 @@
 #include "wm8994.h"
 #include "nvic.h"
 #include "debug.h"
+#include <dev_conf.h>
 
 #if AUDIO_MODULE_PRESENT
 
@@ -30,6 +31,10 @@ static a_channel_head_t chan_llist_ready;
 
 static boolean a_force_stop        = false;
 static irqmask_t audio_irq_mask;
+
+static void (*a_mixer_callback) (int chan, void *stream, int len, void *udata) = NULL;
+
+boolean g_audio_proc_isr = true;
 
 void error_handle (void)
 {
@@ -82,6 +87,7 @@ a_channel_insert (Mix_Chunk *chunk, int channel)
     desc->loopsize =     a_chunk_len(desc);
     desc->bufposition =  a_chunk_data(desc);
     desc->volume =       a_chunk_vol(desc);
+    desc->priority = 0;
     
     return &desc->inst;
 }
@@ -90,19 +96,6 @@ void
 a_channel_remove (a_channel_t *desc)
 {
     a_channel_unlink(&chan_llist_ready, desc);
-}
-
-static void
-a_paint_buff_helper (a_buf_t *abuf)
-{
-    int compratio = chan_llist_ready.size + 2;
-
-    a_clear_abuf(abuf);
-    if (a_chanlist_try_reject_all(&chan_llist_ready) == 0) {
-        a_clear_abuf(abuf);
-        return;
-    }
-    a_paint_buffer(&chan_llist_ready, abuf, compratio);
 }
 
 static void a_shutdown (void)
@@ -115,18 +108,72 @@ static void a_shutdown (void)
 }
 
 static void
-DMA_on_tx_complete (isr_status_e status)
+a_paint_buff_helper (a_buf_t *abuf)
+{
+    int compratio = chan_llist_ready.size + 2;
+    boolean mixdutry = false;
+
+    a_clear_abuf(abuf);
+    if (a_mixer_callback) {
+        a_mixer_callback(-1, abuf->buf, abuf->samples * sizeof(abuf->buf[0]), NULL);
+        mixdutry = true;
+    }
+    if (a_chanlist_try_reject_all(&chan_llist_ready) == 0) {
+        if (!mixdutry) {
+            a_clear_abuf(abuf);
+        }
+        return;
+    }
+    *abuf->durty = mixdutry;
+    a_paint_buffer(&chan_llist_ready, abuf, compratio);
+}
+
+static void a_paint_all (boolean force)
+{
+    a_buf_t master;
+    int id, bufidx = 0;
+
+    for (id = A_ISR_HALF; id < A_ISR_MAX; id++) {
+        if (isr_pending[id] || force) {
+            a_get_master4idx(&master, bufidx);
+            a_paint_buff_helper(&master);
+        }
+        bufidx++;
+    }
+}
+
+static void
+DMA_on_tx_complete_isr (isr_status_e status)
+{
+    a_buf_t master;
+    isr_status = status;
+    a_get_master4idx(&master, status == A_ISR_HALF ? 0 : 1);
+    a_paint_buff_helper(&master);
+}
+
+static void
+DMA_on_tx_complete_dsr (isr_status_e status)
 {
     isr_status = status;
     isr_pending[status]++;
     if (chan_llist_ready.size > 0) {
-        if (isr_pending[status] > 100) {
+        if ((isr_pending[status] & 0xff) == 0xff) {
             dprintf("audio_main.c, DMA_on_tx_complete : isr_pending[ %s ]= %d\n",
                     status == A_ISR_HALF ? "A_ISR_HALF" :
                     status == A_ISR_COMP ? "A_ISR_COMP" : "?", isr_pending[status]);
         } else if (isr_pending[status] == 2) {
             a_clear_master();
         }
+    }
+}
+
+static void
+DMA_on_tx_complete (isr_status_e status)
+{
+    if (g_audio_proc_isr) {
+        DMA_on_tx_complete_isr(status);
+    } else {
+        DMA_on_tx_complete_dsr(status);
     }
 }
 
@@ -160,20 +207,6 @@ void BSP_AUDIO_OUT_Error_CallBack(void)
     error_handle();
 }
 
-static void a_paint_all (boolean force)
-{
-    a_buf_t master;
-
-    if (isr_pending[A_ISR_HALF] || force) {
-        a_get_master4idx(&master, 0);
-        a_paint_buff_helper(&master);
-    }
-    if (isr_pending[A_ISR_COMP] || force) {
-        a_get_master4idx(&master, 1);
-        a_paint_buff_helper(&master);
-    }
-}
-
 static void a_isr_clear_all (void)
 {
     isr_status = A_ISR_NONE;
@@ -181,11 +214,25 @@ static void a_isr_clear_all (void)
     isr_pending[A_ISR_COMP] = 0;
 }
 
-void audio_update (void)
-{
-    irqmask_t irq_flags;
 
-    irq_save_mask(&irq_flags, ~audio_irq_mask);
+void audio_update_isr (void)
+{
+    irqmask_t irq_flags = audio_irq_mask;
+
+    irq_save(&irq_flags);
+    if (a_force_stop) {
+        a_clear_master();
+        a_force_stop = false;
+    }
+    music_tickle();
+    irq_restore(irq_flags);
+}
+
+void audio_update_dsr (void)
+{
+    irqmask_t irq_flags = audio_irq_mask;
+
+    irq_save(&irq_flags);
     if (isr_status) {
         a_paint_all(false);
     }
@@ -197,6 +244,15 @@ void audio_update (void)
         a_force_stop = false;
     }
     music_tickle();
+}
+
+void audio_update (void)
+{
+    if (g_audio_proc_isr) {
+        audio_update_isr();
+    } else {
+        audio_update_dsr();
+    }
 }
 
 void audio_init (void)
@@ -216,28 +272,57 @@ void audio_init (void)
 
 audio_channel_t *audio_play_channel (Mix_Chunk *chunk, int channel)
 {
+    irqmask_t irq_flags = audio_irq_mask;
     audio_channel_t *ch = NULL;
+
+    irq_save(&irq_flags);
     if (!CHANNEL_NUM_VALID(channel)) {
+        irq_restore(irq_flags);
         return NULL;
     }
     ch = a_channel_insert(chunk, channel);
+    irq_restore(irq_flags);
     return ch;
+}
+
+void audio_stop_all (void)
+{
+    irqmask_t irq_flags = audio_irq_mask;
+    irq_save(&irq_flags);
+    a_shutdown();
+    irq_restore(irq_flags);
+}
+
+void audio_mixer_ext (void (*mixer_callback) (int, void *, int, void *))
+{
+    irqmask_t irq_flags = audio_irq_mask;
+    irq_save(&irq_flags);
+    a_mixer_callback = mixer_callback;
+    irq_restore(irq_flags);
 }
 
 audio_channel_t *audio_stop_channel (int channel)
 {
+    irqmask_t irq_flags = audio_irq_mask;
+    irq_save(&irq_flags);
     audio_pause(channel);
+    irq_restore(irq_flags);
     return NULL;
 }
 
 void audio_pause (int channel)
 {
+    irqmask_t irq_flags = audio_irq_mask;
+    irq_save(&irq_flags);
+
     if (!CHANNEL_NUM_VALID(channel)) {
+        irq_restore(irq_flags);
         return;
     }
     if (a_chn_play(&channels[channel])) {
         a_channel_remove(&channels[channel]);
     }
+    irq_restore(irq_flags);
 }
 
 void audio_resume (void)
@@ -252,9 +337,34 @@ int audio_is_playing (int handle)
     }
     return a_chn_play(&channels[handle]);
 }
+
+int audio_chk_priority (int priority)
+{
+    a_channel_t *cur, *next;
+    int id = 0;
+    irqmask_t irq_flags = audio_irq_mask;
+    irq_save(&irq_flags);
+
+    a_chan_foreach_safe(&chan_llist_ready, cur, next) {
+
+        if (!priority || cur->priority >= priority) {
+            irq_restore(irq_flags);
+            return id;
+        }
+        id++;
+    }
+    irq_restore(irq_flags);
+    return -1;
+}
+
+
 void audio_set_pan (int handle, int l, int r)
 {
+    irqmask_t irq_flags = audio_irq_mask;
+    irq_save(&irq_flags);
+
     if (!CHANNEL_NUM_VALID(handle)) {
+        irq_restore(irq_flags);
         return;
     }
     if (a_chn_play(&channels[handle])) {
@@ -268,12 +378,17 @@ void audio_set_pan (int handle, int l, int r)
         channels[handle].volume = a_chunk_vol(&channels[handle]);
 #endif
     }
+    irq_restore(irq_flags);
 }
 
 void audio_change_sample_volume (audio_channel_t *achannel, uint8_t volume)
 {
+    irqmask_t irq_flags = audio_irq_mask;
+
+    irq_save(&irq_flags);
     a_channel_t *desc = container_of(achannel, a_channel_t, inst);
     desc->volume = volume & MAX_VOL;
+    irq_restore(irq_flags);
 }
 
 #else /*AUDIO_MODULE_PRESENT*/
@@ -283,10 +398,20 @@ void audio_init (void)
 
 }
 
+void audio_mixer_ext (void (*mixer_callback) (int, void *, int, void *))
+{
+    a_mixer_callback = mixer_callback;
+}
+
 audio_channel_t *
 audio_play_channel (Mix_Chunk *chunk, int channel)
 {
     return NULL;
+}
+
+void audio_stop_all (void)
+{
+
 }
 
 audio_channel_t *
@@ -306,6 +431,13 @@ audio_is_playing (int handle)
 {
     return 0;
 }
+
+int
+audio_chk_priority (int handle)
+{
+    
+}
+
 
 void
 audio_set_pan (int handle, int l, int r)

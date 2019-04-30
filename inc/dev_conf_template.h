@@ -20,7 +20,6 @@
 
 #define SDRAM_VOL_START             (0xC0000000)
 #define SDRAM_VOL_END               (0xC1000000)
-#define HEAP_MALLOC_MARGIN          (0x1000)
 
 #define DEVIO_READONLY              (0)
 #define MAX_HANDLES                 (3)

@@ -257,44 +257,32 @@ DRESULT _SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 
 DRESULT _SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 {
-  uint8_t ret = MSD_OK;
   DRESULT res = RES_OK;
 #if SD_UNALIGNED_WA
-  int unaligned = ((uint32_t)buff) & 0x3;
 
-  if (unaligned) {
-     ret = SD_Uread(lun, buff, sector, count);
-  } else {
-     ret = BSP_SD_ReadBlocks((uint32_t *)buff,
-                          (uint32_t)sector,
-                          count,
-                          SD_TIMEOUT);
-     if (ret == MSD_OK) {
-        while(BSP_SD_GetCardState()!= MSD_OK) {} 
-     } else {
-        res = RES_ERROR;
-     }
-  }
-#else
-  ret = BSP_SD_ReadBlocks((uint32_t *)buff,
-                          (uint32_t)sector,
-                          count,
-                          SD_TIMEOUT);
-  if (ret == MSD_OK) {
-    while(BSP_SD_GetCardState()!= MSD_OK) {} 
-  } else {
-    res = RES_ERROR;
-  }
+  if (((uint32_t)buff) & 0x3) {
+     res = SD_Uread(lun, buff, sector, count);
+  } else
 #endif /*SD_UNALIGNED_WA*/
+  {
+    res = BSP_SD_ReadBlocks((uint32_t *)buff,
+                          (uint32_t)sector,
+                          count,
+                          SD_TIMEOUT);
+    if (res == RES_OK) {
+        while(BSP_SD_GetCardState()!= MSD_OK) {} 
+    }
+  }
   return res;
 }
+
 #endif /*SD_MODE_DMA*/
 
 
 DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 {
     DRESULT res;
-    irqmask_t irq_flags;
+    irqmask_t irq_flags = 0;
     hdd_led_on();
 
     irq_save(&irq_flags);
@@ -324,7 +312,7 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
   * @param  count: Number of sectors to write (1..128)
   * @retval DRESULT: Operation result
   */
-DRESULT _SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
+static DRESULT __SD_write (BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 {
   DRESULT res = RES_ERROR;
   WriteStatus = 0;
@@ -339,7 +327,6 @@ DRESULT _SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
   alignedAddr = (uint32_t)buff &  ~0x1F;
   SCB_CleanDCache_by_Addr((uint32_t*)alignedAddr, count*BLOCKSIZE + ((uint32_t)buff - alignedAddr));
 #endif
-
 
   if(BSP_SD_WriteBlocks_DMA((uint32_t*)buff,
                             (uint32_t)(sector),
@@ -374,9 +361,9 @@ DRESULT _SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
   return res;
 }
 
-#else
+#else /*SD_MODE_DMA*/
 
-DRESULT _SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
+static DRESULT __SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 {
   uint8_t ret = RES_ERROR;
   DRESULT res = RES_OK;
@@ -395,10 +382,54 @@ DRESULT _SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 
 #endif /*SD_MODE_DMA*/
 
-DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
+#if SD_UNALIGNED_WA
+
+static DRESULT SD_UWrite (BYTE lun, const BYTE *buff, DWORD sector, UINT count)
+{
+    uint8_t ret = MSD_OK;
+    DWORD end = sector + count;
+
+    for (; sector < end;) {
+        d_memcpy(sd_local_buf, buff, _MIN_SS);
+        ret = BSP_SD_WriteBlocks((uint32_t *)sd_local_buf,
+                                (uint32_t)sector,
+                                SD_BLOCK_SECTOR_CNT,
+                                SD_TIMEOUT);
+        if (ret == MSD_OK) {
+           while(BSP_SD_GetCardState()!= MSD_OK) {} 
+        } else {
+           return RES_ERROR;
+        }
+        
+        sector += SD_BLOCK_SECTOR_CNT;
+        buff += _MIN_SS;
+    }
+    return RES_OK;
+}
+
+#endif /*SD_UNALIGNED_WA*/
+
+static DRESULT _SD_write (BYTE lun, const BYTE *buff, DWORD sector, UINT count)
+{
+    DRESULT res = RES_OK;
+#if SD_UNALIGNED_WA
+    if ((uint32_t)buff & 0x3) {
+        res = SD_UWrite(lun, buff, sector, count);
+    } else
+#endif
+    {
+        res = __SD_write(lun, buff, sector, count);
+    }
+    if (res == RES_OK) {
+        while(BSP_SD_GetCardState()!= MSD_OK) {} 
+    }
+    return res;
+}
+
+DRESULT SD_write (BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 {
     DRESULT res;
-    irqmask_t irq_flags;
+    irqmask_t irq_flags = 0;
     hdd_led_on();
     irq_save(&irq_flags);
 

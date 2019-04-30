@@ -50,7 +50,7 @@ typedef struct {
 
 typedef int16_t snd_sample_t;
 
-typedef struct Mix_Chunk {
+typedef struct {
     int allocated;
     snd_sample_t *abuf;
     int32_t alen;
@@ -74,10 +74,13 @@ typedef struct {
 
 void audio_init (void);
 
+void audio_mixer_ext (void (*mixer_callback) (int, void *, int, void *));
 audio_channel_t *audio_play_channel (Mix_Chunk *chunk, int channel);
 audio_channel_t *audio_stop_channel (int channel);
 void audio_pause (int channel);
+void audio_stop_all (void);
 int audio_is_playing (int handle);
+int audio_chk_priority (int priority);
 void audio_set_pan (int handle, int l, int r);
 void audio_change_sample_volume (audio_channel_t *achannel, uint8_t volume);
 void audio_update (void);

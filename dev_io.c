@@ -210,10 +210,10 @@ char *d_gets (int handle, PACKED char *dst, int count)
     return dst;
 }
 
-int d_write (int handle, PACKED void *src, int count)
+int d_write (int handle, PACKED const void *src, int count)
 {
 #if !DEVIO_READONLY
-    PACKED char *data;
+    PACKED const char *data;
     UINT done;
     FRESULT res = FR_NOT_READY;
 
@@ -240,7 +240,7 @@ int d_printf (int handle, char *fmt, ...)
     size = vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
 
-    d_write(handle, buf, size);
+    return d_write(handle, buf, size);
 }
 
 
@@ -272,6 +272,7 @@ int d_closedir (int dir)
 {
     f_closedir(getdir(dir));
     freedir(dir);
+    return 0;
 }
 
 int d_readdir (int dir, fobj_t *fobj)

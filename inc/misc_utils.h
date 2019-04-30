@@ -64,7 +64,7 @@ extern void *Sys_HeapCachePop (int size);
 extern void Sys_HeapCachePush (int size);
 
 
-static inline void d_memcpy(void *_dst, void *_src, int cnt)
+static inline void d_memcpy(void *_dst, const void *_src, int cnt)
 {
     uint8_t *src = (uint8_t *)_src, *dst = (uint8_t *)_dst;
     while (cnt--) {

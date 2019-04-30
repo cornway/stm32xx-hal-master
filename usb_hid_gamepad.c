@@ -115,7 +115,7 @@ int _joypad_read_std (usb_data_t *data, int8_t *pads)
 int joypad_read (int8_t *pads)
 {
     usb_data_t data;
-    irqmask_t irq;
+    irqmask_t irq = usb_irq;
     uint8_t mode;
 
     if (!gamepad_data_ready) {
@@ -123,7 +123,7 @@ int joypad_read (int8_t *pads)
     }
     gamepad_data_ready = 0;
 
-    irq_save_mask(&irq, ~usb_irq);
+    irq_save(&irq);
     memcpy(&data, &gamepad_data, sizeof(data));
     irq_restore(irq);
 
