@@ -107,7 +107,7 @@ a_write_single_to_master (snd_sample_t *dest, mixdata_t *mixdata, int compratio)
 }
 
 void
-a_mix_single_to_master (snd_sample_t *dest, mixdata_t *mixdata, int compratio, boolean isfirst)
+a_mix_single_to_master (snd_sample_t *dest, mixdata_t *mixdata, int compratio)
 {
     int16_t *pdest = (int16_t *)dest;
     int16_t *psrc = (int16_t *)mixdata[0].buf;
@@ -116,10 +116,6 @@ a_mix_single_to_master (snd_sample_t *dest, mixdata_t *mixdata, int compratio, b
     if (vol == 0)
         return;
 
-    if (isfirst) {
-        a_write_single_to_master(dest, mixdata, compratio);
-        return;
-    }
     if (vol == MAX_VOL) {
         for (int i = 0; i < mixdata->size; i++) {
             pdest[i] = psrc[i] / compratio  + pdest[i];
@@ -138,8 +134,8 @@ a_mix_single_to_master (snd_sample_t *dest, mixdata_t *mixdata, int compratio, b
 static inline void
 mix_to_master_raw2 (snd_sample_t *dest, mixdata_t *mixdata, int compratio)
 {
-    a_mix_single_to_master(dest, mixdata, compratio, false);
-    a_mix_single_to_master(dest, mixdata + 1, compratio, false);
+    a_mix_single_to_master(dest, mixdata, compratio);
+    a_mix_single_to_master(dest, mixdata + 1, compratio);
 }
 
 static inline void
@@ -155,7 +151,7 @@ chunk_proc_raw_all (snd_sample_t *dest, mixdata_t *mixdata, int cnt, int comprat
     switch (cnt) {
 
         case 1:
-            a_mix_single_to_master(dest, mixdata, compratio, false);
+            a_mix_single_to_master(dest, mixdata, compratio);
         break;
 
         case 2:
@@ -164,7 +160,7 @@ chunk_proc_raw_all (snd_sample_t *dest, mixdata_t *mixdata, int cnt, int comprat
 
         case 3:
             mix_to_master_raw2(dest, mixdata, compratio);
-            a_mix_single_to_master(dest, mixdata + 2, compratio, false);
+            a_mix_single_to_master(dest, mixdata + 2, compratio);
         break;
 
         case 4:
@@ -173,7 +169,7 @@ chunk_proc_raw_all (snd_sample_t *dest, mixdata_t *mixdata, int cnt, int comprat
 
         case 5:
             mix_to_master_raw4(dest, mixdata, compratio);
-            a_mix_single_to_master(dest, mixdata + 4, compratio, false);
+            a_mix_single_to_master(dest, mixdata + 4, compratio);
         break;
 
         case 6:
@@ -184,7 +180,7 @@ chunk_proc_raw_all (snd_sample_t *dest, mixdata_t *mixdata, int cnt, int comprat
         case 7:
             mix_to_master_raw4(dest, mixdata, compratio);
             mix_to_master_raw2(dest, mixdata + 4, compratio);
-            a_mix_single_to_master(dest, mixdata + 6, compratio, false);
+            a_mix_single_to_master(dest, mixdata + 6, compratio);
         break;
 
         case 8:
@@ -258,7 +254,7 @@ static void a_paint_buf_ex (a_channel_head_t *chanlist, a_buf_t *abuf, int compr
         a_grab_mixdata(cur, abuf, &mixdata);
 
         if (mixdata.size) {
-            a_mix_single_to_master(abuf->buf, &mixdata, compratio, cnt == 0);
+            a_mix_single_to_master(abuf->buf, &mixdata, compratio);
             durty++;
         }
         cnt++;

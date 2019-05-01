@@ -111,20 +111,20 @@ static void
 a_paint_buff_helper (a_buf_t *abuf)
 {
     int compratio = chan_llist_ready.size + 2;
-    boolean mixdutry = false;
+    boolean mixduty = false;
 
     a_clear_abuf(abuf);
     if (a_mixer_callback) {
         a_mixer_callback(-1, abuf->buf, abuf->samples * sizeof(abuf->buf[0]), NULL);
-        mixdutry = true;
+        mixduty = true;
     }
     if (a_chanlist_try_reject_all(&chan_llist_ready) == 0) {
-        if (!mixdutry) {
+        if (!mixduty) {
             a_clear_abuf(abuf);
         }
         return;
     }
-    *abuf->durty = mixdutry;
+    *abuf->durty = mixduty;
     a_paint_buffer(&chan_llist_ready, abuf, compratio);
 }
 
