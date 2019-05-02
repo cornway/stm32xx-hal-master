@@ -69,7 +69,7 @@ typedef struct {
     Mix_Chunk chunk;
     int8_t is_playing;
     uint8_t id;
-    int (*complete) (cplt_stat_t);
+    int (*complete) (uint8_t *, uint32_t, cplt_stat_t);
 } audio_channel_t;
 
 void audio_init (void);

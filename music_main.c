@@ -81,7 +81,7 @@ static void cd_reset (cdaudio_t *cd)
     cd->state = CD_IDLE;
 }
 
-static int cd_cplt_hdlr (cplt_stat_t complete)
+static int cd_cplt_hdlr (uint8_t *abuf, uint32_t alen, cplt_stat_t complete)
 {
     switch (complete) {
         case A_HALF:

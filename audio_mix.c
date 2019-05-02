@@ -245,7 +245,7 @@ static void a_paint_buf_ex (a_channel_head_t *chanlist, a_buf_t *abuf, int compr
     int cnt = false;
 
     a_chan_foreach_safe(chanlist, cur, next) {
-        if (a_chn_cplt(cur) && a_chn_cplt(cur)(A_HALF)) {
+        if (a_chn_cplt(cur) && a_chn_cplt(cur)((uint8_t *)a_chunk_data(cur), a_chunk_len(cur) * sizeof(snd_sample_t), A_HALF)) {
             durty++;
             cnt++;
             continue;
@@ -316,7 +316,7 @@ a_chan_try_reject (a_channel_t *desc)
         }
 
         if (a_chn_cplt(desc)) {
-            if (a_chn_cplt(desc)(A_FULL)) {
+            if (a_chn_cplt(desc)((uint8_t *)a_chunk_data(desc), a_chunk_len(desc) * sizeof(snd_sample_t), A_FULL)) {
                 goto remove;
             } else {
                 desc->bufposition = a_chunk_data(desc);
