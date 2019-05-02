@@ -51,7 +51,7 @@ heap_malloc (int size, int freeable)
 
     p = (mchunk_t *)malloc(size);
     if (!p) {
-        fatal_error("heap_malloc : no free space left\n");
+        return NULL;
     }
     heap_size_total -= size;
     p->magic = MALLOC_MAGIC;

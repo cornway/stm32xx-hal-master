@@ -100,11 +100,7 @@ a_channel_remove (a_channel_t *desc)
 
 static void a_shutdown (void)
 {
-    a_channel_t *cur, *next;
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_SW);
-    a_chan_foreach_safe(&chan_llist_ready, cur, next) {
-        a_channel_remove(cur);
-    }
 }
 
 static void
@@ -287,9 +283,12 @@ audio_channel_t *audio_play_channel (Mix_Chunk *chunk, int channel)
 
 void audio_stop_all (void)
 {
+    a_channel_t *cur, *next;
     irqmask_t irq_flags = audio_irq_mask;
     irq_save(&irq_flags);
-    a_shutdown();
+    a_chan_foreach_safe(&chan_llist_ready, cur, next) {
+        a_channel_remove(cur);
+    }
     irq_restore(irq_flags);
 }
 
