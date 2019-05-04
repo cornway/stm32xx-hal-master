@@ -2,6 +2,7 @@
 #define __MISC_UTILS_H__
 
 #include <dev_conf.h>
+#include <arch.h>
 #include <stdint.h>
 
 #ifndef assert
@@ -72,5 +73,42 @@ static inline void d_memcpy(void *_dst, const void *_src, int cnt)
     }
 }
 
+#ifdef __LITTLE_ENDIAN__
+
+static inline void
+writeShort (void *_buf, unsigned short v)
+{
+    uint8_t *buf = (uint8_t *)_buf;
+    buf[0] = v & 0xff;
+    buf[1] = v >> 8;
+}
+
+static inline void
+writeLong (void *_buf, unsigned long v)
+{
+    uint8_t *buf = (uint8_t *)_buf;
+    buf[0] = v & 0xff;
+    buf[1] = v >> 8;
+    buf[2] = v >> 16;
+    buf[3] = v >> 24;
+}
+
+static inline short
+readShort (void *_p)
+{
+extern short asmread16 (void *);
+    return asmread16(_p);
+}
+
+static inline long
+readLong (void *_p)
+{
+extern long asmread32 (void *);
+    return asmread32(_p);
+}
+
+#else /*__LITTLE_ENDIAN__*/
+
+#endif /*__LITTLE_ENDIAN__*/
 
 #endif /*__MISC_UTILS_H__*/

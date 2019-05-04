@@ -45,13 +45,13 @@ $label.BRL          CPSIE   I
 
                     AREA    |.text|, CODE, READONLY
                     ALIGN
-upcall              FUNCTION
+upcall              PROC
                     SWI     0x02
                     BX      LR
                     ENDP
                     ALIGN
                         
-;VMBOOT              FUNCTION  
+;VMBOOT              PROC  
 ;                    CPSID   I
 ;                    DSB
 ;                    BL      EnableFPU
@@ -63,24 +63,25 @@ upcall              FUNCTION
 ;                    POP     {PC}
 ;                    ENDP
                         
-;SysTick_Handler     FUNCTION 
+;SysTick_Handler     PROC 
 ;SYS_TICK_           WRAP VMTick                
 ;                    ENDP  
                         
-;PendSV_Handler      FUNCTION  
+;PendSV_Handler      PROC  
 
 ;                    ENDP  
                         
-;SVC_Handler         FUNCTION   
+;SVC_Handler         PROC   
 ;SVC_HANDLE_         WRAP VMSvc
 ;                    ENDP 
                     
-;HardFault_Handler   FUNCTION  
+;HardFault_Handler   PROC  
 ;HARD_FAULT_         WRAP VMHardFault   
 ;                    ENDP 
 TableEnd        
                 
-EnableFPU           FUNCTION
+EnableFPU           PROC
+                    PUSH {R0, R1}
                     ; CPACR is located at address 0xE000ED88
                     LDR R0, =0xE000ED88
                     ; Read CPACR
@@ -98,12 +99,12 @@ EnableFPU           FUNCTION
                     ORR R1, R1, #(0x3 << 30) ;set bits 30-31 to enable lazy staking and automatic status store
                     STR R1, [R0]
                     DSB
-                    
+                    POP {R1, R0}
                     BX  LR
                     ENDP
                     ALIGN
                     
-SystemSoftReset     FUNCTION
+SystemSoftReset     PROC
                     DSB
                     LDR R0, =0xE000ED0C ;AIRCR
                     LDR R1, =0x05FA0004
@@ -112,19 +113,23 @@ SystemSoftReset     FUNCTION
                     B .
                     ENDP
 
-__arch_get_stack    FUNCTION
+__arch_get_stack    PROC
+                    PUSH {R2}
                     LDR R2, =Stack_Mem
                     STR R2, [R0]
                     LDR R2, =Stack_Size
                     STR R2, [R1]
+                    POP {R2}
                     BX  LR
                     ENDP
 
-__arch_get_heap     FUNCTION
+__arch_get_heap     PROC
+                    PUSH {R2}
                     LDR R2, =Heap_Mem
                     STR R2, [R0]
                     LDR R2, =Heap_Size
                     STR R2, [R1]
+                    POP {R2}
                     BX  LR
                     ENDP
 
