@@ -10,6 +10,10 @@ typedef enum {
     FTYPE_DIR,
 } ftype_t;
 
+#define DSEEK_SET 0
+#define DSEEK_CUR 1
+#define DSEEK_END 2
+
 typedef struct {
     ftype_t type;
     int h;
@@ -29,7 +33,7 @@ int d_open (char *path, int *hndl, char const * att);
 int d_size (int hndl);
 void d_close (int h);
 void d_unlink (char *path);
-void d_seek (int handle, int position);
+int d_seek (int handle, int position, uint32_t mode);
 int d_eof (int handle);
 int d_read (int handle, PACKED void *dst, int count);
 char *d_gets (int handle, PACKED char *dst, int count);

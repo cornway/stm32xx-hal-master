@@ -12,7 +12,7 @@
 
 #if (GFX_COLOR_MODE == GFX_COLOR_MODE_CLUT)
 
-#define GFX_RGB(a, r, g, b) GFX_ARGB8888(a, r, g, b)
+#define GFX_RGB(r, g, b, a) GFX_ARGB8888(r, g, b, a)
 #define GFX_ARGB_R GFX_ARGB8888_R
 #define GFX_ARGB_G GFX_ARGB8888_G
 #define GFX_ARGB_B GFX_ARGB8888_B
@@ -23,7 +23,7 @@ typedef uint8_t pix_t;
 
 #elif (GFX_COLOR_MODE == GFX_COLOR_MODE_RGB565)
 
-#define GFX_RGB(a, r, g, b) GFX_RGB565(r, g, b)
+#define GFX_RGB(r, g, b, a) GFX_RGB565(r, g, b)
 #define GFX_ARGB_R GFX_RGB565_R
 #define GFX_ARGB_G GFX_RGB565_G
 #define GFX_ARGB_B GFX_RGB565_B
@@ -37,7 +37,7 @@ typedef uint16_t pix_t;
 typedef uint16_t pal_t;
 typedef uint32_t pix_t;
 
-#define GFX_RGB(a, r, g, b) GFX_ARGB8888(a, r, g, b)
+#define GFX_RGB(r, g, b, a) GFX_ARGB8888(r, g, b, a)
 #define GFX_ARGB_R GFX_ARGB8888_R
 #define GFX_ARGB_G GFX_ARGB8888_G
 #define GFX_ARGB_B GFX_ARGB8888_B

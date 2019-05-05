@@ -5,6 +5,7 @@
 #include "dev_io.h"
 #include "dev_conf.h"
 #include "stdarg.h"
+#include <misc_utils.h>
 
 #ifndef DEVIO_READONLY
 #warning "DEVIO_READONLY is undefined, using TRUE"
@@ -170,12 +171,14 @@ void d_unlink (char *path)
 
 }
 
-void d_seek (int handle, int position)
+/*TODO : handle mode arg*/
+int d_seek (int handle, int position, uint32_t mode)
 {
     if (handle < 0) {
-        return;
+        return -1;
     }
-    f_lseek(getfile(handle), position);
+    assert(mode == DSEEK_SET);
+    return f_lseek(getfile(handle), position) == FR_OK ? position : -1;
 }
 
 int d_eof (int handle)

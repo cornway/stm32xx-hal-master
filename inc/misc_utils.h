@@ -59,6 +59,8 @@ extern void *Sys_AllocShared (int *size);
 extern void *Sys_AllocVideo (int *size);
 extern int Sys_AllocBytesLeft (void);
 extern void *Sys_Malloc (int size);
+extern void *Sys_Realloc (void *x, int32_t size);
+extern void *Sys_Calloc (int32_t size);
 extern void Sys_Free (void *p);
 extern void *Sys_HeapCacheTop (int size);
 extern void *Sys_HeapCachePop (int size);
@@ -94,16 +96,16 @@ writeLong (void *_buf, unsigned long v)
 }
 
 static inline short
-readShort (void *_p)
+readShort (const void *_p)
 {
-extern short asmread16 (void *);
+extern short asmread16 (const void *);
     return asmread16(_p);
 }
 
 static inline long
-readLong (void *_p)
+readLong (const void *_p)
 {
-extern long asmread32 (void *);
+extern long asmread32 (const void *);
     return asmread32(_p);
 }
 

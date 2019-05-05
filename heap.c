@@ -78,7 +78,26 @@ heap_free (void *_p)
     }
     heap_size_total += p->size;
     free(p);
+}
 
+static inline void *
+heap_realloc (void *x, int32_t size)
+{
+    mchunk_t *p = (mchunk_t *)x;
+    if (!p) {
+        return NULL;
+    }
+    p = p - 1;
+    if (p->size >= size) {
+        return x;
+    }
+    if (heap_size_total < size) {
+        fatal_error("%s() : size= %d, avail= %d\n",
+            __func__, size, heap_size_total);
+    }
+    assert(p->freeable);
+    heap_free(x);
+    return heap_malloc(size, 1);
 }
 
 void Sys_AllocInit (void)
@@ -112,6 +131,20 @@ int Sys_AllocBytesLeft (void)
 void *Sys_Malloc (int size)
 {
     return heap_malloc(size, 1);
+}
+
+void *Sys_Realloc (void *x, int32_t size)
+{
+    return heap_realloc(x, size);
+}
+
+void *Sys_Calloc (int32_t size)
+{
+    void *p = heap_malloc(size, 1);
+    if (p) {
+        memset(p, 0, size);
+    }
+    return p;
 }
 
 void Sys_Free (void *p)

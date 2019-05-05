@@ -174,6 +174,10 @@ void screen_win_cfg (screen_t *screen)
     }
 }
 
+uint32_t screen_total_mem_avail_kb (void)
+{
+    return ((bsp_lcd_laysize * LTDC_NB_OF_LAYERS) / 1024);
+}
 
 /*
  * Set the layer to draw to

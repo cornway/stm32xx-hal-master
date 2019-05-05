@@ -32,6 +32,7 @@ typedef struct {
  *  function prototypes                                                *
  *---------------------------------------------------------------------*/
 void screen_init (void);
+uint32_t screen_total_mem_avail_kb (void);
 void screen_win_cfg (screen_t *screen);
 void screen_set_clut (pal_t *palette, uint32_t clut_num_entries);
 void screen_update (screen_t *in);
