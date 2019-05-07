@@ -21,7 +21,7 @@ A_COMPILE_TIME_ASSERT(samplerate,
 
 
 #define CHANNEL_NUM_VALID(num) \
-    (((num) < AUDIO_MAX_CHANS) || ((num) == AUDIO_MUS_CHAN_START))
+    (((num) < AUDIO_MAX_VOICES) || ((num) == AUDIO_MUS_CHAN_START))
 
 static isr_status_e isr_status = A_ISR_NONE;
 static int isr_pending[A_ISR_MAX] = {0};

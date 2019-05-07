@@ -124,8 +124,8 @@ void dev_tickle (void)
 int dev_main (void)
 {
     CPU_CACHE_Enable();
-    HAL_Init();
     SystemClock_Config();
+    HAL_Init();
     Sys_AllocInit();
     BSP_LED_Init(LED1);
     BSP_LED_Init(LED2);

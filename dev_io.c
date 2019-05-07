@@ -102,7 +102,7 @@ int dev_io_init (void)
     return 0;
 }
 
-int d_open (char *path, int *hndl, char const * att)
+int d_open (const char *path, int *hndl, char const * att)
 {
     int ret = -1;
     BYTE mode = 0;
@@ -166,9 +166,11 @@ void d_close (int h)
     freefile(h);
 }
 
-void d_unlink (char *path)
+int d_unlink (const char *path)
 {
-
+    FRESULT res;
+    res = f_unlink(path);
+    return res == FR_OK ? 0 : -1;
 }
 
 /*TODO : handle mode arg*/
@@ -247,7 +249,7 @@ int d_printf (int handle, char *fmt, ...)
 }
 
 
-int d_mkdir (char *path)
+int d_mkdir (const char *path)
 {
 #if !DEVIO_READONLY
     FRESULT res = f_mkdir(path);
@@ -258,7 +260,7 @@ int d_mkdir (char *path)
     return 0;
 }
 
-int d_opendir (char *path)
+int d_opendir (const char *path)
 {
     int h;
     alloc_dir(&h);
@@ -300,7 +302,7 @@ uint32_t d_time (void)
     return HAL_GetTick();
 }
 
-int d_dirlist (char *path, flist_t *flist)
+int d_dirlist (const char *path, flist_t *flist)
 {
     FRESULT res;
     DIR dir;

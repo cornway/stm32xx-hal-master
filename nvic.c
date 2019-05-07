@@ -38,6 +38,34 @@ static void NVIC_init_table (void)
     initialized = SET;
 }
 
+/*
+    Sys tick timer is used everywere by HAL to handle timeouts\delays,
+    But i have to disable ALL non-fatal interrupts to let SD card op's be atomic.
+    SDMMC may report a Rx overrun error if interrupted during FIFO reading.
+    FIXME : avoid disabling sys tick irq
+*/
+static inline void NVIC_SysTickIrqCtrl (boolean disable)
+{
+    uint32_t ctrl = SysTick->CTRL;
+    if (disable) {
+        ctrl &= ~SysTick_CTRL_TICKINT_Msk;
+    } else {
+        ctrl |= SysTick_CTRL_TICKINT_Msk;
+    }
+    SysTick->CTRL = ctrl;
+}
+
+static inline void NVIC_SysIrqCtrl (IRQn_Type irq, boolean disable)
+{
+    switch (irq) {
+        case SysTick_IRQn:
+            NVIC_SysTickIrqCtrl(disable);
+        break;
+        default:
+            assert(0);
+    }
+}
+
 static void NVIC_map_irq (IRQn_Type IRQn, uint8_t preempt, uint8_t preemptsub, uint8_t group)
 {
     int i;
@@ -61,11 +89,13 @@ static inline void _irq_save (irqmask_t *flags)
 {
     int i;
     irqmask_t mask = *flags;
+    IRQn_Type irq;
 
     if (!mask)
         mask = NVIC_IRQ_MASK;
     else
         assert((irq_active_mask & mask) == mask);
+
     mask = irq_active_mask & mask;
     mask = ~irq_saved_mask & mask;
 
@@ -77,7 +107,12 @@ static inline void _irq_save (irqmask_t *flags)
             continue;
         }
         if ((mask >> i) & 0x1) {
-            NVIC_DisableIRQ(irq_maptable[i].irq);
+            irq = irq_maptable[i].irq;
+            if (irq < 0) {
+                NVIC_SysIrqCtrl(irq, true);
+            } else {
+                NVIC_DisableIRQ(irq_maptable[i].irq);
+            }
         }
         i++;
     }
@@ -93,13 +128,20 @@ void irq_save (irqmask_t *flags)
 void irq_restore (irqmask_t flags)
 {
     int i;
+    IRQn_Type irq;
+
     for (i = 0; i < irq_maptable_index;) {
         if (((flags >> i) & 0xff) == 0) {
             i += 8;
             continue;
         }
         if ((flags >> i) & 0x1) {
-            NVIC_EnableIRQ(irq_maptable[i].irq);
+            irq = irq_maptable[i].irq;
+            if (irq < 0) {
+                NVIC_SysIrqCtrl(irq, false);
+            } else {
+                NVIC_EnableIRQ(irq);
+            }
         }
         i++;
     }

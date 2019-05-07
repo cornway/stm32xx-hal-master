@@ -95,6 +95,12 @@ writeLong (void *_buf, unsigned long v)
     buf[3] = v >> 24;
 }
 
+static inline void
+writePtr (void *_buf, void *v)
+{
+    writeLong(_buf, (unsigned long)v);
+}
+
 static inline short
 readShort (const void *_p)
 {
@@ -107,6 +113,12 @@ readLong (const void *_p)
 {
 extern long asmread32 (const void *);
     return asmread32(_p);
+}
+
+static inline void *
+readPtr (const void *_p)
+{
+    return (void *)readLong(_p);
 }
 
 #else /*__LITTLE_ENDIAN__*/
