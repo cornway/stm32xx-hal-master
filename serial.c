@@ -316,14 +316,14 @@ static HAL_StatusTypeDef _serial_send (const void *data, size_t cnt)
 #if SERIAL_TSF
 static char prev_putc = 0xff;
 
-static inline boolean __newline_char (char c)
+static inline d_bool __newline_char (char c)
 {
     if ('\n' == c ||
         '\r' == c) {
 
-        return true;
+        return d_true;
     }
-    return false;
+    return d_false;
 }
 #endif
 

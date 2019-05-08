@@ -44,7 +44,7 @@ static void NVIC_init_table (void)
     SDMMC may report a Rx overrun error if interrupted during FIFO reading.
     FIXME : avoid disabling sys tick irq
 */
-static inline void NVIC_SysTickIrqCtrl (boolean disable)
+static inline void NVIC_SysTickIrqCtrl (d_bool disable)
 {
     uint32_t ctrl = SysTick->CTRL;
     if (disable) {
@@ -55,7 +55,7 @@ static inline void NVIC_SysTickIrqCtrl (boolean disable)
     SysTick->CTRL = ctrl;
 }
 
-static inline void NVIC_SysIrqCtrl (IRQn_Type irq, boolean disable)
+static inline void NVIC_SysIrqCtrl (IRQn_Type irq, d_bool disable)
 {
     switch (irq) {
         case SysTick_IRQn:
@@ -109,7 +109,7 @@ static inline void _irq_save (irqmask_t *flags)
         if ((mask >> i) & 0x1) {
             irq = irq_maptable[i].irq;
             if (irq < 0) {
-                NVIC_SysIrqCtrl(irq, true);
+                NVIC_SysIrqCtrl(irq, d_true);
             } else {
                 NVIC_DisableIRQ(irq_maptable[i].irq);
             }
@@ -138,7 +138,7 @@ void irq_restore (irqmask_t flags)
         if ((flags >> i) & 0x1) {
             irq = irq_maptable[i].irq;
             if (irq < 0) {
-                NVIC_SysIrqCtrl(irq, false);
+                NVIC_SysIrqCtrl(irq, d_false);
             } else {
                 NVIC_EnableIRQ(irq);
             }

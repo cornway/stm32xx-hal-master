@@ -9,7 +9,7 @@
 typedef struct {
 
     MPU_Region_InitTypeDef init;
-    boolean alloced;
+    d_bool alloced;
 } mpu_reg_t;
 
 static mpu_reg_t mpu_reg_pool[MPU_REG_POOL_MAX];
@@ -18,8 +18,8 @@ static mpu_reg_t *mpu_alloc_reg (void)
 {
     int i;
     for (i = 0; i < MPU_REG_POOL_MAX; i++) {
-        if (mpu_reg_pool[i].alloced == false) {
-            mpu_reg_pool[i].alloced = true;
+        if (mpu_reg_pool[i].alloced == d_false) {
+            mpu_reg_pool[i].alloced = d_true;
             return &mpu_reg_pool[i];
         }
     }
@@ -28,7 +28,7 @@ static mpu_reg_t *mpu_alloc_reg (void)
 
 static void mpu_release_reg (mpu_reg_t *reg)
 {
-    reg->alloced = false;
+    reg->alloced = d_false;
 }
 
 static int mpu_reg_id (mpu_reg_t *reg)
@@ -107,8 +107,8 @@ static uint32_t size_to_mpu_size (uint32_t size)
 int mpu_lock (arch_word_t addr, arch_word_t size, const char *mode)
 {
     mpu_reg_t *reg;
-    boolean wr_protect = false;
-    boolean r_protect = false;
+    d_bool wr_protect = d_false;
+    d_bool r_protect = d_false;
 
     assert(mode);
     assert((addr & (size - 1)) == 0);
@@ -123,10 +123,10 @@ int mpu_lock (arch_word_t addr, arch_word_t size, const char *mode)
     while (*mode) {
         switch (*mode) {
             case 'w':
-                wr_protect = true;
+                wr_protect = d_true;
             break;
             case 'r':
-                r_protect = true;
+                r_protect = d_true;
             break;
             case 'x':
                 reg->init.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;

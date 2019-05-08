@@ -29,12 +29,12 @@ static int isr_pending[A_ISR_MAX] = {0};
 static a_channel_t channels[AUDIO_MUS_CHAN_START + 1/*Music channel*/];
 static a_channel_head_t chan_llist_ready;
 
-static boolean a_force_stop        = false;
+static d_bool a_force_stop        = d_false;
 static irqmask_t audio_irq_mask;
 
 static void (*a_mixer_callback) (int chan, void *stream, int len, void *udata) = NULL;
 
-boolean g_audio_proc_isr = true;
+d_bool g_audio_proc_isr = d_true;
 
 void error_handle (void)
 {
@@ -52,7 +52,7 @@ static void a_chanlist_empty_clbk (struct a_channel_head_s *head)
     if (cd_playing())
         return;
 
-    a_force_stop = true;
+    a_force_stop = d_true;
 
 }
 
@@ -107,12 +107,12 @@ static void
 a_paint_buff_helper (a_buf_t *abuf)
 {
     int compratio = chan_llist_ready.size + 2;
-    boolean mixduty = false;
+    d_bool mixduty = d_false;
 
     a_clear_abuf(abuf);
     if (a_mixer_callback) {
         a_mixer_callback(-1, abuf->buf, abuf->samples * sizeof(abuf->buf[0]), NULL);
-        mixduty = true;
+        mixduty = d_true;
     }
     if (a_chanlist_try_reject_all(&chan_llist_ready) == 0) {
         if (!mixduty) {
@@ -124,7 +124,7 @@ a_paint_buff_helper (a_buf_t *abuf)
     a_paint_buffer(&chan_llist_ready, abuf, compratio);
 }
 
-static void a_paint_all (boolean force)
+static void a_paint_all (d_bool force)
 {
     a_buf_t master;
     int id, bufidx = 0;
@@ -218,7 +218,7 @@ void audio_update_isr (void)
     irq_save(&irq_flags);
     if (a_force_stop) {
         a_clear_master();
-        a_force_stop = false;
+        a_force_stop = d_false;
     }
     music_tickle();
     irq_restore(irq_flags);
@@ -230,14 +230,14 @@ void audio_update_dsr (void)
 
     irq_save(&irq_flags);
     if (isr_status) {
-        a_paint_all(false);
+        a_paint_all(d_false);
     }
     a_isr_clear_all();
     irq_restore(irq_flags);
 
     if (a_force_stop) {
         a_clear_master();
-        a_force_stop = false;
+        a_force_stop = d_false;
     }
     music_tickle();
 }

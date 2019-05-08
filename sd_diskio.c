@@ -257,7 +257,8 @@ DRESULT _SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 
 DRESULT _SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 {
-  DRESULT res = RES_OK;
+  DRESULT res = RES_ERROR;
+  uint8_t msd_res = MSD_ERROR;
 #if SD_UNALIGNED_WA
 
   if (((uint32_t)buff) & 0x3) {
@@ -265,11 +266,12 @@ DRESULT _SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
   } else
 #endif /*SD_UNALIGNED_WA*/
   {
-    res = BSP_SD_ReadBlocks((uint32_t *)buff,
+    msd_res = BSP_SD_ReadBlocks((uint32_t *)buff,
                           (uint32_t)sector,
                           count,
                           SD_TIMEOUT);
-    if (res == RES_OK) {
+    if (msd_res == MSD_OK) {
+        res = RES_OK;
         while(BSP_SD_GetCardState()!= MSD_OK) {} 
     }
   }

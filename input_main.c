@@ -342,5 +342,6 @@ __weak i_event_t *input_post_key (i_event_t  *evts, i_event_t event)
         *evts = event;
         return evts + 1;
     }
+    return NULL;
 }
 

@@ -242,7 +242,7 @@ static void a_paint_buf_ex (a_channel_head_t *chanlist, a_buf_t *abuf, int compr
     a_channel_t *cur, *next;
     mixdata_t mixdata;
     int durty = 0;
-    int cnt = false;
+    int cnt = 0;
 
     a_chan_foreach_safe(chanlist, cur, next) {
         if (a_chn_cplt(cur) && a_chn_cplt(cur)((uint8_t *)a_chunk_data(cur), a_chunk_len(cur) * sizeof(snd_sample_t), A_HALF)) {
@@ -263,7 +263,7 @@ static void a_paint_buf_ex (a_channel_head_t *chanlist, a_buf_t *abuf, int compr
     a_rev_proc(abuf);
 #endif
     if (durty) {
-        *abuf->durty = true;
+        *abuf->durty = d_true;
     }
 }
 

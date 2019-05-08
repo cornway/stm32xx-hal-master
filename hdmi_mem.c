@@ -773,7 +773,7 @@ edid_color_characteristics(const struct edid * const edid)
     return characteristics;
 }
 
-static inline boolean
+static inline d_bool
 edid_detailed_timing_is_monitor_descriptor(const struct edid * const edid,
                                            const uint8_t timing)
 {
@@ -859,7 +859,7 @@ print_edid1(hdmi_timing_t *timing, const struct edid * const edid)
     const struct edid_monitor_range_limits *monitor_range_limits = NULL;
     edid_monitor_descriptor_string monitor_serial_number = {0};
     edid_monitor_descriptor_string monitor_model_name = {0};
-    boolean has_ascii_string = false;
+    d_bool has_ascii_string = d_false;
     char manufacturer[4] = {0};
     char *p_c;
 
@@ -891,7 +891,7 @@ print_edid1(hdmi_timing_t *timing, const struct edid * const edid)
             /* This is arbitrary data, just silently ignore it. */
             break;
         case EDID_MONITOR_DESCRIPTOR_ASCII_STRING:
-            has_ascii_string = true;
+            has_ascii_string = d_true;
             break;
         case EDID_MONITOR_DESCRIPTOR_MONITOR_NAME:
             strncpy(monitor_model_name, (char *) mon->data,

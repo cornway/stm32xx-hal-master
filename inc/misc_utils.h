@@ -44,10 +44,10 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
-#ifndef boolean
-#define boolean int
-#define true 1
-#define false 0
+#ifndef d_bool
+#define d_bool int
+#define d_true 1
+#define d_false 0
 #endif
 
 #define ATTR_UNUSED __attribute__((unused))
