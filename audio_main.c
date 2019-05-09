@@ -251,6 +251,17 @@ void audio_update (void)
     }
 }
 
+void audio_irq_save (irqmask_t *flags)
+{
+    *flags = audio_irq_mask;
+    irq_save(flags);
+}
+
+void audio_irq_restore (irqmask_t flags)
+{
+    irq_restore(flags);
+}
+
 void audio_init (void)
 {
     memset(&chan_llist_ready, 0, sizeof(chan_llist_ready));

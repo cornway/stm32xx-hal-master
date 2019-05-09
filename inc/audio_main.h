@@ -3,6 +3,7 @@
 
 #include "stdint.h"
 #include "dev_conf.h"
+#include <nvic.h>
 
 
 #define AUDIO_SIZE_TO_MS(rate, size) (((long long)(size) * 1000) / (rate))
@@ -88,7 +89,8 @@ int audio_chk_priority (int priority);
 void audio_set_pan (int handle, int l, int r);
 void audio_change_sample_volume (audio_channel_t *achannel, uint8_t volume);
 void audio_update (void);
-
+void audio_irq_save (irqmask_t *flags);
+void audio_irq_restore (irqmask_t flags);
 
 typedef struct {
     void *desc;
