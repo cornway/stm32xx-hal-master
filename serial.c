@@ -99,11 +99,18 @@ static streambuf_t streambuf[STREAM_BUFCNT] DTCM;
 
 #if DEBUG_SERIAL_USE_RX
 
-#define DMA_RX_SIZE 2
+/*As far as i want to keep 'console' interactive,
+  each received symbol must be immediately accepted, e.g. -
+  any string will be processed char by char with cr(and\or)lf at the end,
+  i see only one way to do this in more sophisticated way - flush rx buffer within timer.
+  TODO : extend rx buffer size to gain more perf.
+*/
+#define DMA_RX_SIZE 1
 #define DMA_RX_FIFO_SIZE (1 << 8)
 
 typedef struct {
     uint16_t cnt;
+    uint16_t crlf;
     char buf[DMA_RX_SIZE * 2];
     char fifo[DMA_RX_FIFO_SIZE];
 } rxstream_t;
@@ -457,6 +464,7 @@ void serial_putc (char c)
 
 char serial_getc (void)
 {
+    /*TODO : Use Rx from USART */
     return 0;
 }
 
@@ -599,12 +607,25 @@ static uart_desc_t *uart_find_desc (USART_TypeDef *source)
     return NULL;
 }
 
+static int _is_crlf (char c)
+{
+    if (c == '\n' || c == '\r') {
+        return 1;
+    }
+    return 0;
+}
+
 static void _dma_rx_xfer_cplt (uint8_t full)
 {
     uint16_t wridx;
-    int cnt = DMA_RX_SIZE;
+    int cnt = DMA_RX_SIZE, total;
     char *src, *dst;
+
     if (rxstream.cnt >= DMA_RX_FIFO_SIZE) {
+        if (!rxstream.crlf) {
+            /*Too long string, reset it*/
+            rxstream.cnt = 0;
+        }
         return;
         /*Full, exit*/
     }
@@ -613,12 +634,18 @@ static void _dma_rx_xfer_cplt (uint8_t full)
     if (wridx + DMA_RX_SIZE + 1 > DMA_RX_FIFO_SIZE) {
         cnt = DMA_RX_FIFO_SIZE - wridx - 1;
     }
-    rxstream.cnt += cnt;
+    total = rxstream.cnt + cnt;
     dst = rxstream.fifo + wridx;
     while (cnt) {
         *dst = *src;
+        if (_is_crlf(*dst)) {
+            rxstream.crlf = cnt;
+            *dst = 0;
+            break;
+        }
         src++; dst++; cnt--;
     }
+    rxstream.cnt = total - cnt;
 }
 
 static void dma_fifo_flush (rxstream_t *rx, char *dest, int *pcnt)
@@ -631,8 +658,12 @@ static void dma_fifo_flush (rxstream_t *rx, char *dest, int *pcnt)
         d++; s++; cnt--;
     }
     *d = 0;
-    rx->cnt = 0;
+    /*TODO : Move next line after crlf to the begining,
+      to handle multiple lines.
+    */
     *pcnt = rx->cnt;
+    rx->crlf = 0;
+    rx->cnt = 0;
 }
 
 static void uart_handle_irq (USART_TypeDef *source)
@@ -670,29 +701,48 @@ void DMA2_Stream7_IRQHandler (void)
 
 #if DEBUG_SERIAL_USE_RX
 
-static serial_rx_clbk_t serial_rx_clbk = NULL;
+#define DEBUG_SERIAL_MAX_CLBK 4
+
+static serial_rx_clbk_t serial_rx_clbk[DEBUG_SERIAL_MAX_CLBK] = {NULL};
+static serial_rx_clbk_t *last_rx_clbk = &serial_rx_clbk[0];
 
 void serial_rx_callback (serial_rx_clbk_t clbk)
 {
-    serial_rx_clbk = clbk;
+    if (last_rx_clbk == &serial_rx_clbk[DEBUG_SERIAL_MAX_CLBK]) {
+        return;
+    }
+    *last_rx_clbk++ = clbk;
 }
 
 void serial_tickle (void)
 {
     irqmask_t irq = dma_rx_irq_mask;
+    serial_rx_clbk_t *clbk = &serial_rx_clbk[0];
     char buf[DMA_RX_FIFO_SIZE + 1];
-    int cnt;
+    char *pbuf = buf;
+    int cnt, idx;
 
-    if (!rxstream.cnt) {
+    irq_save(&irq);
+    if (!rxstream.crlf || *clbk == NULL) {
+        irq_restore(irq);
         return;
     }
 
-    if (serial_rx_clbk) {
-        irq_save(&irq);
-        dma_fifo_flush(&rxstream, buf, &cnt);
-        irq_restore(irq);
+    dma_fifo_flush(&rxstream, pbuf, &cnt);
+    irq_restore(irq);
 
-        serial_rx_clbk(buf, cnt);
+    while (clbk != last_rx_clbk) {
+
+        idx = (*clbk)(pbuf, cnt);
+        if (idx >= cnt) {
+            return;
+            /*handled*/
+        }
+        if (idx > 0) {
+            pbuf += idx;
+            cnt -= idx;
+        }
+        clbk++;
     }
 }
 

@@ -39,7 +39,9 @@ int fputc(int ch, FILE *f)
 int fgetc(FILE *f)
 {
   char ch = 0;
-
+#if PRINTF_SERIAL
+  ch = serial_getc();
+#endif
   return((int)ch);
 }
 

@@ -10,6 +10,22 @@ typedef enum {
     FTYPE_DIR,
 } ftype_t;
 
+typedef enum {
+    DVAR_FUNC,
+    DVAR_INT32,
+    DVAR_STR,
+} dvar_obj_t;
+
+typedef int (*dvar_func_t) (void *, void *);
+
+typedef struct {
+    void *ptr;
+    uint16_t ptrsize;
+    uint16_t size;
+    dvar_obj_t type;
+    uint32_t flags;
+} dvar_t;
+
 #define DSEEK_SET 0
 #define DSEEK_CUR 1
 #define DSEEK_END 2
@@ -46,5 +62,7 @@ int d_readdir (int dir, fobj_t *fobj);
 uint32_t d_time (void);
 int d_dirlist (const char *path, flist_t *flist);
 
+int d_dvar_reg (dvar_t *var, const char *name);
+int d_dvar_rm (const char *name);
 
 #endif

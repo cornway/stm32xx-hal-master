@@ -30,7 +30,7 @@
 #define SERIAL_TSF 1
 #endif
 
-typedef void (*serial_rx_clbk_t) (const char *buf, int len);
+typedef int (*serial_rx_clbk_t) (const char *buf, int len);
 
 void serial_init (void);
 void serial_putc (char c);

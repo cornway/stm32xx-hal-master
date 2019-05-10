@@ -6,6 +6,8 @@
 #include "dev_conf.h"
 #include "stdarg.h"
 #include <misc_utils.h>
+#include <string.h>
+#include <ctype.h>
 
 #ifndef DEVIO_READONLY
 #warning "DEVIO_READONLY is undefined, using TRUE"
@@ -40,6 +42,7 @@ typedef struct {
     FILINFO fn;
 } dirhandle_t;
 
+static int devio_con_clbk (const char *text, int len);
 
 static fhandle_t __file_handles[MAX_HANDLES];
 static dirhandle_t __dir_handles[MAX_HANDLES];
@@ -99,6 +102,7 @@ int dev_io_init (void)
     for (i = 0; i < MAX_HANDLES; i++) {
         dir_handles[i] = (fobjhdl_t *)&__dir_handles[i];
     }
+    serial_rx_callback(devio_con_clbk);
     return 0;
 }
 
@@ -329,6 +333,154 @@ int d_dirlist (const char *path, flist_t *flist)
         f_closedir(&dir);
     } else {
         return -1;
+    }
+    return 0;
+}
+
+
+#define DEV_MAX_NAME 16
+
+typedef struct dvar_int_s {
+    struct dvar_int_s *next;
+    dvar_t dvar;
+    uint16_t namelen;
+    char name[DEV_MAX_NAME];
+} dvar_int_t;
+
+dvar_int_t *dvar_head = NULL;
+
+int d_dvar_reg (dvar_t *var, const char *name)
+{
+    dvar_int_t *v;
+
+    v = (dvar_int_t *)Sys_Malloc(sizeof(dvar_int_t));
+    if (!v) {
+        return -1;
+    }
+
+    v->namelen = snprintf(v->name, sizeof(v->name), "%s", name);
+    memcpy(&v->dvar, var, sizeof(v->dvar));
+
+    if (dvar_head == NULL) {
+        dvar_head = v;
+        v->next = NULL;
+    } else {
+        v->next = dvar_head;
+        dvar_head = v;
+    }
+    return 0;
+}
+
+int d_dvar_rm (const char *name)
+{
+    dvar_int_t *v = dvar_head;
+    dvar_int_t *prev = NULL;
+
+    while (v) {
+
+        if (strcmp((char *)v->name, name) == 0) {
+            if (prev) {
+                prev->next = v->next;
+            } else {
+                dvar_head = v->next;
+            }
+            Sys_Free(v);
+            return 0;
+        }
+
+        prev = v;
+        v = v->next;
+    }
+    return -1;
+}
+
+static const char *_next_token (const char *buf)
+{
+    while (*buf) {
+        if (!isspace(*buf)) {
+            return buf;
+        }
+        buf++;
+    }
+    return NULL;
+}
+
+static const char *_next_space (const char *buf)
+{
+    while (*buf) {
+        if (isspace(*buf)) {
+            return buf;
+        }
+        buf++;
+    }
+    return NULL;
+}
+
+
+static int _devio_con_handle (dvar_int_t *v, const char *text, int len)
+{
+    int ret = 0;
+    switch (v->dvar.type) {
+        case DVAR_INT32:
+        {
+            const char *p;
+            int32_t i;
+
+            p = _next_token(text);
+            if (!p) {
+                return 0;
+            }
+            if (!sscanf(p, "%i", &i)) {
+                return 0;
+            }
+            writeLong(v->dvar.ptr, i);
+            p = _next_space(p);
+            if (!p) {
+                return len;
+            }
+            return (int)(p - text);
+        }
+        break;
+        case DVAR_STR:
+        {
+            const char *p;
+
+            p = _next_token(text);
+            if (!p) {
+                return 0;
+            }
+            p += snprintf(v->dvar.ptr, v->dvar.ptrsize, "%s", p);
+            return (int)(p - text);
+        }
+        break;
+        case DVAR_FUNC:
+        {
+            dvar_func_t func = v->dvar.ptr;
+            return func((char *)text, &len);
+        }
+        break;
+    }
+
+    return 0;
+}
+
+static int devio_con_clbk (const char *text, int len)
+{
+    dvar_int_t *v = dvar_head;
+    dvar_int_t *prev = NULL;
+    int hret;
+
+    while (v) {
+
+        if (strncmp(text, v->name, v->namelen) == 0) {
+            hret = _devio_con_handle(v, text + v->namelen, len - v->namelen);
+            if (hret <= 0) {
+                return 0;
+            }
+            return hret + v->namelen;
+        }
+        prev = v;
+        v = v->next;
     }
     return 0;
 }
