@@ -16,12 +16,14 @@
 
 #define HEAP_CACHE_SIZE             (0)
 
-#define AUDIO_SAMPLE_RATE           (22050U)
-
-#define SDRAM_VOL_START             (0xC0000000)
-#define SDRAM_VOL_END               (0xC1000000)
+#define AUDIO_SAMPLE_RATE           (11025U)
 
 #define DEVIO_READONLY              (0)
-#define MAX_HANDLES                 (3)
+#define MAX_HANDLES                 (4)
+
+
+#define DEV_MAXXDIM                 (320)
+#define DEV_MAXYDIM                 (240)
+
 
 #endif /*__DEV_CONF_H__*/

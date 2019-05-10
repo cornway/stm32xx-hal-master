@@ -6,6 +6,7 @@
 #include "dev_conf.h"
 #include "stm32f7xx_it.h"
 #include "nvic.h"
+#include "heap.h"
 #include "misc_utils.h"
 
 #if DEBUG_SERIAL
@@ -19,8 +20,24 @@ static void serial_fatal (void)
 
 
 #if !DEBUG_SERIAL_USE_DMA
+
+#if DEBUG_SERIAL_BUFERIZED
+#warning "DEBUG_SERIAL_BUFERIZED==true while DEBUG_SERIAL_USE_DMA==false"
 #undef DEBUG_SERIAL_BUFERIZED
 #define DEBUG_SERIAL_BUFERIZED 0
+#endif
+
+#ifdef DEBUG_SERIAL_USE_RX
+#error "DEBUG_SERIAL_USE_RX only with DEBUG_SERIAL_USE_DMA==1"
+#endif
+
+#else
+
+#ifndef DEBUG_SERIAL_USE_RX
+#warning "DEBUG_SERIAL_USE_RX undefined, using TRUE"
+#define DEBUG_SERIAL_USE_RX 1
+#endif /*!DEBUG_SERIAL_USE_DMA*/
+
 #endif /*!DEBUG_SERIAL_USE_DMA*/
 
 #ifndef USE_STM32F769I_DISCO
@@ -38,16 +55,24 @@ typedef enum {
 typedef struct uart_desc_s uart_desc_t;
 
 typedef void (*uart_msp_init_t) (uart_desc_t *uart_desc);
+typedef void (*uart_dma_init_t) (uart_desc_t *uart_desc);
 
 struct uart_desc_s {
     USART_TypeDef           *hw;
     UART_HandleTypeDef      handle;
     UART_InitTypeDef  const * cfg;
     uart_msp_init_t         msp_init;
+    
 #if DEBUG_SERIAL_USE_DMA
+    uart_dma_init_t         dma_init;
     DMA_HandleTypeDef       hdma_tx;
     FlagStatus              uart_tx_ready;
     IRQn_Type               irq_txdma, irq_uart;
+#if DEBUG_SERIAL_USE_RX
+    DMA_HandleTypeDef       hdma_rx;
+    IRQn_Type               irq_rxdma;
+    void                    (*rx_handler) (DMA_HandleTypeDef *);
+#endif
 #endif
     serial_type_t           type;
 #if DEBUG_SERIAL_BUFERIZED
@@ -68,9 +93,24 @@ typedef struct {
     uint32_t timestamp;
 } streambuf_t;
 
-static streambuf_t streambuf[STREAM_BUFCNT];
+static streambuf_t streambuf[STREAM_BUFCNT] DTCM;
 
 #endif /*DEBUG_SERIAL_BUFERIZED*/
+
+#if DEBUG_SERIAL_USE_RX
+
+#define DMA_RX_SIZE 2
+#define DMA_RX_FIFO_SIZE (1 << 8)
+
+typedef struct {
+    uint16_t cnt;
+    char buf[DMA_RX_SIZE * 2];
+    char fifo[DMA_RX_FIFO_SIZE];
+} rxstream_t;
+
+static rxstream_t rxstream DTCM;
+
+#endif /*DEBUG_SERIAL_USE_RX*/
 
 static void serial_timer_init (void);
 static void serial_flush_handler (int force);
@@ -89,6 +129,24 @@ static const UART_InitTypeDef uart_115200_8n1_tx =
     .OverSampling   = 0,
     .OneBitSampling = 0,
 };
+
+static const UART_InitTypeDef uart_115200_8n1_txrx =
+{
+    .BaudRate       = 115200,
+    .WordLength     = UART_WORDLENGTH_8B,
+    .StopBits       = UART_STOPBITS_1,
+    .Parity         = UART_PARITY_NONE,
+    .Mode           = UART_MODE_TX_RX,
+    .HwFlowCtl      = UART_HWCONTROL_NONE,
+    .OverSampling   = 0,
+    .OneBitSampling = 0,
+};
+
+#if DEBUG_SERIAL_USE_RX
+const UART_InitTypeDef *uart_def_ptr = &uart_115200_8n1_txrx;
+#else
+const UART_InitTypeDef *uart_def_ptr = &uart_115200_8n1_tx;
+#endif
 
 static uart_desc_t *debug_port (void)
 {
@@ -109,6 +167,7 @@ static uart_desc_t *debug_port (void)
 #if DEBUG_SERIAL_USE_DMA
 
 static irqmask_t timer_irq_mask = 0;
+static irqmask_t dma_rx_irq_mask = 0;
 
 static inline void dma_tx_sync (uart_desc_t *uart_desc)
 {
@@ -118,10 +177,81 @@ static inline void dma_tx_sync (uart_desc_t *uart_desc)
 
 #endif /*DEBUG_SERIAL_USE_DMA*/
 
+static void dma_rx_xfer_hanlder (struct __DMA_HandleTypeDef * hdma);
+
+#if DEBUG_SERIAL_USE_DMA
+static void uart1_dma_init (uart_desc_t *uart_desc)
+{
+    static DMA_HandleTypeDef *hdma_tx, *hdma_rx;
+    UART_HandleTypeDef *huart = &uart_desc->handle;
+    irqmask_t irqmask;
+
+    /*DMA2_Stream7*/
+    __HAL_RCC_DMA2_CLK_ENABLE();
+
+    hdma_tx = &uart_desc->hdma_tx;
+
+    hdma_tx->Instance                 = DMA2_Stream7;
+    hdma_tx->Init.Channel             = DMA_CHANNEL_4;
+    hdma_tx->Init.Direction           = DMA_MEMORY_TO_PERIPH;
+    hdma_tx->Init.PeriphInc           = DMA_PINC_DISABLE;
+    hdma_tx->Init.MemInc              = DMA_MINC_ENABLE;
+    hdma_tx->Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_tx->Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;
+    hdma_tx->Init.Mode                = DMA_NORMAL;
+    hdma_tx->Init.Priority            = DMA_PRIORITY_LOW;
+
+    HAL_DMA_DeInit(hdma_tx);
+    HAL_DMA_Init(hdma_tx);
+
+    /* Associate the initialized DMA handle to the UART handle */
+    __HAL_LINKDMA(huart, hdmatx, *hdma_tx);
+
+    HAL_NVIC_SetPriority(DMA2_Stream7_IRQn, 0, 1);
+    HAL_NVIC_EnableIRQ(DMA2_Stream7_IRQn);
+
+    uart_desc->irq_txdma = DMA2_Stream7_IRQn;
+#if DEBUG_SERIAL_USE_RX
+    hdma_rx = &uart_desc->hdma_rx;
+
+    hdma_rx->Instance                 = DMA2_Stream5;
+    hdma_rx->Init.Channel             = DMA_CHANNEL_4;
+    hdma_rx->Init.Direction           = DMA_PERIPH_TO_MEMORY;
+    hdma_rx->Init.PeriphInc           = DMA_PINC_DISABLE;
+    hdma_rx->Init.MemInc              = DMA_MINC_ENABLE;
+    hdma_rx->Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_rx->Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;
+    hdma_rx->Init.Mode                = DMA_CIRCULAR;
+    hdma_rx->Init.Priority            = DMA_PRIORITY_LOW;
+    uart_desc->rx_handler            = dma_rx_xfer_hanlder;
+
+    HAL_DMA_DeInit(hdma_rx);
+    HAL_DMA_Init(hdma_rx);
+
+    __HAL_LINKDMA(huart, hdmarx, *hdma_rx);
+
+    irq_bmap(&irqmask);
+    HAL_NVIC_SetPriority(DMA2_Stream5_IRQn, 0, 1);
+    HAL_NVIC_EnableIRQ(DMA2_Stream5_IRQn);
+    irq_bmap(&dma_rx_irq_mask);
+    dma_rx_irq_mask = dma_rx_irq_mask & (~irqmask);
+
+    uart_desc->irq_rxdma = DMA2_Stream5_IRQn;
+
+    if(HAL_UART_Receive_DMA(huart, (uint8_t *)rxstream.buf, sizeof(rxstream.buf)) != HAL_OK)
+    {
+        serial_fatal();
+    }
+#else
+    UNUSED(hdma_rx);
+#endif
+    UNUSED(hdma_tx);
+}
+#endif /*DEBUG_SERIAL_USE_DMA*/
+
 static void uart1_msp_init (uart_desc_t *uart_desc)
 {
     UART_HandleTypeDef *huart = &uart_desc->handle;
-    static DMA_HandleTypeDef *hdma_tx;
     GPIO_InitTypeDef  GPIO_InitStruct;
 
     __GPIOA_CLK_ENABLE();
@@ -142,38 +272,10 @@ static void uart1_msp_init (uart_desc_t *uart_desc)
     if (huart->Init.Mode & UART_MODE_RX) {
         HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
     }
-#if DEBUG_SERIAL_USE_DMA
-    /*DMA2_Stream7*/
-    __HAL_RCC_DMA2_CLK_ENABLE();
-
-    hdma_tx = &uart_desc->hdma_tx;
-
-    hdma_tx->Instance                 = DMA2_Stream7;
-    hdma_tx->Init.Channel             = DMA_CHANNEL_4;
-    hdma_tx->Init.Direction           = DMA_MEMORY_TO_PERIPH;
-    hdma_tx->Init.PeriphInc           = DMA_PINC_DISABLE;
-    hdma_tx->Init.MemInc              = DMA_MINC_ENABLE;
-    hdma_tx->Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
-    hdma_tx->Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;
-    hdma_tx->Init.Mode                = DMA_NORMAL;
-    hdma_tx->Init.Priority            = DMA_PRIORITY_LOW;
-
-    HAL_DMA_Init(hdma_tx);
-
-    /* Associate the initialized DMA handle to the UART handle */
-    __HAL_LINKDMA(huart, hdmatx, *hdma_tx);
-
-    HAL_NVIC_SetPriority(DMA2_Stream7_IRQn, 0, 1);
-    HAL_NVIC_EnableIRQ(DMA2_Stream7_IRQn);
-
     HAL_NVIC_SetPriority(USART1_IRQn, 0, 1);
     HAL_NVIC_EnableIRQ(USART1_IRQn);
 
-    uart_desc->irq_txdma = DMA2_Stream7_IRQn;
     uart_desc->irq_uart  = USART1_IRQn;
-#else
-    UNUSED(hdma_tx);
-#endif
 }
 
 
@@ -193,6 +295,7 @@ static void _serial_init (uart_desc_t *uart_desc)
     {
         serial_fatal();
     }
+    uart_desc->dma_init(uart_desc);
     uart_desc->initialized = SET;
 }
 
@@ -205,7 +308,8 @@ static void _serial_debug_setup (uart_desc_t *uart_desc)
     uart_desc->active_stream = 0;
 #endif
     uart_desc->hw       = USART1;
-    uart_desc->cfg      = &uart_115200_8n1_tx;
+    uart_desc->cfg      = uart_def_ptr;
+    uart_desc->dma_init = uart1_dma_init;
     uart_desc->msp_init = uart1_msp_init;
     uart_desc->type     = SERIAL_DEBUG;
     uart_desc->uart_tx_ready = SET;
@@ -225,13 +329,15 @@ void serial_init (void)
 
 static HAL_StatusTypeDef serial_submit_to_hw (uart_desc_t *uart_desc, const void *data, size_t cnt)
 {
+    irqmask_t irq = 0;
     HAL_StatusTypeDef status;
     serial_led_on();
 
 #if DEBUG_SERIAL_USE_DMA
     dma_tx_sync(uart_desc);
+    irq_save(&irq);
     status = HAL_UART_Transmit_DMA(&uart_desc->handle, (uint8_t *)data, cnt);
-
+    irq_restore(irq);
 #else
     status = HAL_UART_Transmit(&uart_desc->handle, (uint8_t *)data, cnt, 1000);
 #endif /*DEBUG_SERIAL_USE_DMA*/
@@ -314,7 +420,7 @@ static HAL_StatusTypeDef _serial_send (const void *data, size_t cnt)
 }
 
 #if SERIAL_TSF
-static char prev_putc = 0xff;
+static int16_t prev_putc = 0xff;
 
 static inline d_bool __newline_char (char c)
 {
@@ -333,8 +439,8 @@ void serial_putc (char c)
     uint8_t buf[1] = {c};
 
 #if SERIAL_TSF
-    if (__newline_char(prev_putc) ||
-        prev_putc == 0xff) {
+    if (prev_putc < 0 ||
+        __newline_char((char)prev_putc)) {
 
         dprintf("%c", c);
     } else {
@@ -394,8 +500,8 @@ static inline int __insert_tsf (const char *fmt, char *buf, int max)
 {
     uint32_t msec, sec;
 
-    if (!__newline_char(prev_putc) &&
-        prev_putc != -1) {
+    if (prev_putc < 0 &&
+        !__newline_char(prev_putc)) {
 
         return 0;
     }
@@ -493,6 +599,42 @@ static uart_desc_t *uart_find_desc (USART_TypeDef *source)
     return NULL;
 }
 
+static void _dma_rx_xfer_cplt (uint8_t full)
+{
+    uint16_t wridx;
+    int cnt = DMA_RX_SIZE;
+    char *src, *dst;
+    if (rxstream.cnt >= DMA_RX_FIFO_SIZE) {
+        return;
+        /*Full, exit*/
+    }
+    src = &rxstream.buf[full * DMA_RX_SIZE];
+    wridx = rxstream.cnt;
+    if (wridx + DMA_RX_SIZE + 1 > DMA_RX_FIFO_SIZE) {
+        cnt = DMA_RX_FIFO_SIZE - wridx - 1;
+    }
+    rxstream.cnt += cnt;
+    dst = rxstream.fifo + wridx;
+    while (cnt) {
+        *dst = *src;
+        src++; dst++; cnt--;
+    }
+}
+
+static void dma_fifo_flush (rxstream_t *rx, char *dest, int *pcnt)
+{
+    uint16_t cnt = rx->cnt;
+    char *d = dest, *s = rx->fifo;
+
+    while (cnt) {
+        *d = *s;
+        d++; s++; cnt--;
+    }
+    *d = 0;
+    rx->cnt = 0;
+    *pcnt = rx->cnt;
+}
+
 static void uart_handle_irq (USART_TypeDef *source)
 {
     uart_desc_t *uart_desc = uart_find_desc(source);
@@ -500,6 +642,16 @@ static void uart_handle_irq (USART_TypeDef *source)
     if (uart_desc) {
         HAL_UART_IRQHandler(&uart_desc->handle);
     }
+}
+
+void HAL_UART_RxHalfCpltCallback (UART_HandleTypeDef* huart)
+{
+    _dma_rx_xfer_cplt(0);
+}
+
+void HAL_UART_RxCpltCallback (UART_HandleTypeDef* huart)
+{
+    _dma_rx_xfer_cplt(1);
 }
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *UartHandle)
@@ -515,6 +667,59 @@ void DMA2_Stream7_IRQHandler (void)
 {
     dma_tx_handle_irq(DMA2_Stream7);
 }
+
+#if DEBUG_SERIAL_USE_RX
+
+static serial_rx_clbk_t serial_rx_clbk = NULL;
+
+void serial_rx_callback (serial_rx_clbk_t clbk)
+{
+    serial_rx_clbk = clbk;
+}
+
+void serial_tickle (void)
+{
+    irqmask_t irq = dma_rx_irq_mask;
+    char buf[DMA_RX_FIFO_SIZE + 1];
+    int cnt;
+
+    if (!rxstream.cnt) {
+        return;
+    }
+
+    if (serial_rx_clbk) {
+        irq_save(&irq);
+        dma_fifo_flush(&rxstream, buf, &cnt);
+        irq_restore(irq);
+
+        serial_rx_clbk(buf, cnt);
+    }
+}
+
+static void dma_rx_xfer_hanlder (struct __DMA_HandleTypeDef * hdma)
+{
+    HAL_DMA_IRQHandler(hdma);
+}
+
+static void dma_rx_handle_irq (const DMA_Stream_TypeDef *source)
+{
+    uart_desc_t *dsc       = uart_desc_pool[0],
+                *dsc_end   = uart_desc_pool[uart_desc_cnt];
+
+    for (; dsc != dsc_end; dsc++) {
+        if (dsc->hdma_rx.Instance == source) {
+            dma_rx_xfer_hanlder(&dsc->hdma_rx);
+            break;
+        }
+    }
+}
+
+void DMA2_Stream5_IRQHandler (void)
+{
+    dma_rx_handle_irq(DMA2_Stream5);
+}
+
+#endif
 
 void USART1_IRQHandler (void)
 {

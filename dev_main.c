@@ -119,6 +119,26 @@ void dev_tickle (void)
 {
     audio_update();
     input_tickle();
+    serial_tickle();
+}
+
+static char largebuf[1024];
+static int index = 0;
+
+void _serial_rx_clbk (const char *buf, int len)
+{
+    const char *p = buf;
+
+    index += snprintf(largebuf + index, 1024 - index, "%s", buf);
+
+    while (*p) {
+        if (*p == '\n' || *p == '\r') {
+            index = 0;
+            dprintf("Echo : %s", largebuf);
+            break;
+        }
+        p++;
+    }
 }
 
 int dev_main (void)
@@ -135,7 +155,7 @@ int dev_main (void)
     audio_init();
     input_bsp_init();
     dev_io_init();
-
+    serial_rx_callback(_serial_rx_clbk);
     SystemDump();
 
     VID_PreConfig();

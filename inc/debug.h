@@ -30,11 +30,16 @@
 #define SERIAL_TSF 1
 #endif
 
+typedef void (*serial_rx_clbk_t) (const char *buf, int len);
+
 void serial_init (void);
 void serial_putc (char c);
 char serial_getc (void);
 void serial_send_buf (const void *data, size_t cnt);
 void serial_flush (void);
+void serial_rx_callback (serial_rx_clbk_t);
+void serial_tickle (void);
+
 
 void dprintf (const char *fmt, ...) PRINTF;
 void dvprintf (const char *fmt, va_list argptr);
