@@ -122,9 +122,6 @@ void dev_tickle (void)
     serial_tickle();
 }
 
-static char largebuf[1024];
-static int index = 0;
-
 static int con_echo (const char *buf, int len)
 {
     dprintf("@: %s\n", buf);

@@ -8,6 +8,7 @@
 #include <misc_utils.h>
 #include <string.h>
 #include <ctype.h>
+#include <debug.h>
 
 #ifndef DEVIO_READONLY
 #warning "DEVIO_READONLY is undefined, using TRUE"
@@ -42,7 +43,25 @@ typedef struct {
     FILINFO fn;
 } dirhandle_t;
 
+#define DEVIO_PRINTENV_CMD "print"
+#define DEVIO_REGISTER_CMD "register"
+#define DEVIO_UNREGISTER_CMD "unreg"
+
+const char *devio_deprecated_names[] =
+{
+    DEVIO_PRINTENV_CMD,
+    DEVIO_REGISTER_CMD,
+    DEVIO_UNREGISTER_CMD,
+};
+
 static int devio_con_clbk (const char *text, int len);
+static int _d_dvar_reg (dvar_t *var, const char *name);
+
+static int devio_print_env (void *p1, void *p2);
+static int devio_dvar_register (void *p1, void *p2);
+static int devio_dvar_unregister (void *p1, void *p2);
+
+static int devio_dvar_deprecated (const char *name);
 
 static fhandle_t __file_handles[MAX_HANDLES];
 static dirhandle_t __dir_handles[MAX_HANDLES];
@@ -87,6 +106,7 @@ static inline void releasehandle (fobjhdl_t **hdls, int handle)
 
 int dev_io_init (void)
 {
+    dvar_t dvar;
     int i;
     if(FATFS_LinkDriver(&SD_Driver, SDPath)) {
         return -1;
@@ -103,6 +123,16 @@ int dev_io_init (void)
         dir_handles[i] = (fobjhdl_t *)&__dir_handles[i];
     }
     serial_rx_callback(devio_con_clbk);
+
+    dvar.ptr = devio_print_env;
+    dvar.ptrsize = sizeof(&devio_print_env);
+    dvar.type = DVAR_FUNC;
+
+    _d_dvar_reg(&dvar, DEVIO_PRINTENV_CMD);
+    dvar.ptr = devio_dvar_register;
+    _d_dvar_reg(&dvar, DEVIO_REGISTER_CMD);
+    dvar.ptr = devio_dvar_unregister;
+    _d_dvar_reg(&dvar, DEVIO_UNREGISTER_CMD);
     return 0;
 }
 
@@ -338,20 +368,44 @@ int d_dirlist (const char *path, flist_t *flist)
 }
 
 
-#define DEV_MAX_NAME 16
+#define DEV_MAX_NAME (1 << 4)
 
 typedef struct dvar_int_s {
     struct dvar_int_s *next;
     dvar_t dvar;
-    uint16_t namelen;
     char name[DEV_MAX_NAME];
+    uint16_t namelen;
 } dvar_int_t;
 
 dvar_int_t *dvar_head = NULL;
 
-int d_dvar_reg (dvar_t *var, const char *name)
+static int devio_dvar_exist (PACKED const char *name, dvar_int_t **_prev, dvar_int_t **_dvar)
+{
+    dvar_int_t *v = dvar_head;
+    dvar_int_t *prev = NULL;
+
+    while (v) {
+
+        if (strcmp(v->name, name) == 0) {
+            *_prev = prev;
+            *_dvar = v;
+            return 1;
+        }
+
+        prev = v;
+        v = v->next;
+    }
+    return 0;
+}
+
+static int _d_dvar_reg (dvar_t *var, const char *name)
 {
     dvar_int_t *v;
+
+    if (devio_dvar_exist(name, &v, &v)) {
+        dprintf("Variable with name \'%s\' already exist !\n", name);
+        return -1;
+    }
 
     v = (dvar_int_t *)Sys_Malloc(sizeof(dvar_int_t));
     if (!v) {
@@ -371,27 +425,37 @@ int d_dvar_reg (dvar_t *var, const char *name)
     return 0;
 }
 
+int d_dvar_reg (dvar_t *var, const char *name)
+{
+    if (devio_dvar_deprecated(name)) {
+        dprintf("Deprecated name \'%s\'\n", name);
+        return -1;
+    }
+    return _d_dvar_reg(var, name);
+}
+
+
 int d_dvar_rm (const char *name)
 {
-    dvar_int_t *v = dvar_head;
+    dvar_int_t *v = NULL;
     dvar_int_t *prev = NULL;
 
-    while (v) {
-
-        if (strcmp((char *)v->name, name) == 0) {
-            if (prev) {
-                prev->next = v->next;
-            } else {
-                dvar_head = v->next;
-            }
-            Sys_Free(v);
-            return 0;
-        }
-
-        prev = v;
-        v = v->next;
+    if (devio_dvar_deprecated(name)) {
+        dprintf("Cannot be removed : \'%s\'\n", name);
+        return -1;
     }
-    return -1;
+
+    if (!devio_dvar_exist(name, &prev, &v)) {
+        dprintf("Variable with name \'%s\' missing!", name);
+        return -1;
+    }
+
+    if (prev) {
+        prev->next = v->next;
+    } else {
+        dvar_head = v->next;
+    }
+    return 0;
 }
 
 static const char *_next_token (const char *buf)
@@ -416,6 +480,10 @@ static const char *_next_space (const char *buf)
     return NULL;
 }
 
+/*Deffered routine, to register/unregister dvar's, etc..*/
+
+static dvar_int_t devio_defered_dvar;
+static dvar_int_t *devio_defered_ptr = NULL;
 
 static int _devio_con_handle (dvar_int_t *v, const char *text, int len)
 {
@@ -438,7 +506,7 @@ static int _devio_con_handle (dvar_int_t *v, const char *text, int len)
             if (!p) {
                 return len;
             }
-            return (int)(p - text);
+            ret = (int)(p - text);
         }
         break;
         case DVAR_STR:
@@ -450,38 +518,117 @@ static int _devio_con_handle (dvar_int_t *v, const char *text, int len)
                 return 0;
             }
             p += snprintf(v->dvar.ptr, v->dvar.ptrsize, "%s", p);
-            return (int)(p - text);
+            ret = (int)(p - text);
         }
         break;
         case DVAR_FUNC:
         {
-            dvar_func_t func = v->dvar.ptr;
-            return func((char *)text, &len);
+            dvar_func_t func = (dvar_func_t)v->dvar.ptr;
+            ret = func((void *)text, &len);
         }
         break;
     }
 
-    return 0;
+    return ret;
 }
 
-static int devio_con_clbk (const char *text, int len)
+static int devio_con_clbk (const char *_text, int len)
 {
     dvar_int_t *v = dvar_head;
-    dvar_int_t *prev = NULL;
+    const char *text;
     int hret;
+
+    text = _next_token(_text);
+    hret = (int)(text - _text);
 
     while (v) {
 
         if (strncmp(text, v->name, v->namelen) == 0) {
-            hret = _devio_con_handle(v, text + v->namelen, len - v->namelen);
-            if (hret <= 0) {
-                return 0;
+            /*TODO : Add command/line terminator, e.g. - ';' or '&&'..*/
+            hret += _devio_con_handle(v, text + v->namelen, len - v->namelen);
+            if (devio_defered_ptr) {
+                hret += len - (hret + v->namelen);
+                break;
             }
             return hret + v->namelen;
         }
-        prev = v;
         v = v->next;
     }
+    if (devio_defered_ptr) {
+        dvar_func_t func;
+
+        v = devio_defered_ptr;
+        func = (dvar_func_t)v->dvar.ptr;
+
+        func(v->name, &v->namelen);
+
+        devio_defered_ptr = NULL;
+        if (hret != 0) {
+            dprintf("Warning! trying to execute \'%s\'\n", text + len);
+            dprintf("after : \'%s\' was executed\n", v->name);
+        }
+        return len;
+    }
+    return 0;
+}
+
+static int devio_dvar_register (void *p1, void *p2)
+{
+    char *name = (char *)p1;
+
+    dprintf("%s() : Not implemented yet, \'%s\' skipped\n", __func__, name);
+    return strlen(name);
+}
+
+static int _devio_dvar_unregister (void *p1, void *p2)
+{
+    d_dvar_rm((char *)p1);
+
+    return strlen((char *)p1);
+}
+
+static int devio_dvar_unregister (void *p1, void *p2)
+{
+    devio_defered_ptr = &devio_defered_dvar;
+    /*TODO : remove explicit size : %16*/
+    sscanf((const char *)p1, "%16s", devio_defered_ptr->name);
+    devio_defered_ptr->namelen = strlen(devio_defered_ptr->name);
+    devio_defered_ptr->dvar.ptr = _devio_dvar_unregister;
+    devio_defered_ptr->dvar.ptrsize = sizeof(&_devio_dvar_unregister);
+    devio_defered_ptr->dvar.type = DVAR_FUNC;
+
+    return devio_defered_ptr->namelen;
+}
+
+static int devio_dvar_deprecated (const char *name)
+{
+    int i;
+
+    for (i = 0; i < arrlen(devio_deprecated_names); i++) {
+        if (strcmp(devio_deprecated_names[i], name) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int devio_print_env (void *p1, void *p2)
+{
+    dvar_int_t *v = dvar_head;
+    const char *border = "========================================\n";
+    const char *type_text[] = {"function", "integer", "string"};
+    int i = 0;
+
+    dprintf("%s", border);
+
+    while (v) {
+        dprintf("%3i : \'%s\'  \'%s\'  <0x%08x>  <0x%04x>\n",
+                i, v->name, type_text[v->dvar.type], (unsigned)v->dvar.ptr, v->dvar.ptrsize);
+        v = v->next;
+    }
+
+    dprintf("%s", border);
+
     return 0;
 }
 

@@ -720,7 +720,8 @@ void serial_tickle (void)
     serial_rx_clbk_t *clbk = &serial_rx_clbk[0];
     char buf[DMA_RX_FIFO_SIZE + 1];
     char *pbuf = buf;
-    int cnt, idx;
+    int cnt, prev_cnt, idx;
+    int attemption = 0;
 
     irq_save(&irq);
     if (!rxstream.crlf || *clbk == NULL) {
@@ -731,10 +732,12 @@ void serial_tickle (void)
     dma_fifo_flush(&rxstream, pbuf, &cnt);
     irq_restore(irq);
 
-    while (clbk != last_rx_clbk) {
+    prev_cnt = cnt;
+doparse:
+    while (cnt > 0 && *pbuf && clbk != last_rx_clbk) {
 
         idx = (*clbk)(pbuf, cnt);
-        if (idx >= cnt) {
+        if (idx < 0 || idx >= cnt) {
             return;
             /*handled*/
         }
@@ -743,6 +746,18 @@ void serial_tickle (void)
             cnt -= idx;
         }
         clbk++;
+        attemption++;
+    }
+    if (cnt > 0) {
+        /*Try until all text will be parsed*/
+        if (prev_cnt == cnt) {
+            dprintf("Cannot parse text \'%s\'\n", pbuf);
+            dprintf("Attemptions : %i\n", attemption);
+            return;
+        }
+        prev_cnt = cnt;
+        clbk = &serial_rx_clbk[0];
+        goto doparse;
     }
 }
 
