@@ -133,6 +133,7 @@ int dev_main (void)
     CPU_CACHE_Enable();
     SystemClock_Config();
     HAL_Init();
+    mpu_init();
     Sys_AllocInit();
     BSP_LED_Init(LED1);
     BSP_LED_Init(LED2);

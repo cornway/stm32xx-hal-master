@@ -1,5 +1,5 @@
-#ifndef __MACH_M4_H__
-#define __MACH_M4_H__
+#ifndef __MACH_M7_H__
+#define __MACH_M7_H__
 
 #include <stdint.h>
 #include "main.h"
@@ -9,9 +9,7 @@
 #endif
 
 #ifdef __ARMCC_VERSION
-        
 
-        
 #else
 #error "UNKNOWN COMPILER!"
 #endif        
@@ -26,6 +24,7 @@ typedef uint8_t       arch_byte_t;
 #define INT64_T       int64_t
 #define UINT64_T      uint64_t
 
+#define CPU_CHACHELINE (32)
 
 #define V_PREPACK
 #define V_POSTPACK __attribute__((packed))
@@ -33,7 +32,7 @@ typedef uint8_t       arch_byte_t;
 
 #define _VALUES_IN_REGS     __value_in_regs
 
-#define _WEAK __weak      
+#define _WEAK __weak
         
 #define _STATIC static
 
@@ -305,7 +304,7 @@ static inline arch_word_t __lr (void)
 
 
     
-#endif /*__MACH_M4_H__*/
+#endif /*__MACH_M7_H__*/
 
 
 /*End of file*/

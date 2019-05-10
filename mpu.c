@@ -3,7 +3,6 @@
 #include "arch.h"
 #include "mpu.h"
 
-
 #define MPU_REG_POOL_MAX (MPU_REGION_NUMBER7 + 1)
 
 typedef struct {
@@ -14,12 +13,15 @@ typedef struct {
 
 static mpu_reg_t mpu_reg_pool[MPU_REG_POOL_MAX];
 
-static mpu_reg_t *mpu_alloc_reg (void)
+static uint32_t size_to_mpu_size (uint32_t size);
+
+static mpu_reg_t *mpu_alloc_reg (int *id)
 {
     int i;
     for (i = 0; i < MPU_REG_POOL_MAX; i++) {
         if (mpu_reg_pool[i].alloced == d_false) {
             mpu_reg_pool[i].alloced = d_true;
+            *id = i + MPU_REGION_NUMBER0;
             return &mpu_reg_pool[i];
         }
     }
@@ -31,15 +33,105 @@ static void mpu_release_reg (mpu_reg_t *reg)
     reg->alloced = d_false;
 }
 
-static int mpu_reg_id (mpu_reg_t *reg)
-{
-    return (mpu_reg_pool - reg) / sizeof(*reg);
-}
-
 void mpu_init (void)
 {
-    HAL_MPU_Enable(MPU_HFNMI_PRIVDEF_NONE);
     memset(mpu_reg_pool, 0, sizeof(mpu_reg_pool));
+}
+
+int mpu_lock (arch_word_t addr, arch_word_t size, const char *mode)
+{
+    mpu_reg_t *reg;
+    int id = 0;
+    d_bool wr_protect = d_false;
+    d_bool r_protect = d_false;
+
+    assert(mode);
+    assert((addr & (size - 1)) == 0);
+
+    reg = mpu_alloc_reg(&id);
+    if (!reg)
+        return -1;
+
+    reg->init.DisableExec = MPU_INSTRUCTION_ACCESS_ENABLE;
+    reg->init.AccessPermission = MPU_REGION_FULL_ACCESS;
+
+    while (*mode) {
+        switch (*mode) {
+            case 'w':
+                wr_protect = d_true;
+            break;
+            case 'r':
+                r_protect = d_true;
+            break;
+            case 'x':
+                reg->init.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+            break;
+        }
+        mode++;
+    }
+    if (r_protect) {
+        assert(wr_protect);
+        reg->init.AccessPermission = MPU_REGION_NO_ACCESS;
+    } else if (wr_protect) {
+        reg->init.AccessPermission = MPU_REGION_PRIV_RO;
+    }
+    reg->init.Number = id;
+    reg->init.Enable = MPU_REGION_ENABLE;
+    reg->init.BaseAddress = addr;
+    reg->init.TypeExtField = MPU_TEX_LEVEL0;
+    reg->init.IsShareable = MPU_ACCESS_SHAREABLE;
+    reg->init.IsCacheable = MPU_ACCESS_CACHEABLE;
+    reg->init.IsBufferable = MPU_ACCESS_BUFFERABLE;
+    reg->init.SubRegionDisable = 0;
+    reg->init.Size = size_to_mpu_size(size);
+
+    HAL_MPU_Disable();
+    HAL_MPU_ConfigRegion(&reg->init);
+    HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+
+    return reg->init.Number;
+}
+
+int mpu_unlock (arch_word_t addr, arch_word_t size)
+{
+    int id = mpu_read(addr, size);
+    mpu_reg_t *reg;
+
+    if (id < 0) {
+        return id;
+    }
+
+    reg = &mpu_reg_pool[id];
+    reg->init.Enable = MPU_REGION_DISABLE;
+
+    HAL_MPU_Disable();
+    HAL_MPU_ConfigRegion(&reg->init);
+    HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+
+    mpu_release_reg(reg);
+    return 0;
+}
+
+static int mpu_search (arch_word_t addr, arch_word_t size)
+{
+    int i;
+    mpu_reg_t *reg;
+    int mpu_size;
+
+    for (i = 0; i < MPU_REG_POOL_MAX; i++) {
+        reg = &mpu_reg_pool[i];
+        if (reg->init.BaseAddress == addr) {
+            mpu_size = size_to_mpu_size(size);
+            assert(reg->init.Size == mpu_size);
+            return i;
+        }
+    }
+    return -1;
+}
+
+int mpu_read (arch_word_t addr, arch_word_t size)
+{
+    return mpu_search(addr, size);
 }
 
 static uint32_t size_to_mpu_size (uint32_t size)
@@ -104,91 +196,4 @@ static uint32_t size_to_mpu_size (uint32_t size)
     assert(0);
 }
 
-int mpu_lock (arch_word_t addr, arch_word_t size, const char *mode)
-{
-    mpu_reg_t *reg;
-    d_bool wr_protect = d_false;
-    d_bool r_protect = d_false;
-
-    assert(mode);
-    assert((addr & (size - 1)) == 0);
-
-    reg = mpu_alloc_reg();
-    if (!reg)
-        return -1;
-
-    reg->init.DisableExec = MPU_INSTRUCTION_ACCESS_ENABLE;
-    reg->init.AccessPermission = MPU_REGION_FULL_ACCESS;
-
-    while (*mode) {
-        switch (*mode) {
-            case 'w':
-                wr_protect = d_true;
-            break;
-            case 'r':
-                r_protect = d_true;
-            break;
-            case 'x':
-                reg->init.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
-            break;
-        }
-        mode++;
-    }
-    if (r_protect) {
-        assert(wr_protect);
-        reg->init.AccessPermission = MPU_REGION_NO_ACCESS;
-    } else if (wr_protect) {
-        reg->init.AccessPermission = MPU_REGION_PRIV_RO;
-    }
-    reg->init.Number = mpu_reg_id(reg) + MPU_REGION_NUMBER0;
-    reg->init.Enable = MPU_REGION_ENABLE;
-    reg->init.BaseAddress = addr;
-    reg->init.TypeExtField = MPU_TEX_LEVEL0;
-    reg->init.IsShareable = MPU_ACCESS_SHAREABLE;
-    reg->init.IsCacheable = MPU_ACCESS_CACHEABLE;
-    reg->init.IsBufferable = MPU_ACCESS_BUFFERABLE;
-    reg->init.SubRegionDisable = 0;
-    reg->init.Size = size_to_mpu_size(size);
-    HAL_MPU_ConfigRegion(&reg->init);
-
-    return reg->init.Number - MPU_REGION_NUMBER0;
-}
-
-int mpu_unlock (arch_word_t addr, arch_word_t size)
-{
-    int id = mpu_read(addr, size);
-    mpu_reg_t *reg;
-
-    if (id < 0) {
-        return id;
-    }
-
-    reg = &mpu_reg_pool[id];
-    reg->init.Enable = MPU_REGION_DISABLE;
-    HAL_MPU_ConfigRegion(&reg->init);
-    mpu_release_reg(reg);
-    return 0;
-}
-
-static int mpu_search (arch_word_t addr, arch_word_t size)
-{
-    int i;
-    mpu_reg_t *reg;
-    int mpu_size;
-
-    for (i = 0; i < MPU_REG_POOL_MAX; i++) {
-        reg = &mpu_reg_pool[i];
-        if (reg->init.BaseAddress == addr) {
-            mpu_size = size_to_mpu_size(size);
-            assert(reg->init.Size == mpu_size);
-            return i;
-        }
-    }
-    return -1;
-}
-
-int mpu_read (arch_word_t addr, arch_word_t size)
-{
-    return mpu_search(addr, size);
-}
 

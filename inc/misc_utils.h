@@ -62,10 +62,6 @@ extern void *Sys_Malloc (int size);
 extern void *Sys_Realloc (void *x, int32_t size);
 extern void *Sys_Calloc (int32_t size);
 extern void Sys_Free (void *p);
-extern void *Sys_HeapCacheTop (int size);
-extern void *Sys_HeapCachePop (int size);
-extern void Sys_HeapCachePush (int size);
-
 
 static inline void d_memcpy(void *_dst, const void *_src, int cnt)
 {

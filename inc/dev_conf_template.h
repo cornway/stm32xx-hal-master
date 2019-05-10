@@ -14,8 +14,6 @@
 
 #define GFX_COLOR_MODE GFX_COLOR_MODE_CLUT
 
-#define HEAP_CACHE_SIZE             (0)
-
 #define AUDIO_SAMPLE_RATE           (11025U)
 
 #define DEVIO_READONLY              (0)
