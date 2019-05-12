@@ -48,6 +48,7 @@
 #include "usbh_hid.h"
 #include "usbh_hid_parser.h"
 #include "input_int.h"
+#include <debug.h>
 
 
 /** @addtogroup USBH_LIB

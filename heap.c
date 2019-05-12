@@ -104,14 +104,14 @@ void Sys_AllocInit (void)
 {
     arch_word_t heap_mem, heap_size;
     arch_word_t sp_mem, sp_size;
-    void *ptr;
 
     arch_get_stack(&sp_mem, &sp_size);
     arch_get_heap(&heap_mem, &heap_size);
 
     mpu_lock(sp_mem, MPU_CACHELINE, "xwr");
     mpu_lock(heap_mem - MPU_CACHELINE, MPU_CACHELINE, "xwr");
-    mpu_lock(heap_mem + heap_size - MPU_CACHELINE, MPU_CACHELINE, "xwr");
+    /*According to code below, heap must be as last partition in memory pool*/
+    mpu_lock(heap_mem + heap_size, MPU_CACHELINE, "xwr");
 
     heap_size_total = heap_size - MPU_CACHELINE * 2;
 }

@@ -25,6 +25,7 @@
 /* Includes ------------------------------------------------------------------*/
 
 #include "usbh_ctlreq.h"
+#include <debug.h>
 
 /** @addtogroup USBH_LIB
 * @{

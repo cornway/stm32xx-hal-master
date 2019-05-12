@@ -2,6 +2,7 @@
 #include "misc_utils.h"
 #include "arch.h"
 #include "mpu.h"
+#include <string.h> 
 
 #define MPU_REG_POOL_MAX (MPU_REGION_NUMBER7 + 1)
 
@@ -188,12 +189,13 @@ static uint32_t size_to_mpu_size (uint32_t size)
         return MPU_REGION_SIZE_512MB;
     } else if (size == 1024 * 1024 * 1024) {
         return MPU_REGION_SIZE_1GB;
-    } else if (size == 1024 * 1024 * 1024 * 2) {
+    } else if (size == 1024 * 1024 * 1024 * 2U) {
         return MPU_REGION_SIZE_2GB;
-    } else if (size == 1024 * 1024 * 1024 * 4) {
+    } else if (size == 1024 * 1024 * 1024 * 4U) {
         return MPU_REGION_SIZE_4GB;
     }
     assert(0);
+    return 0;
 }
 
 
