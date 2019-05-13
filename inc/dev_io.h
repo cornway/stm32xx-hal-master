@@ -53,6 +53,7 @@ int d_seek (int handle, int position, uint32_t mode);
 int d_eof (int handle);
 int d_read (int handle, PACKED void *dst, int count);
 char *d_gets (int handle, PACKED char *dst, int count);
+char d_getc (int h);
 int d_write (int handle, PACKED const void *src, int count);
 int d_printf (int handle, char *fmt, ...);
 int d_mkdir (const char *path);

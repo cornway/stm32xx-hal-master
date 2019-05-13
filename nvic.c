@@ -93,8 +93,6 @@ static inline void _irq_save (irqmask_t *flags)
 
     if (!mask)
         mask = NVIC_IRQ_MASK;
-    else
-        assert((irq_active_mask & mask) == mask);
 
     mask = irq_active_mask & mask;
     mask = ~irq_saved_mask & mask;

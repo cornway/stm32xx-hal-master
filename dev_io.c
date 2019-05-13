@@ -249,6 +249,14 @@ char *d_gets (int handle, PACKED char *dst, int count)
     return dst;
 }
 
+char d_getc (int h)
+{
+    char c;
+    UINT btr;
+    f_read(getfile(h), &c, 1, &btr);
+    return c;
+}
+
 int d_write (int handle, PACKED const void *src, int count)
 {
 #if !DEVIO_READONLY

@@ -221,7 +221,7 @@ static void uart1_dma_init (uart_desc_t *uart_desc)
 #if DEBUG_SERIAL_USE_RX
     hdma_rx = &uart_desc->hdma_rx;
 
-    hdma_rx->Instance                 = DMA2_Stream5;
+    hdma_rx->Instance                 = DMA2_Stream2;
     hdma_rx->Init.Channel             = DMA_CHANNEL_4;
     hdma_rx->Init.Direction           = DMA_PERIPH_TO_MEMORY;
     hdma_rx->Init.PeriphInc           = DMA_PINC_DISABLE;
@@ -238,12 +238,12 @@ static void uart1_dma_init (uart_desc_t *uart_desc)
     __HAL_LINKDMA(huart, hdmarx, *hdma_rx);
 
     irq_bmap(&irqmask);
-    HAL_NVIC_SetPriority(DMA2_Stream5_IRQn, 0, 1);
-    HAL_NVIC_EnableIRQ(DMA2_Stream5_IRQn);
+    HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 0, 1);
+    HAL_NVIC_EnableIRQ(DMA2_Stream2_IRQn);
     irq_bmap(&dma_rx_irq_mask);
     dma_rx_irq_mask = dma_rx_irq_mask & (~irqmask);
 
-    uart_desc->irq_rxdma = DMA2_Stream5_IRQn;
+    uart_desc->irq_rxdma = DMA2_Stream2_IRQn;
 
     if(HAL_UART_Receive_DMA(huart, (uint8_t *)rxstream.buf, sizeof(rxstream.buf)) != HAL_OK)
     {
@@ -779,9 +779,9 @@ static void dma_rx_handle_irq (const DMA_Stream_TypeDef *source)
     }
 }
 
-void DMA2_Stream5_IRQHandler (void)
+void DMA2_Stream2_IRQHandler (void)
 {
-    dma_rx_handle_irq(DMA2_Stream5);
+    dma_rx_handle_irq(DMA2_Stream2);
 }
 
 #endif

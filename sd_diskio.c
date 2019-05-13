@@ -53,7 +53,8 @@
 #include "heap.h"
 #include <misc_utils.h>
 
-#define SD_MODE_DMA 0
+#define SD_MODE_DMA_RO 0
+#define SD_MODE_DMA_WO 1
 #define SD_UNALIGNED_WA 1
 
 /* Private typedef -----------------------------------------------------------*/
@@ -75,10 +76,11 @@
 /* Private variables ---------------------------------------------------------*/
 /* Disk status */
 static volatile DSTATUS Stat = STA_NOINIT;
+static irqmask_t dma_rxtx_irq;
 
-#if SD_MODE_DMA
+#if SD_MODE_DMA_RO || SD_MODE_DMA_WO
 static volatile  UINT  WriteStatus = 0, ReadStatus = 0;
-#endif /*SD_MODE_DMA*/
+#endif /**/
 
 extern void hdd_led_on (void);
 extern void hdd_led_off (void);
@@ -129,12 +131,16 @@ static DSTATUS SD_CheckStatus(BYTE lun)
 DSTATUS SD_initialize(BYTE lun)
 {
   Stat = STA_NOINIT;
+  irqmask_t irq;
 #if !defined(DISABLE_SD_INIT)
 
+  irq_bmap(&irq);
   if(BSP_SD_Init() == MSD_OK)
   {
     Stat = SD_CheckStatus(lun);
   }
+  irq_bmap(&dma_rxtx_irq);
+  dma_rxtx_irq = dma_rxtx_irq & (~irq);
 
 #else
   Stat = SD_CheckStatus(lun);
@@ -176,7 +182,7 @@ DRESULT SD_Uread(BYTE lun, BYTE *buff, DWORD sector, UINT count)
            return RES_ERROR;
         }
         d_memcpy(buff, sd_local_buf, _MIN_SS);
-        sector += SD_BLOCK_SECTOR_CNT;
+        sector += 1;
         buff += _MIN_SS;
     }
     return RES_OK;
@@ -184,7 +190,7 @@ DRESULT SD_Uread(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 
 #endif /*SD_UNALIGNED_WA*/
 
-#if SD_MODE_DMA
+#if SD_MODE_DMA_RO
 
 /**
   * @brief  Reads Sector(s)
@@ -244,7 +250,7 @@ DRESULT _SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 }
 
 
-#else
+#else /*SD_MODE_DMA_RO*/
 
 /**
   * @brief  Reads Sector(s)
@@ -278,13 +284,13 @@ DRESULT _SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
   return res;
 }
 
-#endif /*SD_MODE_DMA*/
+#endif /*SD_MODE_DMA_RO*/
 
 
 DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 {
     DRESULT res;
-    irqmask_t irq_flags = 0;
+    irqmask_t irq_flags = ~dma_rxtx_irq;
     hdd_led_on();
 
     irq_save(&irq_flags);
@@ -304,7 +310,7 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
   * @retval DRESULT: Operation result
   */
 #if _USE_WRITE == 1
-#if SD_MODE_DMA
+#if SD_MODE_DMA_WO
 
 /**
   * @brief  Writes Sector(s)
@@ -363,7 +369,7 @@ static DRESULT __SD_write (BYTE lun, const BYTE *buff, DWORD sector, UINT count)
   return res;
 }
 
-#else /*SD_MODE_DMA*/
+#else /*SD_MODE_DMA_WO*/
 
 static DRESULT __SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 {
@@ -382,28 +388,25 @@ static DRESULT __SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
   return res;
 }
 
-#endif /*SD_MODE_DMA*/
+#endif /*SD_MODE_DMA_WO*/
 
 #if SD_UNALIGNED_WA
 
 static DRESULT SD_UWrite (BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 {
-    uint8_t ret = MSD_OK;
+    DRESULT res;
     DWORD end = sector + count;
 
     for (; sector < end;) {
         d_memcpy(sd_local_buf, buff, _MIN_SS);
-        ret = BSP_SD_WriteBlocks((uint32_t *)sd_local_buf,
-                                (uint32_t)sector,
-                                SD_BLOCK_SECTOR_CNT,
-                                SD_TIMEOUT);
-        if (ret == MSD_OK) {
-           while(BSP_SD_GetCardState()!= MSD_OK) {} 
+        res = __SD_write(lun, sd_local_buf, sector, count);
+        if (res == RES_OK) {
+           while(BSP_SD_GetCardState()!= MSD_OK) {}
         } else {
            return RES_ERROR;
         }
         
-        sector += SD_BLOCK_SECTOR_CNT;
+        sector += 1;
         buff += _MIN_SS;
     }
     return RES_OK;
@@ -431,7 +434,7 @@ static DRESULT _SD_write (BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 DRESULT SD_write (BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 {
     DRESULT res;
-    irqmask_t irq_flags = 0;
+    irqmask_t irq_flags = ~dma_rxtx_irq;
     hdd_led_on();
     irq_save(&irq_flags);
 
@@ -512,7 +515,7 @@ void BSP_SD_AbortCallback(void)
 //void BSP_SD_WriteCpltCallback(uint32_t SdCard)
 void BSP_SD_WriteCpltCallback(void)
 {
-#if SD_MODE_DMA
+#if SD_MODE_DMA_WO
   WriteStatus = 1;
 #endif
 }
@@ -533,7 +536,7 @@ void BSP_SD_WriteCpltCallback(void)
 //void BSP_SD_ReadCpltCallback(uint32_t SdCard)
 void BSP_SD_ReadCpltCallback(void)
 {
-#if SD_MODE_DMA
+#if SD_MODE_DMA_RO
   ReadStatus = 1;
 #endif
 }
