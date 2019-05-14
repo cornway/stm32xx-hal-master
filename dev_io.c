@@ -442,6 +442,33 @@ int d_dvar_reg (dvar_t *var, const char *name)
     return _d_dvar_reg(var, name);
 }
 
+int d_dvar_int32 (int32_t *var, const char *name)
+{
+    dvar_t v;
+    v.ptr = var;
+    v.ptrsize = sizeof(int32_t);
+    v.type = DVAR_INT32;
+    return d_dvar_reg(&v, name);
+}
+
+int d_dvar_float (float *var, const char *name)
+{
+    dvar_t v;
+    v.ptr = var;
+    v.ptrsize = sizeof(float);
+    v.type = DVAR_FLOAT;
+    return d_dvar_reg(&v, name);
+}
+
+int d_dvar_str (char *str, int len, const char *name)
+{
+    dvar_t v;
+    v.ptr = str;
+    v.ptrsize = len;
+    v.type = DVAR_STR;
+    return d_dvar_reg(&v, name);
+}
+
 
 int d_dvar_rm (const char *name)
 {
@@ -503,10 +530,27 @@ static int _devio_con_handle (dvar_int_t *v, const char *text, int len)
             int32_t i;
 
             p = _next_token(text);
-            if (!p) {
+            if (!p || !sscanf(p, "%i", &i)) {
+                /*nothing ?, print current*/
+                dprintf("%s = %i\n", v->name, readLong(v->dvar.ptr));
                 return 0;
             }
-            if (!sscanf(p, "%i", &i)) {
+            writeLong(v->dvar.ptr, i);
+            p = _next_space(p);
+            if (!p) {
+                return len;
+            }
+            ret = (int)(p - text);
+        }
+        case DVAR_FLOAT:
+        {
+            const char *p;
+            float i;
+
+            p = _next_token(text);
+            if (!p || !sscanf(p, "%f", &i)) {
+                i = (float)readLong(v->dvar.ptr);
+                dprintf("%s = %10f\n", v->name, i);
                 return 0;
             }
             writeLong(v->dvar.ptr, i);
@@ -523,6 +567,7 @@ static int _devio_con_handle (dvar_int_t *v, const char *text, int len)
 
             p = _next_token(text);
             if (!p) {
+                dprintf("%s = %s\n", v->name, (char *)(v->dvar.ptr));
                 return 0;
             }
             p += snprintf(v->dvar.ptr, v->dvar.ptrsize, "%s", p);
@@ -624,7 +669,7 @@ static int devio_print_env (void *p1, void *p2)
 {
     dvar_int_t *v = dvar_head;
     const char *border = "========================================\n";
-    const char *type_text[] = {"function", "integer", "string"};
+    const char *type_text[] = {"function", "integer", "float", "string"};
     int i = 0;
 
     dprintf("%s", border);

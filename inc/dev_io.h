@@ -13,6 +13,7 @@ typedef enum {
 typedef enum {
     DVAR_FUNC,
     DVAR_INT32,
+    DVAR_FLOAT,
     DVAR_STR,
 } dvar_obj_t;
 
@@ -64,6 +65,10 @@ uint32_t d_time (void);
 int d_dirlist (const char *path, flist_t *flist);
 
 int d_dvar_reg (dvar_t *var, const char *name);
+int d_dvar_int32 (int32_t *var, const char *name);
+int d_dvar_float (float *var, const char *name);
+int d_dvar_str (char *str, int len, const char *name);
+
 int d_dvar_rm (const char *name);
 
 #endif
