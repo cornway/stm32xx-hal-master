@@ -53,8 +53,14 @@
 #include "heap.h"
 #include <misc_utils.h>
 
+//#ifndef SD_MODE_DMA_RO 
 #define SD_MODE_DMA_RO 0
-#define SD_MODE_DMA_WO 1
+//#endif
+
+//#ifndef SD_MODE_DMA_WO
+#define SD_MODE_DMA_WO 0
+//#endif
+
 #define SD_UNALIGNED_WA 1
 
 /* Private typedef -----------------------------------------------------------*/
@@ -131,9 +137,10 @@ static DSTATUS SD_CheckStatus(BYTE lun)
 DSTATUS SD_initialize(BYTE lun)
 {
   Stat = STA_NOINIT;
-  irqmask_t irq;
+  irqmask_t irq = 0, irqsave;
 #if !defined(DISABLE_SD_INIT)
 
+  irq_save(&irqsave);
   irq_bmap(&irq);
   if(BSP_SD_Init() == MSD_OK)
   {
@@ -141,7 +148,7 @@ DSTATUS SD_initialize(BYTE lun)
   }
   irq_bmap(&dma_rxtx_irq);
   dma_rxtx_irq = dma_rxtx_irq & (~irq);
-
+  irq_restore(irqsave);
 #else
   Stat = SD_CheckStatus(lun);
 #endif
@@ -399,7 +406,7 @@ static DRESULT SD_UWrite (BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 
     for (; sector < end;) {
         d_memcpy(sd_local_buf, buff, _MIN_SS);
-        res = __SD_write(lun, sd_local_buf, sector, count);
+        res = __SD_write(lun, sd_local_buf, sector, 1);
         if (res == RES_OK) {
            while(BSP_SD_GetCardState()!= MSD_OK) {}
         } else {

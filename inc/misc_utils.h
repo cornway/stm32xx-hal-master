@@ -5,6 +5,18 @@
 #include <arch.h>
 #include <stdint.h>
 
+enum {
+    DBG_OFF,
+    DBG_ERR,
+    DBG_WARN,
+    DBG_INFO,
+};
+
+#define ADV_DBG_LVL DBG_OFF
+
+#define dbg_eval(lvl) \
+    if (ADV_DBG_LVL >= (lvl))
+
 #ifndef assert
 #define assert(exp) \
 { if (!(exp)) fatal_error("assertion failed! : %s() : \"%s\"\n", __func__, #exp); }

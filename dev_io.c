@@ -9,6 +9,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <debug.h>
+#include <heap.h>
 
 #ifndef DEVIO_READONLY
 #warning "DEVIO_READONLY is undefined, using TRUE"
@@ -20,7 +21,7 @@
 #define MAX_HANDLES    3
 #endif
 
-FATFS SDFatFs;  /* File system object for SD card logical drive */
+FATFS SDFatFs ALIGN(8);  /* File system object for SD card logical drive */
 char SDPath[4]; /* SD card logical drive path */
 
 
@@ -46,12 +47,14 @@ typedef struct {
 #define DEVIO_PRINTENV_CMD "print"
 #define DEVIO_REGISTER_CMD "register"
 #define DEVIO_UNREGISTER_CMD "unreg"
+#define DEVIO_CTRL_CMD "devio"
 
 const char *devio_deprecated_names[] =
 {
     DEVIO_PRINTENV_CMD,
     DEVIO_REGISTER_CMD,
     DEVIO_UNREGISTER_CMD,
+    DEVIO_CTRL_CMD,
 };
 
 static int devio_con_clbk (const char *text, int len);
@@ -60,14 +63,15 @@ static int _d_dvar_reg (dvar_t *var, const char *name);
 static int devio_print_env (void *p1, void *p2);
 static int devio_dvar_register (void *p1, void *p2);
 static int devio_dvar_unregister (void *p1, void *p2);
+static int devio_ctrl (void *p1, void *p2);
 
 static int devio_dvar_deprecated (const char *name);
 
-static fhandle_t __file_handles[MAX_HANDLES];
-static dirhandle_t __dir_handles[MAX_HANDLES];
+static fhandle_t __file_handles[MAX_HANDLES] ALIGN(8);
+static dirhandle_t __dir_handles[MAX_HANDLES] ALIGN(8);
 
-static fobjhdl_t *file_handles[MAX_HANDLES];
-static fobjhdl_t *dir_handles[MAX_HANDLES];
+static fobjhdl_t *file_handles[MAX_HANDLES] ALIGN(8);
+static fobjhdl_t *dir_handles[MAX_HANDLES] ALIGN(8);
 
 
 #define alloc_file(nump) allochandle(file_handles, nump)
@@ -104,6 +108,35 @@ static inline void releasehandle (fobjhdl_t **hdls, int handle)
     hdls[handle]->is_owned = 0;
 }
 
+const char *_fres_to_string (FRESULT res)
+{
+#define caseres(res) case res: str = #res ; break
+const char *str;
+    switch (res) {
+        caseres(FR_DISK_ERR);
+        caseres(FR_INT_ERR);
+        caseres(FR_NOT_READY);
+        caseres(FR_NO_FILE);
+        caseres(FR_NO_PATH);
+        caseres(FR_INVALID_NAME);
+        caseres(FR_DENIED);
+        caseres(FR_EXIST);
+        caseres(FR_INVALID_OBJECT);
+        caseres(FR_WRITE_PROTECTED);
+        caseres(FR_INVALID_DRIVE);
+        caseres(FR_NOT_ENABLED);
+        caseres(FR_NO_FILESYSTEM);
+        caseres(FR_MKFS_ABORTED);
+        caseres(FR_TIMEOUT);
+        caseres(FR_LOCKED);
+        caseres(FR_NOT_ENOUGH_CORE);
+        caseres(FR_TOO_MANY_OPEN_FILES);
+        caseres(FR_INVALID_PARAMETER);
+    }
+    return str;
+#undef caseres
+}
+
 int dev_io_init (void)
 {
     dvar_t dvar;
@@ -112,7 +145,7 @@ int dev_io_init (void)
         return -1;
     }
 
-    if(f_mount(&SDFatFs, (TCHAR const*)SDPath, 0) != FR_OK) {
+    if(f_mount(&SDFatFs, (TCHAR const*)SDPath, 1) != FR_OK) {
         return -1;
     }
 
@@ -133,8 +166,12 @@ int dev_io_init (void)
     _d_dvar_reg(&dvar, DEVIO_REGISTER_CMD);
     dvar.ptr = devio_dvar_unregister;
     _d_dvar_reg(&dvar, DEVIO_UNREGISTER_CMD);
+    dvar.ptr = devio_ctrl;
+    _d_dvar_reg(&dvar, DEVIO_CTRL_CMD);
     return 0;
 }
+
+
 
 int d_open (const char *path, int *hndl, char const * att)
 {
@@ -174,11 +211,15 @@ int d_open (const char *path, int *hndl, char const * att)
         res = f_open(getfile(*hndl), path, FA_READ);
         if (res == FR_OK) {
             f_close(getfile(*hndl));
-            f_unlink(path);
+            res = f_unlink(path);
+            if (res != FR_OK) {
+                dbg_eval(DBG_ERR) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
+            }
         }
     }
     res = f_open(getfile(*hndl), path, mode);
     if (res != FR_OK) {
+        dbg_eval(DBG_WARN) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
         freefile(*hndl);
         *hndl = -1;
         return -1;
@@ -193,10 +234,14 @@ int d_size (int hndl)
 
 void d_close (int h)
 {
+    FRESULT res;
     if (h < 0) {
         return;
     }
-    f_close(getfile(h));
+    res = f_close(getfile(h));
+    if (res != FR_OK) {
+        dbg_eval(DBG_ERR) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
+    }
     freefile(h);
 }
 
@@ -204,7 +249,11 @@ int d_unlink (const char *path)
 {
     FRESULT res;
     res = f_unlink(path);
-    return res == FR_OK ? 0 : -1;
+    if (res != FR_OK) {
+        dbg_eval(DBG_ERR) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
+        return -1;
+    }
+    return 0;
 }
 
 /*TODO : handle mode arg*/
@@ -236,6 +285,7 @@ int d_read (int handle, PACKED void *dst, int count)
         res = f_read(getfile(handle), data, count, &done);
     }
     if (res != FR_OK) {
+        dbg_eval(DBG_WARN) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
         return -1;
     }
     return done;
@@ -253,7 +303,11 @@ char d_getc (int h)
 {
     char c;
     UINT btr;
-    f_read(getfile(h), &c, 1, &btr);
+    FRESULT res;
+    res = f_read(getfile(h), &c, 1, &btr);
+    if (res != FR_OK) {
+        dbg_eval(DBG_WARN) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
+    }
     return c;
 }
 
@@ -269,6 +323,7 @@ int d_write (int handle, PACKED const void *src, int count)
         res = f_write (getfile(handle), data, count, &done);
     }
     if (res != FR_OK) {
+        dbg_eval(DBG_ERR) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
         return -1;
     }
     return done;
@@ -305,11 +360,15 @@ int d_mkdir (const char *path)
 int d_opendir (const char *path)
 {
     int h;
+    FRESULT res;
     alloc_dir(&h);
     if (h < 0) {
         return -1;
     }
-    if (f_opendir(getdir(h), path) != FR_OK) {
+    res = f_opendir(getdir(h), path);
+    if (res != FR_OK) {
+        dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
+        freedir(h);
         return -1;
     }
     return h;
@@ -317,7 +376,11 @@ int d_opendir (const char *path)
 
 int d_closedir (int dir)
 {
-    f_closedir(getdir(dir));
+    FRESULT res;
+    res = f_closedir(getdir(dir));
+    if (res != FR_OK) {
+        dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
+    }
     freedir(dir);
     return 0;
 }
@@ -515,6 +578,14 @@ static const char *_next_space (const char *buf)
     return NULL;
 }
 
+static const char *_next_arg (const char *text, const char *fmt, void *buf)
+{
+    const char *p = _next_token(text);
+    if (!p) return NULL;
+    if (!sscanf(p, fmt, buf)) return NULL;
+    return _next_space(p);
+}
+
 /*Deffered routine, to register/unregister dvar's, etc..*/
 
 static dvar_int_t devio_defered_dvar;
@@ -639,6 +710,140 @@ static int _devio_dvar_unregister (void *p1, void *p2)
 
     return strlen((char *)p1);
 }
+
+typedef struct {
+    int (*h) (void *p1, void *p2);
+    const char *name;
+} devio_hdlr_t;
+
+static int _devio_test (void *p1, void *p2)
+{
+    const char *fname = "test.txt";
+    char buf[128], name[16] = {0}, *namep = (char *)fname;
+    const char *str = (const char *)p1;
+    int f, errors = 0;
+
+    _next_arg(str, "%16s", name);
+    if (name[0]) {
+        namep = name;
+    }
+    dprintf("file name : %s\n", name);
+
+    d_open(namep, &f, "+w");
+    if (f < 0) {
+        goto failopen;
+    }
+    dprintf("file write :\n");
+    d_printf(f, "%s()\n", __func__);
+    d_close(f);
+
+    d_open(namep, &f, "r");
+    if (f < 0) {
+        goto failopen;
+    }
+    dprintf("file read :\n");
+    while (!d_eof(f)) {
+        if (!d_gets(f, buf, sizeof(buf))) {
+            errors++;
+        }
+        dprintf("> %s\n", buf);
+    }
+    d_close(f);
+    d_unlink(namep);
+    dprintf("errors : %d\n", errors);
+failopen:
+    dprintf("%s() : failed to open \'%s\'\n", __func__, fname);
+    return 0;
+}
+
+static int _devio_reset (void *p1, void *p2)
+{
+extern void SystemSoftReset (void);
+    dprintf("Resetting...\n");
+    serial_flush();
+    SystemSoftReset();
+    exit(0);
+}
+
+static int __dir_list (char *pathbuf, int recursion, const char *path);
+
+static int _devio_list (void *p1, void *p2)
+{
+    char path[16] = {0}, *ppath;
+    char pathbuf[128];
+    char *p;
+    fobj_t fobj;
+    int dh;
+
+    ppath = ".";
+    _next_arg((char *)p1, "%16s", path);
+    if (path[0]) {
+        ppath = path;
+    }
+    return __dir_list(pathbuf, 0, ppath);
+}
+
+const char *treedeep[] =
+{
+"--",
+"----",
+"------",
+"--------"
+};
+
+static int __dir_list (char *pathbuf, int recursion, const char *path)
+{
+    int h;
+    fobj_t obj;
+
+    if (recursion > arrlen(treedeep)) {
+        dprintf("Too deep recursion : %i\n", recursion);
+    }
+    h = d_opendir(path);
+    if (h < 0) {
+        dprintf("cannot open path : %s\n", path);
+        return -1;
+    }
+    while(d_readdir(h, &obj) >= 0) {
+
+        dprintf("%s|%s %s \n",
+            treedeep[recursion], obj.name, obj.type == FTYPE_FILE ? "f" : "d");
+        if (obj.type == FTYPE_DIR) {
+            sprintf(pathbuf, "%s/%s", path, obj.name);
+            __dir_list(pathbuf, recursion + 1, pathbuf);
+        }
+    }
+    d_closedir(h);
+    return 0;
+}
+
+
+devio_hdlr_t devio_hdlrs[] =
+{
+    {_devio_test, "test"},
+    {_devio_reset, "reset"},
+    {_devio_list, "list"},
+};
+
+
+static int devio_ctrl (void *p1, void *p2)
+{
+    const char *str = p1, *p;
+    int len = (int)p2, i, cnt;
+    char tok[16] = {0};
+
+    p = _next_arg(str, "%16s", tok);
+    for (i = 0; i < arrlen(devio_hdlrs); i++) {
+        if (strcmp(tok, devio_hdlrs[i].name) == 0) {
+            cnt = devio_hdlrs[i].h((void *)p, NULL);
+        }
+    }
+    return len;
+bad:
+    dprintf("%s() : unknown arg : \'%s\'\n", __func__, str);
+    return len;
+}
+
 
 static int devio_dvar_unregister (void *p1, void *p2)
 {

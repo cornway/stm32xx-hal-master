@@ -93,8 +93,6 @@ void screen_init (void)
     bsp_lcd_width = BSP_LCD_GetXSize();
     bsp_lcd_height = BSP_LCD_GetYSize();
 
-    BSP_LCD_SetLayerVisible(LCD_FOREGROUND, ENABLE);
-    BSP_LCD_SetLayerVisible(LCD_BACKGROUND, ENABLE);
     BSP_LCD_SetBrightness(100);
 }
 

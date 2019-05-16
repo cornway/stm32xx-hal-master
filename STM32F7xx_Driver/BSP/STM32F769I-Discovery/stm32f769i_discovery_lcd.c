@@ -122,18 +122,6 @@ EndDependencies */
 #define LCD_DSI_ID              0x11
 #define LCD_DSI_ID_REG          0xA8
 
-enum {
-    DBG_OFF,
-    DBG_ERR,
-    DBG_WARN,
-    DBG_INFO,
-};
-
-#define ADV_DBG_LVL DBG_INFO
-
-#define dbg_eval(lvl) \
-    if (ADV_DBG_LVL >= (lvl))
-
 static DSI_VidCfgTypeDef hdsivideo_handle;
 /**
   * @}
@@ -451,12 +439,14 @@ uint8_t BSP_LCD_InitEx(LCD_OrientationTypeDef orientation)
     * PLLLCDCLK = PLLSAI_VCO Output/PLLSAIR = 384 MHz / 7 = 54.85 MHz 
     * LTDC clock frequency = PLLLCDCLK / LTDC_PLLSAI_DIVR_2 = 54.85 MHz / 2 = 27.429 MHz 
     */
+  /*
+  Moved to SystemClock_Config();
   PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_LTDC;
   PeriphClkInitStruct.PLLSAI.PLLSAIN = 384;
   PeriphClkInitStruct.PLLSAI.PLLSAIR = 7;
   PeriphClkInitStruct.PLLSAIDivR = RCC_PLLSAIDIVR_2;
   HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct);
-
+  */
   /* Background value */
   hltdc_discovery.Init.Backcolor.Blue = 0;
   hltdc_discovery.Init.Backcolor.Green = 0;
