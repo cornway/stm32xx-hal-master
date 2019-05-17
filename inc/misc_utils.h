@@ -12,10 +12,11 @@ enum {
     DBG_INFO,
 };
 
-#define ADV_DBG_LVL DBG_OFF
+extern int g_dev_debug_level;
+#define DEV_DBG_LVL (g_dev_debug_level)
 
 #define dbg_eval(lvl) \
-    if (ADV_DBG_LVL >= (lvl))
+    if (DEV_DBG_LVL >= (lvl))
 
 #ifndef assert
 #define assert(exp) \

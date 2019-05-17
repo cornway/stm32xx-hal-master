@@ -760,13 +760,6 @@ HAL_StatusTypeDef HAL_SD_WriteBlocks(SD_HandleTypeDef *hsd, uint8_t *pData, uint
       if(__HAL_SD_GET_FLAG(hsd, SDMMC_FLAG_TXFIFOHE))
       {
         /*FIXME : do something here.*/
-#ifdef FIXME
-        /* Write data to SDMMC Tx FIFO */
-        for(count = 0U; count < 8U; count++)
-        {
-          SDMMC_WriteFIFO(hsd->Instance, (tempbuff + count));
-        }
-#else
         hsd->Instance->FIFO = tempbuff[0];
         hsd->Instance->FIFO = tempbuff[1];
         hsd->Instance->FIFO = tempbuff[2];
@@ -775,7 +768,6 @@ HAL_StatusTypeDef HAL_SD_WriteBlocks(SD_HandleTypeDef *hsd, uint8_t *pData, uint
         hsd->Instance->FIFO = tempbuff[5];
         hsd->Instance->FIFO = tempbuff[6];
         hsd->Instance->FIFO = tempbuff[7];
-#endif
         tempbuff += 8U;
       }
       if((Timeout == 0U)||((HAL_GetTick()-tickstart) >=  Timeout))

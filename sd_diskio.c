@@ -58,7 +58,7 @@
 //#endif
 
 //#ifndef SD_MODE_DMA_WO
-#define SD_MODE_DMA_WO 0
+#define SD_MODE_DMA_WO 1
 //#endif
 
 #define SD_UNALIGNED_WA 1
@@ -199,6 +199,26 @@ DRESULT SD_Uread(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 
 #if SD_MODE_DMA_RO
 
+
+DRESULT SD_UreadDma (BYTE lun, BYTE *buff, DWORD sector, UINT count)
+{
+    uint8_t ret = MSD_OK;
+    DWORD end = sector + count;
+
+    for (; sector < end;) {
+        ret = BSP_SD_ReadBlocks_DMA((uint32_t *)sd_local_buf, (uint32_t)sector, 1);
+        if (ret == MSD_OK) {
+           while(BSP_SD_GetCardState()!= MSD_OK) {} 
+        } else {
+           return RES_ERROR;
+        }
+        d_memcpy(buff, sd_local_buf, _MIN_SS);
+        sector += 1;
+        buff += _MIN_SS;
+    }
+    return RES_OK;
+}
+
 /**
   * @brief  Reads Sector(s)
   * @param  lun : not used
@@ -215,6 +235,10 @@ DRESULT _SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 #if (ENABLE_SD_DMA_CACHE_MAINTENANCE == 1)
   uint32_t alignedAddr;
 #endif
+
+  if (count > 1) {
+    return SD_UreadDma(lun, buff, sector, count);
+  }
 
   if(BSP_SD_ReadBlocks_DMA((uint32_t*)buff,
                            (uint32_t) (sector),

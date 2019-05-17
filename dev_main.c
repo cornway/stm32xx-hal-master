@@ -57,6 +57,8 @@ int const __cache_line_size = 32;
 #error "Cache line size unknown"
 #endif
 
+int g_dev_debug_level = DBG_ERR;
+
 extern void VID_PreConfig (void);
 
 static void SystemDump (void);
@@ -149,6 +151,8 @@ int dev_main (void)
     SystemDump();
 
     VID_PreConfig();
+
+    d_dvar_int32(&g_dev_debug_level, "dbglvl");
     mainloop(0, NULL);
 
     return 0;

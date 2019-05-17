@@ -21,8 +21,10 @@
 #define MAX_HANDLES    3
 #endif
 
+#define FLAG_EXPORT (1 << 0)
+
 FATFS SDFatFs ALIGN(8);  /* File system object for SD card logical drive */
-char SDPath[4]; /* SD card logical drive path */
+char SDPath[4] = {0}; /* SD card logical drive path */
 
 
 typedef struct {
@@ -137,24 +139,14 @@ const char *str;
 #undef caseres
 }
 
+static int _devio_mount (void *p1, void *p2);
+
 int dev_io_init (void)
 {
+    FRESULT res;
     dvar_t dvar;
     int i;
-    if(FATFS_LinkDriver(&SD_Driver, SDPath)) {
-        return -1;
-    }
 
-    if(f_mount(&SDFatFs, (TCHAR const*)SDPath, 1) != FR_OK) {
-        return -1;
-    }
-
-    for (i = 0; i < MAX_HANDLES; i++) {
-        file_handles[i] = (fobjhdl_t *)&__file_handles[i];
-    }
-    for (i = 0; i < MAX_HANDLES; i++) {
-        dir_handles[i] = (fobjhdl_t *)&__dir_handles[i];
-    }
     serial_rx_callback(devio_con_clbk);
 
     dvar.ptr = devio_print_env;
@@ -168,7 +160,8 @@ int dev_io_init (void)
     _d_dvar_reg(&dvar, DEVIO_UNREGISTER_CMD);
     dvar.ptr = devio_ctrl;
     _d_dvar_reg(&dvar, DEVIO_CTRL_CMD);
-    return 0;
+
+    _devio_mount(SDPath, NULL);
 }
 
 
@@ -652,7 +645,10 @@ static int _devio_con_handle (dvar_int_t *v, const char *text, int len)
         }
         break;
     }
-
+    if (v->dvar.flags & FLAG_EXPORT) {
+        /*Exported function completes all*/
+        return len;
+    }
     return ret;
 }
 
@@ -711,15 +707,71 @@ static int _devio_dvar_unregister (void *p1, void *p2)
     return strlen((char *)p1);
 }
 
+#define DEVIO_MAX_PATH 64
+
 typedef struct {
     int (*h) (void *p1, void *p2);
     const char *name;
 } devio_hdlr_t;
 
+static int __devio_export (devio_hdlr_t *hdlrs, int len)
+{
+    int i;
+    dvar_t dvar;
+
+    dvar.ptrsize = sizeof(hdlrs[0].h);
+    dvar.type = DVAR_FUNC;
+    dvar.flags = FLAG_EXPORT;
+
+    for (i = 0; i < len; i++) {
+        dvar.ptr = hdlrs[i].h;
+        dbg_eval(DBG_INFO) {
+            dprintf("export : \'%s\'\n", hdlrs[i].name);
+        }
+        d_dvar_reg(&dvar, hdlrs[i].name);
+    }
+    return 0;
+}
+
+static int _devio_mount (void *p1, void *p2)
+{
+    int i;
+    FRESULT res;
+
+    memset(&SDFatFs, 0, sizeof(SDFatFs));
+    FATFS_UnLinkDriver((char *)p1);
+
+    if(FATFS_LinkDriver(&SD_Driver, (char *)p1)) {
+        return -1;
+    }
+
+    dbg_eval(DBG_WARN) dprintf("mount fs : %s\n", (char *)p1);
+    res = f_mount(&SDFatFs, (TCHAR const*)p1, 1);
+    if(res != FR_OK) {
+        dbg_eval(DBG_ERR) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
+        return -1;
+    }
+
+    /*TODO : Add own size to each pool*/
+    for (i = 0; i < MAX_HANDLES; i++) {
+        file_handles[i] = (fobjhdl_t *)&__file_handles[i];
+        __file_handles[i].is_owned = 0;
+    }
+    for (i = 0; i < MAX_HANDLES; i++) {
+        dir_handles[i] = (fobjhdl_t *)&__dir_handles[i];
+        __dir_handles[i].is_owned = 0;
+    }
+
+    return 0;
+}
+
+static int _devio_export (void *p1, void *p2);
+
 static int _devio_test (void *p1, void *p2)
 {
     const char *fname = "test.txt";
-    char buf[128], name[16] = {0}, *namep = (char *)fname;
+
+    char buf[128], name[DEVIO_MAX_PATH] = {0}, *namep = (char *)fname;
     const char *str = (const char *)p1;
     int f, errors = 0;
 
@@ -734,7 +786,11 @@ static int _devio_test (void *p1, void *p2)
         goto failopen;
     }
     dprintf("file write :\n");
-    d_printf(f, "%s()\n", __func__);
+    dprintf("%s()\n", __func__);
+
+    if (!d_printf(f, "%s()\n", __func__)) {
+        errors++;
+    }
     d_close(f);
 
     d_open(namep, &f, "r");
@@ -746,13 +802,29 @@ static int _devio_test (void *p1, void *p2)
         if (!d_gets(f, buf, sizeof(buf))) {
             errors++;
         }
-        dprintf("> %s\n", buf);
+        dprintf("\'%s\'\n", buf);
     }
     d_close(f);
     d_unlink(namep);
     dprintf("errors : %d\n", errors);
+    return 0;
 failopen:
-    dprintf("%s() : failed to open \'%s\'\n", __func__, fname);
+    dprintf("%s() : failed to open \'%s\'\n", __func__, namep);
+    return 0;
+}
+
+static int _devio_mkdir (void *p1, void *p2)
+{
+    char *str = p1, *p;
+    char path[DEVIO_MAX_PATH] = {0}, *ppath = ".";
+
+    p = (char *)_next_arg(str, "%s", path);
+    if (path[0]) {
+        ppath = path;
+    }
+    if (d_mkdir(ppath) < 0) {
+        dprintf("%s() : fail\n", __func__);
+    }
     return 0;
 }
 
@@ -769,7 +841,7 @@ static int __dir_list (char *pathbuf, int recursion, const char *path);
 
 static int _devio_list (void *p1, void *p2)
 {
-    char path[16] = {0}, *ppath;
+    char path[DEVIO_MAX_PATH] = {0}, *ppath;
     char pathbuf[128];
     char *p;
     fobj_t fobj;
@@ -820,11 +892,18 @@ static int __dir_list (char *pathbuf, int recursion, const char *path)
 
 devio_hdlr_t devio_hdlrs[] =
 {
+    {_devio_export, "export"}, /*Must be first*/
     {_devio_test, "test"},
     {_devio_reset, "reset"},
     {_devio_list, "list"},
+    {_devio_mkdir, "mkdir"},
+    {_devio_mount, "mount"},
 };
 
+static int _devio_export (void *p1, void *p2)
+{
+    __devio_export(devio_hdlrs + 1, arrlen(devio_hdlrs) - 1);
+}
 
 static int devio_ctrl (void *p1, void *p2)
 {
