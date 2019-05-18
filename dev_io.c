@@ -225,6 +225,11 @@ int d_size (int hndl)
     return f_size((FIL *)getfile(hndl));
 }
 
+int d_tell (int h)
+{
+    return (int)f_tell((FIL *)getfile(h));
+}
+
 void d_close (int h)
 {
     FRESULT res;
