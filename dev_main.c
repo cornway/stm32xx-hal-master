@@ -122,6 +122,7 @@ void dev_tickle (void)
     audio_update();
     input_tickle();
     serial_tickle();
+    profiler_reset();
 }
 
 static int con_echo (const char *buf, int len)
@@ -138,6 +139,7 @@ int dev_main (void)
     mpu_init();
     Sys_AllocInit();
     serial_init();
+    profiler_init();
 
     BSP_LED_Init(LED1);
     BSP_LED_Init(LED2);

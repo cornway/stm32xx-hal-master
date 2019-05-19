@@ -134,4 +134,12 @@ readPtr (const void *_p)
 
 #endif /*__LITTLE_ENDIAN__*/
 
+void _profiler_enter (const char *func, int line);
+void _profiler_exit (const char *func, int line);
+#define profiler_enter() _profiler_enter(__func__, __LINE__)
+#define profiler_exit() _profiler_exit(__func__, __LINE__)
+void profiler_reset (void);
+void profiler_init (void);
+
+
 #endif /*__MISC_UTILS_H__*/
