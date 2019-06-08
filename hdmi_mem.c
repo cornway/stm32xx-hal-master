@@ -1084,39 +1084,71 @@ print_edid1(hdmi_timing_t *timing, const struct edid * const edid)
     dprintf("\n");
 
     dprintf("Standard timings supported\n");
-    if (edid->established_timings.timing_720x400_70)
+    if (edid->established_timings.timing_720x400_70) {
+        timing->std.timing_720x400_70 = 1;
         dprintf("   720 x  400p @ 70Hz - IBM VGA\n");
-    if (edid->established_timings.timing_720x400_88)
+    }
+    if (edid->established_timings.timing_720x400_88) {
+        timing->std.timing_720x400_88 = 1;
         dprintf("   720 x  400p @ 88Hz - IBM XGA2\n");
-    if (edid->established_timings.timing_640x480_60)
+    }
+    if (edid->established_timings.timing_640x480_60) {
+        timing->std.timing_640x480_60 = 1;
         dprintf("   640 x  480p @ 60Hz - IBM VGA\n");
-    if (edid->established_timings.timing_640x480_67)
+    }
+    if (edid->established_timings.timing_640x480_67) {
+        timing->std.timing_640x480_67 = 1;
         dprintf("   640 x  480p @ 67Hz - Apple Mac II\n");
-    if (edid->established_timings.timing_640x480_72)
+    }
+    if (edid->established_timings.timing_640x480_72) {
+        timing->std.timing_640x480_72 = 1;
         dprintf("   640 x  480p @ 72Hz - VESA\n");
-    if (edid->established_timings.timing_640x480_75)
+    }
+    if (edid->established_timings.timing_640x480_75) {
+        timing->std.timing_640x480_75 = 1;
         dprintf("   640 x  480p @ 75Hz - VESA\n");
-    if (edid->established_timings.timing_800x600_56)
+    }
+    if (edid->established_timings.timing_800x600_56) {
+        timing->std.timing_800x600_56 = 1;
         dprintf("   800 x  600p @ 56Hz - VESA\n");
-    if (edid->established_timings.timing_800x600_60)
+    }
+    if (edid->established_timings.timing_800x600_60) {
+        timing->std.timing_800x600_60 = 1;
         dprintf("   800 x  600p @ 60Hz - VESA\n");
-
-    if (edid->established_timings.timing_800x600_72)
+    }
+    if (edid->established_timings.timing_800x600_72) {
+        timing->std.timing_800x600_72 = 1;
         dprintf("   800 x  600p @ 72Hz - VESA\n");
-    if (edid->established_timings.timing_800x600_75)
+    }
+    if (edid->established_timings.timing_800x600_75) {
+        timing->std.timing_800x600_75 = 1;
         dprintf("   800 x  600p @ 75Hz - VESA\n");
-    if (edid->established_timings.timing_832x624_75)
+    }
+    if (edid->established_timings.timing_832x624_75) {
+        timing->std.timing_832x624_75 = 1;
         dprintf("   832 x  624p @ 75Hz - Apple Mac II\n");
-    if (edid->established_timings.timing_1024x768_87)
+    }
+    if (edid->established_timings.timing_1024x768_87) {
+        timing->std.timing_1024x768_87 = 1;
         dprintf("  1024 x  768i @ 87Hz - VESA\n");
-    if (edid->established_timings.timing_1024x768_60)
+    }
+    if (edid->established_timings.timing_1024x768_60) {
+        timing->std.timing_1024x768_60 = 1;
         dprintf("  1024 x  768p @ 60Hz - VESA\n");
-    if (edid->established_timings.timing_1024x768_70)
+    }
+    if (edid->established_timings.timing_1024x768_70) {
+        timing->std.timing_1024x768_70 = 1;
         dprintf("  1024 x  768p @ 70Hz - VESA\n");
-    if (edid->established_timings.timing_1024x768_75)
+    }
+    if (edid->established_timings.timing_1024x768_75) {
+        timing->std.timing_1024x768_75 = 1;
         dprintf("  1024 x  768p @ 75Hz - VESA\n");
-    if (edid->established_timings.timing_1280x1024_75)
+    }
+    if (edid->established_timings.timing_1280x1024_75) {
+        timing->std.timing_1280x1024_75 = 1;
         dprintf("  1280 x 1024p @ 75Hz - VESA\n");
+    }
+
 
     for (i = 0; i < arrlen(edid->standard_timing_id); i++) {
         const struct edid_standard_timing_descriptor * const desc =

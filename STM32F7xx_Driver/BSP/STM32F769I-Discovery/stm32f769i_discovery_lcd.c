@@ -134,6 +134,14 @@ static DSI_VidCfgTypeDef hdsivideo_handle;
 /**
   * @brief  DSI timming params used for different HDMI adpater
   */
+
+typedef struct HDMI_Std_Format_s {
+    float pclock;
+    uint16_t hact, hstart, hend, htotal;
+    uint16_t vact, vstart, vend, vtotal;
+    char hpol, vpol;
+} HDMI_Std_FormatTypeDef;
+
 typedef struct HDMI_Format_s
 {
   uint16_t      HACT;
@@ -505,14 +513,71 @@ int BSP_HDMI_QerryTiming (hdmi_timing_t *timing)
     return hdmi_parse_edid(timing, &edid, size);
 }
 
-int HDMI_GetConf (hdmi_timing_t *timing)
+static void HDMI_SetStd 
+            (hdmi_timing_t *timing,
+            const HDMI_Std_FormatTypeDef *std)
+{
+    timing->hres    = std->hact;
+    timing->hstart  = std->hstart;
+    timing->hend    = std->hend;
+    timing->htotal  = std->htotal;
+    timing->hpol    = std->hpol;
+    timing->vres    = std->vact;
+    timing->vstart  = std->vstart;
+    timing->vend    = std->vend;
+    timing->vtotal  = std->vtotal;
+    timing->vpol    = std->vpol;
+}
+
+HDMI_Std_FormatTypeDef HDMI_Format_VESA_640_480_60 = 
+{ 25.2f, 640, 656, 752, 800, 480, 490, 492, 525, '-', '-',};
+
+HDMI_Std_FormatTypeDef HDMI_Format_VESA_640_480_75 =
+{ 31.5f, 640, 656, 720, 840, 480, 481, 484, 500, '-', '-', };
+
+HDMI_Std_FormatTypeDef HDMI_Format_VESA_800_600_60 =
+{ 40.0f, 800, 840, 968, 1056, 600, 601, 605, 628, '+', '+', };
+
+HDMI_Std_FormatTypeDef HDMI_Format_VESA_720_400_70 =
+{ 35.5f, 720, 756, 828, 936, 400, 401, 404, 446, '-', '+', };
+
+static HDMI_Std_FormatTypeDef * const
+HDMI_GetStdConf (hdmi_timing_t *timing, hdmi_std_timing_t pref)
+{
+    if (timing->std.timing_720x400_70 && pref.timing_720x400_70) {
+        return &HDMI_Format_VESA_720_400_70;
+    } else if (timing->std.timing_720x400_88 && pref.timing_720x400_88) {
+
+    } else if (timing->std.timing_640x480_60 && pref.timing_640x480_60) {
+        return &HDMI_Format_VESA_640_480_60;
+    } else if (timing->std.timing_640x480_67 && pref.timing_640x480_67) {
+
+    } else if (timing->std.timing_640x480_72 && pref.timing_640x480_72) {
+
+    } else if (timing->std.timing_640x480_75 && pref.timing_640x480_75) {
+        return &HDMI_Format_VESA_640_480_75;
+    } else if (timing->std.timing_800x600_56 && pref.timing_800x600_56) {
+
+    } else if (timing->std.timing_800x600_60 && pref.timing_800x600_60) {
+        return &HDMI_Format_VESA_800_600_60;
+    } else if (timing->std.timing_800x600_72 && pref.timing_800x600_72) {
+
+    } else if (timing->std.timing_800x600_75 && pref.timing_800x600_75) {
+
+    }
+    return NULL;
+}
+
+
+int HDMI_SetConf 
+        (hdmi_timing_t *timing,
+        HDMI_DSIPacketTypeDef *dsipack,
+        HDMI_FormatTypeDef *fmt)
 {
     int hfp, hbp, hsync;
     int vfp, vbp, vsync;
     uint32_t pclk_mhz = (uint32_t)timing->pclk_mhz;
     uint32_t framerate_hz = timing->rate_hz;
-    HDMI_FormatTypeDef *fmt = &HDMI_Format;
-    HDMI_DSIPacketTypeDef *dsipack = &HDMI_DSIPacket;
 
     hfp = timing->hstart - timing->hres;
     hbp = timing->htotal - timing->hend;
@@ -559,8 +624,11 @@ uint8_t BSP_LCD_HDMIInitEx(void)
   */
   int ret = 0;
   const uint8_t dsi_lanes = 2;
+  HDMI_Std_FormatTypeDef * hdmi_std;
+  hdmi_std_timing_t pref;
 
   hdmi_timing_t timing;
+  memset(&timing, 0, sizeof(timing));
 
   ADV7533_Init();
  /*TODO : as hdmi devices able to be hot-plugged,
@@ -573,9 +641,19 @@ uint8_t BSP_LCD_HDMIInitEx(void)
     fatal_error("BSP_HDMI_QerryTiming() : Fail\n");
   }
 
-  ret = HDMI_GetConf(&timing);
+  memset(&pref, 0, sizeof(pref));
+  pref.timing_640x480_60 = 1;
+
+  hdmi_std = HDMI_GetStdConf(&timing, pref);
+
+  if (hdmi_std) {
+    HDMI_SetStd(&timing, hdmi_std);
+  }
+
+  ret = HDMI_SetConf(&timing, &HDMI_DSIPacket, &HDMI_Format);
+
   if (ret < 0) {
-    fatal_error("HDMI_GetConf() : Fail\n");
+    fatal_error("HDMI_SetConf() : Fail\n");
   }
 
   ADV7533_PowerOn();
