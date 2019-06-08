@@ -515,7 +515,7 @@ static inline int __insert_tsf (const char *fmt, char *buf, int max)
     }
     msec = HAL_GetTick();
     sec = msec / MSEC;
-    return snprintf(buf, max, "[%10d.%3d] ", sec, msec % MSEC);
+    return snprintf(buf, max, "[%10d.%03d] ", sec, msec % MSEC);
 }
 
 void dprintf (const char *fmt, ...)
@@ -876,6 +876,9 @@ static void serial_timer_init (void)
     }
 }
 
+/*TODO : move this outside*/
+extern TIM_HandleTypeDef profile_timer_handle;
+
 void HAL_TIM_Base_MspInit(TIM_HandleTypeDef *htim)
 {
     if (&serial_timer.handle == htim) {
@@ -885,6 +888,8 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef *htim)
         HAL_NVIC_SetPriority(serial_timer.irq, 0, 1);
 
         HAL_NVIC_EnableIRQ(serial_timer.irq);
+    } else if (&profile_timer_handle == htim) {
+        __HAL_RCC_TIM2_CLK_ENABLE();
     }
 }
 

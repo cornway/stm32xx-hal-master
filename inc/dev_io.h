@@ -48,6 +48,7 @@ typedef struct {
 int dev_io_init (void);
 int d_open (const char *path, int *hndl, char const * att);
 int d_size (int hndl);
+int d_tell (int h);
 void d_close (int h);
 int d_unlink (const char *path);
 int d_seek (int handle, int position, uint32_t mode);
