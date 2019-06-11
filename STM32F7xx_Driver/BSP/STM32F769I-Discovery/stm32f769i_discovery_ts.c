@@ -219,6 +219,12 @@ uint8_t BSP_TS_Init(uint16_t ts_SizeX, uint16_t ts_SizeY)
   return (ts_status);
 }
 
+void BSP_TS_DeInit (void)
+{
+    ts_driver->Reset(I2C_Address);
+}
+
+
 /**
   * @brief  Configures and enables the touch screen interrupts.
   * @retval TS_OK if all initializations are OK. Other value if error.

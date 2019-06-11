@@ -332,6 +332,9 @@ void     BSP_LCD_MspDeInit(void);
 void     BSP_LCD_MspInit(void);
 void     BSP_LCD_Reset(void);
 
+extern uint32_t lcd_x_size_var;
+extern uint32_t lcd_y_size_var;
+
 uint32_t BSP_LCD_GetXSize(void);
 uint32_t BSP_LCD_GetYSize(void);
 void     BSP_LCD_SetXSize(uint32_t imageWidthPixels);
