@@ -99,7 +99,7 @@ static int cd_cplt_hdlr (uint8_t *abuf, uint32_t alen, cplt_stat_t complete)
                 return 1;
             }
             if ((CD_IDLE_M & cdaudio.state) || !cd_track.volume) {
-                /*This will cause 'fake channel' - it will won't play, but still in 'ready'*/
+                /*This will cause 'fake channel' - it won't play, but suspend*/
                 return 0;
             }
             cd_setup_track(&cdaudio, &cd_track);

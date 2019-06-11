@@ -16,7 +16,7 @@ extern const char *snd_dir_path;
 
 
 #define GET_WAV_PATH(buf, path, name) \
-    snprintf(buf, sizeof(buf), "%s%s.WAV", path, name);
+    snprintf(buf, sizeof(buf), "%s/%s.WAV", path, name);
 
 static int
 snd_ext_alloc_slot ()

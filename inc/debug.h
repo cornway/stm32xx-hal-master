@@ -37,7 +37,8 @@ void serial_putc (char c);
 char serial_getc (void);
 void serial_send_buf (const void *data, size_t cnt);
 void serial_flush (void);
-void serial_rx_callback (serial_rx_clbk_t);
+void term_register_handler (serial_rx_clbk_t);
+void term_unregister_handler (serial_rx_clbk_t);
 void serial_tickle (void);
 
 

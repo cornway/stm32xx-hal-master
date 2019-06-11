@@ -187,6 +187,11 @@ static void AUDIO_InitApplication(void)
   audio_irq_mask = audio_irq_mask & (~irq_flags);
 }
 
+static void AUDIO_DeInitApplication(void)
+{
+  BSP_AUDIO_OUT_DeInit();
+}
+
 void BSP_AUDIO_OUT_HalfTransfer_CallBack(void)
 {
     DMA_on_tx_complete(A_ISR_HALF);
@@ -274,6 +279,14 @@ void audio_init (void)
 #if (USE_REVERB)
     a_rev_init();
 #endif
+    cd_init();
+}
+
+void audio_deinit (void)
+{
+    dprintf("%s() :\n", __func__);
+    AUDIO_DeInitApplication();
+    audio_stop_all();
     cd_init();
 }
 
@@ -404,6 +417,11 @@ void audio_change_sample_volume (audio_channel_t *achannel, uint8_t volume)
 #else /*AUDIO_MODULE_PRESENT*/
 
 void audio_init (void)
+{
+
+}
+
+void audio_deinit (void)
 {
 
 }

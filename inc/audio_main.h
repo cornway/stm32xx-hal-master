@@ -78,7 +78,7 @@ typedef struct {
 } audio_channel_t;
 
 void audio_init (void);
-
+void audio_deinit (void);
 void audio_mixer_ext (void (*mixer_callback) (int, void *, int, void *));
 audio_channel_t *audio_play_channel (Mix_Chunk *chunk, int channel);
 audio_channel_t *audio_stop_channel (int channel);

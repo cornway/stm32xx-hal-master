@@ -6,10 +6,6 @@
 #define MEM_MAPPED_ADDR (0x90000000)
 #define MEM_ADDR 0x0
 
-#define GET_PAD(x, a) ((a) - ((x) % (a)))
-#define ROUND_UP(x, a) ((x) + GET_PAD(a, x))
-#define ROUND_DOWN(x, a) ((x) - ((a) - GET_PAD(a, x)))
-
 static uint32_t qspi_addr;
 
 

@@ -136,6 +136,11 @@ int joypad_read (int8_t *pads)
     }
 }
 
+void joypad_bsp_deinit (void)
+{
+    USBH_Stop(&hUSBHost);
+    USBH_DeInit(&hUSBHost);
+}
 
 void joypad_bsp_init (void)
 {

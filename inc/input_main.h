@@ -3,6 +3,7 @@
 
 #include "stdint.h"
 #include "touch.h"
+#include <misc_utils.h>
 
 #define GAMEPAD_USE_FLYLOOK 1
 
@@ -39,6 +40,7 @@ typedef enum {
 typedef struct {
     int sym;
     i_key_state_t state;
+    int16_t x, y;
 } i_event_t;
 
 enum {
@@ -73,12 +75,13 @@ enum {
 
 
 void input_bsp_init (void);
+void input_bsp_deinit (void);
 void input_soft_init (const kbdmap_t kbdmap[JOY_STD_MAX]);
 void input_bind_extra (int type, int sym);
 void input_tickle (void);
 void input_proc_keys (i_event_t *evts);
 i_event_t *input_post_key (i_event_t  *evts, i_event_t event);
-
+d_bool input_is_touch_present (void);
 
 
 #endif /*_INPUT_MAIN_H*/

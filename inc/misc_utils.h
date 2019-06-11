@@ -57,6 +57,10 @@ extern int g_dev_debug_level;
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
+#define GET_PAD(x, a) ((a) - ((x) % (a)))
+#define ROUND_UP(x, a) ((x) + GET_PAD(a, x))
+#define ROUND_DOWN(x, a) ((x) - ((a) - GET_PAD(a, x)))
+
 #ifndef d_bool
 #define d_bool int
 #define d_true 1

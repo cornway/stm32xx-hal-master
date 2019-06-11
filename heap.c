@@ -113,7 +113,24 @@ void Sys_AllocInit (void)
     /*According to code below, heap must be as last partition in memory pool*/
     mpu_lock(heap_mem + heap_size, MPU_CACHELINE, "xwr");
 
+    dprintf("%s() :\n", __func__);
+    dprintf("stack : <%p> + %u bytes\n", (void *)sp_mem, sp_size);
+    dprintf("heap : <%p> + %u bytes\n", (void *)heap_mem, heap_size);
     heap_size_total = heap_size - MPU_CACHELINE * 2;
+}
+
+void Sys_AllocDeInit (void)
+{
+    arch_word_t heap_mem, heap_size, heap_size_left;
+
+    dprintf("%s() :\n", __func__);
+    arch_get_heap(&heap_mem, &heap_size);
+
+    heap_size_left = heap_size - MPU_CACHELINE * 2 - heap_size_total;
+    assert(heap_size_left <= heap_size);
+    if (heap_size_left) {
+        dprintf("%s() : Unfreed left : %u bytes\n", __func__, heap_size_left);
+    }
 }
 
 void *Sys_AllocShared (int *size)

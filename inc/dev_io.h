@@ -46,6 +46,7 @@ typedef struct {
 } flist_t;
 
 int dev_io_init (void);
+void dev_io_deinit (void);
 int d_open (const char *path, int *hndl, char const * att);
 int d_size (int hndl);
 int d_tell (int h);
