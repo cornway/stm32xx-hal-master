@@ -5,6 +5,7 @@
 #include <misc_utils.h>
 #include <debug.h>
 #include <dev_io.h>
+#include <tim_int.h>
 
 #define P_RECORDS_MAX 1024
 #define P_MAX_DEEPTH 36
@@ -13,16 +14,6 @@ int g_profile_deep_level = 1;
 int g_profile_timer_tsf = 1;
 static uint32_t *prof_timer_cnt_ptr;
 static uint8_t prof_time_init_ok = 0;
-
-#if DEBUG_SERIAL
-
-#define prints(args ...) dprintf(args)
-
-#else
-
-#define prints(args ...)
-
-#endif
 
 enum {
     PFLAG_ENTER = (1 << 0),
@@ -54,8 +45,6 @@ static int caller = -1;
 extern uint32_t SystemCoreClock;
 
 static uint32_t clocks_per_us = (0U);
-
-static uint32_t cpu_cycles_count;
 
 static inline uint32_t _cpu_cycles_to_us (uint32_t cycles)
 {
@@ -190,7 +179,46 @@ void profiler_reset (void)
     profile_deepth = 0;
 }
 
-static void profiler_timer_init (void);
+timer_desc_t profile_timer_desc;
+
+static void profile_timer_msp_init (timer_desc_t *desc)
+{
+    __HAL_RCC_TIM2_CLK_ENABLE();
+}
+
+static void profile_timer_handler (timer_desc_t *desc)
+{
+
+}
+
+void TIM2_IRQHandler (void)
+{
+    HAL_TIM_IRQHandler(&profile_timer_desc.handle);
+}
+
+static void profiler_timer_init (void)
+{
+
+    profile_timer_desc.flags = TIM_RUNREG;
+    profile_timer_desc.period = 0xffffffff;
+    profile_timer_desc.presc = 1000000;
+    profile_timer_desc.handler = profile_timer_handler;
+    profile_timer_desc.init = profile_timer_msp_init;
+    profile_timer_desc.hw = TIM2;
+    profile_timer_desc.irq = TIM2_IRQn;
+    if (hal_tim_init(&profile_timer_desc) == 0) {
+        prof_time_init_ok = 1;
+    }
+
+    if (!prof_time_init_ok) {
+        dprintf("%s() : fail\n", __func__);
+    }
+}
+
+static void profiler_timer_deinit (void)
+{
+    hal_tim_deinit(&profile_timer_desc);
+}
 
 void profiler_init (void)
 {
@@ -214,9 +242,14 @@ void profiler_init (void)
     d_dvar_int32(&g_profile_timer_tsf, "proftsf");
 }
 
+void profiler_deinit (void)
+{
+    dprintf("%s() :\n", __func__);
+    profiler_timer_deinit();
+}
+
 void profiler_print (void)
 {
-    char charbuf[256];
     rhead_t *tail = NULL;
     int i, cur, next, prev, entrycnt = 0;
     uint32_t delta_tick, delta_us;
@@ -268,33 +301,4 @@ static int profiler_print_dvar (void *p1, void *p2)
     profiler_print();
     return -1;
 }
-
-TIM_HandleTypeDef profile_timer_handle;
-
-static void profiler_timer_init (void)
-{
-    TIM_HandleTypeDef *handle = &profile_timer_handle;
-    uint32_t uwPrescalerValue = (uint32_t)((SystemCoreClock / 2) / 1000000) - 1;
-
-    handle->Instance = TIM2;
-
-    prof_timer_cnt_ptr = (uint32_t *)&handle->Instance->CNT;
-
-    handle->Init.Period            = 0xffffffff - 1;
-    handle->Init.Prescaler         = uwPrescalerValue;
-    handle->Init.ClockDivision     = 0;
-    handle->Init.CounterMode       = TIM_COUNTERMODE_UP;
-    handle->Init.RepetitionCounter = 0;
-    handle->Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-
-    if (HAL_TIM_Base_Init(handle) == HAL_OK) {
-        if (HAL_TIM_Base_Start(handle) == HAL_OK) {
-            prof_time_init_ok = 1;
-        }
-    }
-    if (!prof_time_init_ok) {
-        dprintf("%s() : fail\n", __func__);
-    }
-}
-
 
