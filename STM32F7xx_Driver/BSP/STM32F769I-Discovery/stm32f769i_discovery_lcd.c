@@ -1186,7 +1186,7 @@ void BSP_LCD_DisplayChar(uint16_t Xpos, uint16_t Ypos, uint8_t Ascii)
   *            @arg  RIGHT_MODE
   *            @arg  LEFT_MODE
   */
-void BSP_LCD_DisplayStringAt(uint16_t Xpos, uint16_t Ypos, uint8_t *Text, Text_AlignModeTypdef Mode)
+void BSP_LCD_DisplayStringAt(uint16_t Xpos, uint16_t Ypos, uint16_t w, uint16_t h, uint8_t *Text, Text_AlignModeTypdef Mode)
 {
   uint16_t refcolumn = 1, i = 0;
   uint32_t size = 0, xsize = 0;
@@ -1196,7 +1196,7 @@ void BSP_LCD_DisplayStringAt(uint16_t Xpos, uint16_t Ypos, uint8_t *Text, Text_A
   while (*ptr++) size ++ ;
 
   /* Characters number per line */
-  xsize = (lcd_x_size_var/DrawProp[ActiveLayer].pFont->Width);
+  xsize = (w/DrawProp[ActiveLayer].pFont->Width);
 
   switch (Mode)
   {
@@ -1229,7 +1229,7 @@ void BSP_LCD_DisplayStringAt(uint16_t Xpos, uint16_t Ypos, uint8_t *Text, Text_A
   }
 
   /* Send the string character by character on LCD */
-  while ((*Text != 0) & (((lcd_x_size_var - (i*DrawProp[ActiveLayer].pFont->Width)) & 0xFFFF) >= DrawProp[ActiveLayer].pFont->Width))
+  while ((*Text != 0) & (((w - (i*DrawProp[ActiveLayer].pFont->Width)) & 0xFFFF) >= DrawProp[ActiveLayer].pFont->Width))
   {
     /* Display one character on LCD */
     BSP_LCD_DisplayChar(refcolumn, Ypos, *Text);
@@ -1250,7 +1250,7 @@ void BSP_LCD_DisplayStringAt(uint16_t Xpos, uint16_t Ypos, uint8_t *Text, Text_A
   */
 void BSP_LCD_DisplayStringAtLine(uint16_t Line, uint8_t *ptr)
 {
-  BSP_LCD_DisplayStringAt(0, LINE(Line), ptr, LEFT_MODE);
+  BSP_LCD_DisplayStringAt(0, LINE(Line), lcd_x_size_var, lcd_y_size_var, ptr, LEFT_MODE);
 }
 
 /**

@@ -3,6 +3,19 @@
 #include <boot_int.h>
 #include <boot.h>
 #include <lcd_main.h>
+#include <dev_io.h>
+
+static int g_gui_debug_lvl = DBG_WARN;
+
+#define gui_error(fmt, args ...) \
+    if (g_gui_debug_lvl >= DBG_ERR) {dprintf("%s() [fatal] : "fmt, __func__, args);}
+
+#define gui_warn(args ...) \
+    if (g_gui_debug_lvl >= DBG_WARN) {dprintf(args);}
+
+#define gui_info(fmt, args ...) \
+    if (g_gui_debug_lvl >= DBG_INFO) {dprintf("%s() : "fmt, __func__, args);}
+
 
 #define G_TEXT_MAX 128
 
@@ -102,6 +115,7 @@ static component_t *gui_iterate_all (gui_t *gui, void *user, int (*h) (component
         }
         pane = pane->next;
     }
+    return NULL;
 }
 
 void gui_init (gui_t *gui, int x, int y, int w, int h)
@@ -115,6 +129,8 @@ void gui_init (gui_t *gui, int x, int y, int w, int h)
     gui->dim.y = y;
     gui->dim.w = w;
     gui->dim.h = h;
+
+    d_dvar_int32(&g_gui_debug_lvl, "guidbglvl");
 }
 
 pane_t *gui_get_pane (const char *name)
@@ -127,11 +143,11 @@ pane_t *gui_get_pane (const char *name)
     allocsize = ROUND_UP(allocsize, 4);
     pane = Sys_Malloc(allocsize);
     memset(pane, 0, allocsize);
-    snprintf(pane->text, namelen + 1, "%s", name);
+    snprintf(pane->name, namelen + 1, "%s", name);
     return pane;
 }
 
-void gui_set_pane (gui_t *gui, pane_t *pane)
+void __gui_set_panexy (gui_t *gui, pane_t *pane, int x, int y, int w, int h)
 {
     pane->next = NULL;
     if (gui->head == NULL) {
@@ -141,11 +157,35 @@ void gui_set_pane (gui_t *gui, pane_t *pane)
         pane->next = gui->head;
         gui->head = pane;
     }
-    pane->dim.x = gui->dim.x;
-    pane->dim.y = gui->dim.y;
-    pane->dim.w = gui->dim.w;
-    pane->dim.h = gui->dim.h;
+    pane->dim.x = x;
+    pane->dim.y = y;
+    pane->dim.w = w;
+    pane->dim.h = h;
     pane->parent = gui;
+    gui->selected = pane;
+    pane->repaint = 1;
+}
+
+
+void gui_set_pane (gui_t *gui, pane_t *pane)
+{
+    __gui_set_panexy(gui, pane, gui->dim.x, gui->dim.y, gui->dim.w, gui->dim.h);
+}
+
+void gui_set_panexy (gui_t *gui, pane_t *pane, int x, int y, int w, int h)
+{
+    __gui_set_panexy(gui, pane, x, y, w, h);
+    dim_place(&pane->dim, &gui->dim);
+}
+
+static void __gui_set_comp_def_sfx (component_t *com)
+{
+    gui_sfx_t *sfx = &com->sfx;
+
+    sfx->sfx_cantdothis = -1;
+    sfx->sfx_close = -1;
+    sfx->sfx_open = -1;
+    sfx->sfx_other = -1;
 }
 
 component_t *gui_get_comp (const char *name, const char *text)
@@ -166,6 +206,7 @@ component_t *gui_get_comp (const char *name, const char *text)
     }
     com->text_offset = namelen + 1;
     com->text_size = textlen;
+    __gui_set_comp_def_sfx(com);
     return com;
 
 }
@@ -185,9 +226,13 @@ void gui_set_comp (pane_t *pane, component_t *c, int x, int y, int w, int h)
     c->dim.y = y;
     c->dim.w = w;
     c->dim.h = h;
-    dim_place(&c->dim, &pane->dim);
     c->repaint = 1;
     c->parent = pane;
+    dim_place(&c->dim, &pane->dim);
+
+    if (pane->parent->alloc_sfx) {
+        pane->parent->alloc_sfx(&c->sfx.sfx_other, GUISFX_OTHER);
+    }
 }
 
 void gui_set_prop (component_t *c, prop_t *prop)
@@ -205,25 +250,49 @@ void gui_com_clear (component_t *com)
     BSP_LCD_FillRect(com->dim.x, com->dim.y, com->dim.w, com->dim.h);
 }
 
-void gui_text (component_t *com, const char *text, int x, int y)
+static inline void
+__gui_text (component_t *com, char *buf, int bufsize, const char *text, int x, int y)
 {
-    sprintf(com->name_text + com->text_offset, "%s", text);
+    snprintf(buf, bufsize, "%s", text);
     com->repaint = 1;
 }
 
-void gui_printxy (component_t *com, int x, int y, char *fmt, ...)
+void gui_text (component_t *com, const char *text, int x, int y)
+{
+    __gui_text(com, com->name_text + com->text_offset, com->text_size, text, x, y);
+}
+
+static uint32_t __gui_printxy
+                    (component_t *com, char *buf, int bufsize,
+                     int x, int y, const char *fmt, va_list argptr)
+{
+    return vsnprintf (buf, bufsize, fmt, argptr);
+}
+
+void gui_printxy (component_t *com, int x, int y, const char *fmt, ...)
 {
     va_list         argptr;
-    char            string[1024];
-    int size = 0, max = sizeof(string);
+    uint32_t printed;
 
     va_start (argptr, fmt);
-    size += vsnprintf (string, max, fmt, argptr);
+    printed = __gui_printxy(com, com->name_text + com->text_offset, com->text_size, x, y, fmt, argptr);
     va_end (argptr);
-
-    assert(size < arrlen(string));
-    gui_text(com, string, x, y);
 }
+
+void gui_apendxy (component_t *com, int x, int y, const char *fmt, ...)
+{
+    va_list         argptr;
+    int offset = com->text_offset + com->text_offset;
+
+    if (com->text_offset >= com->text_size - 1) {
+        return;
+    }
+
+    va_start (argptr, fmt);
+    com->text_offset += __gui_printxy(com, com->name_text + offset, com->text_size - offset, x, y, fmt, argptr);
+    va_end (argptr);
+}
+
 
 static void gui_comp_draw (pane_t *pane, component_t *com)
 {
@@ -233,14 +302,28 @@ static void gui_comp_draw (pane_t *pane, component_t *com)
         BSP_LCD_SetTextColor(com->bcolor);
         BSP_LCD_FillRect(com->dim.x, com->dim.y, com->dim.w, com->dim.h);
     } else if (!com->userdraw) {
+        int x, y, w, h;
+
+        if (com->draw) {
+            com->draw(pane, com, NULL);
+        }
+        
         BSP_LCD_SetTextColor(com->bcolor);
         BSP_LCD_FillRect(com->dim.x, com->dim.y, com->dim.w, com->dim.h);
 
         BSP_LCD_SetTextColor(com->fcolor);
-        BSP_LCD_DisplayStringAt(com->dim.x + g_gui_ctxt.fontw / 2, com->dim.y + g_gui_ctxt.fonth / 2, com->name_text, LEFT_MODE);
-        BSP_LCD_DisplayStringAt(com->dim.x + g_gui_ctxt.fontw / 2, com->dim.y + (g_gui_ctxt.fonth * 3) / 2, com->name_text + com->text_offset, LEFT_MODE);
-    }
-    if (com->draw) {
+
+        x = com->dim.x + g_gui_ctxt.fontw / 2;
+        y = com->dim.y + g_gui_ctxt.fonth / 2;
+        w = com->dim.w;
+        h = com->dim.h;
+
+        if (com->showname) {
+            BSP_LCD_DisplayStringAt(x, y, w, h, com->name_text, LEFT_MODE);
+        }
+        y += g_gui_ctxt.fonth;
+        BSP_LCD_DisplayStringAt(x, y, w, h, com->name_text + com->text_offset, LEFT_MODE);
+    } else if (com->draw) {
         com->draw(pane, com, NULL);
     }
 }
@@ -262,27 +345,72 @@ static void gui_pane_draw (gui_t *gui, pane_t *pane)
 void gui_draw (gui_t *gui)
 {
     pane_t *pane = gui->head;
+    pane_t *selected = gui->selected;
 
     while (pane) {
-        gui_pane_draw(gui, pane);
+        if (pane != selected && pane->repaint) {
+            gui_pane_draw(gui, pane);
+            pane->repaint = 0;
+        }
         pane = pane->next;
+    }
+    if (selected && selected->repaint) {
+        gui_pane_draw(gui, selected);
+        selected->repaint = 0;
     }
 }
 
-void gui_resp (gui_t *gui, gevt_t *evt)
+static void gui_act (gui_t *gui, component_t *com, gevt_t *evt)
 {
     comp_handler_t h;
+    pane_t *pane = com->parent;
     d_bool isrelease = d_false;
 
-    pane_t *pane = gui->head;
-    component_t *com;
-
-    screen_ts_align(&evt->p.x, &evt->p.y);
+    if (pane == gui->selected) {
+        return;
+    }
 
     if (evt->e == GUIRELEASE) {
         isrelease = d_true;
     }
-    while (pane) {
+
+    if (isrelease) {
+        h = com->release;
+    } else {
+        h = com->act;
+    }
+
+    if (pane->onfocus) {
+        if (isrelease) {
+            assert(com == pane->onfocus);
+            pane->onfocus = NULL;
+            com->focus = 0;
+        }
+    }
+    if (h(pane, com, NULL) > 0) {
+        if (!isrelease) {
+            pane->onfocus = com;
+            com->focus = 1;
+            com->glow = 127;
+        }
+    }
+}
+
+void gui_resp (gui_t *gui, component_t *com, gevt_t *evt)
+{
+    comp_handler_t h;
+    d_bool isrelease = d_false;
+    pane_t *pane = gui->selected;
+
+    screen_ts_align(&evt->p.x, &evt->p.y);
+    if (com) {
+        gui_act(gui, com, evt);
+    }
+
+    if (evt->e == GUIRELEASE) {
+        isrelease = d_true;
+    }
+    if (pane) {
         point_t pp, p;
 
         pp = evt->p;
@@ -313,39 +441,16 @@ void gui_resp (gui_t *gui, gevt_t *evt)
                             com->glow = 127;
                         }
                         break;
+                    } else {
+                        if (gui->start_sfx) {
+                            gui->start_sfx(com->sfx.sfx_other);
+                        }
                     }
                 }
             }
             com = com->next;
         }
         pane = pane->next;
-    }
-}
-
-void gui_act (gui_t *gui, component_t *com, gevt_t *evt)
-{
-    pane_t *pane = com->parent;
-    d_bool isrelease = d_false;
-
-    if (evt->e == GUIRELEASE) {
-        isrelease = d_true;
-    }
-    if (pane->onfocus) {
-        if (isrelease) {
-            pane->onfocus = NULL;
-            com->focus = 0;
-        }
-    }
-    if (!isrelease) {
-        pane->onfocus = com;
-        com->focus = 1;
-        com->glow = 127;
-        if (com->release) {
-            com->release(pane, com, NULL);
-        } else if (com->act) {
-            com->act(pane, com, NULL);
-        }
-        return;
     }
 }
 
@@ -367,6 +472,7 @@ static component_t *gui_get_for_name (gui_t *gui, const char *name)
 static int __wake (component_t *com, void *user)
 {
     com->repaint = 1;
+    com->parent->repaint = 1;
     return 0;
 }
 
@@ -377,8 +483,42 @@ void gui_wake (gui_t *gui, const char *name)
     } else {
         component_t *com = gui_get_for_name(gui, name);
         if (com) {
-            com->repaint = 1;
+            __wake(com, NULL);
         }
     }
+}
+
+pane_t *gui_search_pane (gui_t *gui, const char *name)
+{
+    pane_t *pane = gui->head;
+
+    while (pane) {
+        if (strcmp(pane->name, name) == 0) {
+            return pane;
+        }
+        pane = pane->next;
+    }
+    return NULL;
+}
+
+component_t *gui_search_com (pane_t *pane, const char *name)
+{
+    return gui_get_for_name(pane->parent, name);
+}
+
+void gui_select_pane (gui_t *gui, pane_t *pane)
+{
+    pane->prevselected = gui->selected;
+    gui->selected = pane;
+    pane->repaint = 1;
+}
+
+void gui_release_pane (gui_t *gui, pane_t *pane)
+{
+    gui->selected = pane->prevselected;
+    if (gui->selected) {
+        gui->selected->repaint = 1;
+    }
+    pane->repaint = 0;
 }
 

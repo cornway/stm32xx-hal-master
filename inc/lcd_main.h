@@ -25,7 +25,7 @@ typedef enum
 
 typedef struct {
     pix_t *buf;
-    uint32_t width, height;
+    int width, height;
 } screen_t;
 
 typedef struct {
@@ -35,6 +35,7 @@ typedef struct {
     uint32_t lay_size;
     LCD_LayerCfgTypeDef lay_halcfg;
     lcd_layers_t active_lay_idx;
+    uint16_t w, h;
     uint8_t lay_cnt;
 } lcd_wincfg_t;
 
@@ -43,12 +44,13 @@ typedef struct {
  *  function prototypes                                                *
  *---------------------------------------------------------------------*/
 void screen_init (void);
+void screen_deinit (void);
+void screen_get_wh (screen_t *s);
 uint32_t screen_total_mem_avail_kb (void);
 int screen_win_cfg (lcd_wincfg_t *cfg, screen_t *screen, uint32_t colormode, int layers_cnt);
 void screen_set_clut (pal_t *palette, uint32_t clut_num_entries);
 void screen_update (screen_t *in);
 void screen_direct (screen_t *s);
-void screen_deinit (void);
 void screen_vsync (void);
 void screen_ts_align (int *x, int *y);
 

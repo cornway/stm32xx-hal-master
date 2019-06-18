@@ -47,7 +47,7 @@ static void (*screen_update_handle) (screen_t *in);
 
 #define LCD_MAX_SCALE 3
 
-static void screen_update_1x1_truecolor (screen_t *in);
+static void screen_update_no_scale (screen_t *in);
 static void screen_update_2x2_8bpp (screen_t *in);
 static void screen_update_3x3_8bpp (screen_t *in);
 
@@ -113,6 +113,13 @@ void screen_deinit (void)
     }
 }
 
+void screen_get_wh (screen_t *s)
+{
+    assert(lcd_active_cfg && s);
+    s->width = lcd_x_size_var;
+    s->height = lcd_y_size_var;
+}
+
 static void * screen_alloc_fb (lcd_wincfg_t *cfg, uint32_t w, uint32_t h, uint32_t pixel_deep, uint32_t layers_cnt)
 {
     int fb_size;
@@ -147,17 +154,15 @@ static void * screen_alloc_fb (lcd_wincfg_t *cfg, uint32_t w, uint32_t h, uint32
 
 void screen_ts_align (int *x, int *y)
 {
-    assert(lcd_active_cfg);
-
-    *x = *x - lcd_active_cfg->lay_halcfg.WindowX0;
-    *y = *y - lcd_active_cfg->lay_halcfg.WindowY0;
 }
 
 int screen_win_cfg (lcd_wincfg_t *cfg, screen_t *screen, uint32_t colormode, int layers_cnt)
 {
     LCD_LayerCfgTypeDef *Layercfg;
-    uint32_t scale_w = bsp_lcd_width / screen->width;
-    uint32_t scale_h = bsp_lcd_height / screen->height;
+    int in_w = screen->width > 0 ? screen->width : bsp_lcd_width,
+        in_h = screen->height > 0 ? screen->height : bsp_lcd_height;
+    uint32_t scale_w = bsp_lcd_width / in_w;
+    uint32_t scale_h = bsp_lcd_height / in_h;
     uint32_t scale;
     uint32_t x, y, w, h;
     int layer;
@@ -182,6 +187,8 @@ int screen_win_cfg (lcd_wincfg_t *cfg, screen_t *screen, uint32_t colormode, int
 
     if (colormode == GFX_COLOR_MODE_CLUT) {
         switch (scale) {
+            case 1:
+                screen_update_handle = screen_update_no_scale;
             case 2:
                 screen_update_handle = screen_update_2x2_8bpp;
             break;
@@ -197,13 +204,13 @@ int screen_win_cfg (lcd_wincfg_t *cfg, screen_t *screen, uint32_t colormode, int
         switch (scale) {
             default:
                 dprintf("%s() : Only \'no scale\' mode present\n", __func__);
-                screen_update_handle = screen_update_1x1_truecolor;
+                screen_update_handle = screen_update_no_scale;
             break;
         }
     }
 
-    w = screen->width * scale;
-    h = screen->height * scale;
+    w = in_w * scale;
+    h = in_h * scale;
     x = (bsp_lcd_width - w) / scale;
     y = (bsp_lcd_height - h) / scale;
 
@@ -326,7 +333,7 @@ typedef struct {
     scanline_u a[2];
 } pix_outx2_t;
 
-static void screen_update_1x1_truecolor (screen_t *in)
+static void screen_update_no_scale (screen_t *in)
 {
     screen_t screen;
 
