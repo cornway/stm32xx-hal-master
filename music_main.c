@@ -121,13 +121,8 @@ static int cd_open_stream (track_t *song, const char *path)
     if (d_read(song->file, &song->stream, sizeof(song->stream)) < 0) {
         error_handle();
     }
-    if (song->stream.BitPerSample != 16) {
-        error_handle();
-    }
-    if (song->stream.NbrChannels != 2) {
-        error_handle();
-    }
-    if (song->stream.SampleRate != AUDIO_SAMPLE_RATE) {
+    if (!a_check_wave_sup(&song->stream)) {
+        dprintf("%s() : trying to load unsupported wave\n", __func__);
         error_handle();
     }
     song->remain = song->stream.FileSize / sizeof(snd_sample_t);

@@ -92,6 +92,11 @@ void audio_update (void);
 void audio_irq_save (irqmask_t *flags);
 void audio_irq_restore (irqmask_t flags);
 
+int audio_open_wave (const char *name, int num);
+int audio_wave_size (int num);
+int audio_cache_wave (int num, uint8_t *dest, int size);
+void audio_wave_close (int num);
+
 typedef struct {
     void *desc;
 } cd_track_t;

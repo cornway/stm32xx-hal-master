@@ -370,7 +370,11 @@ int audio_chk_priority (int priority)
 
     a_chan_foreach_safe(&chan_llist_ready, cur, next) {
 
-        if (!priority || cur->priority >= priority) {
+        if (!a_chn_play(cur)) {
+            irq_restore(irq_flags);
+            return id;
+        }
+        if (priority >= 0 && (!priority || cur->priority >= priority)) {
             irq_restore(irq_flags);
             return id;
         }
