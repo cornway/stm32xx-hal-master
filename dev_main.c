@@ -44,7 +44,8 @@ void fatal_error (char *message, ...)
     va_start (argptr, message);
     dvprintf (message, argptr);
     va_end (argptr);
-    
+
+    serial_flush();
     bug();
 }
 
@@ -125,6 +126,7 @@ int dev_main (void)
 
 void dev_deinit (void)
 {
+    irqmask_t irq = NVIC_IRQ_MASK;
     dprintf("%s() :\n", __func__);
     term_unregister_handler(con_echo);
     input_bsp_deinit();
@@ -134,6 +136,8 @@ void dev_deinit (void)
     profiler_deinit();
     Sys_AllocDeInit();
     serial_deinit();
+    irq_save(&irq);
+    HAL_RCC_DeInit();
     HAL_DeInit();
 }
 

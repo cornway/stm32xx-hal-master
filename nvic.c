@@ -16,10 +16,7 @@ typedef struct {
     uint8_t group;
 } irq_desc_t;
 
-#if NVIC_IRQ_MAX <= 32
-#define NVIC_IRQ_MASK (0xffffffffU)
-#endif
-
+#define NVIC_IRQ_CORE_MASK NVIC_IRQ_MASK
 
 FlagStatus initialized = RESET;
 static irq_desc_t irq_maptable[NVIC_IRQ_MAX];
@@ -87,12 +84,14 @@ static void NVIC_map_irq (IRQn_Type IRQn, uint8_t preempt, uint8_t preemptsub, u
 
 static inline void _irq_save (irqmask_t *flags)
 {
-    int i;
+    int i, saveall;
     irqmask_t mask = *flags;
     IRQn_Type irq;
 
-    if (!mask)
+    if (!mask) {
         mask = NVIC_IRQ_MASK;
+        saveall = 1;
+    }
 
     mask = irq_active_mask & mask;
     mask = ~irq_saved_mask & mask;
@@ -106,7 +105,7 @@ static inline void _irq_save (irqmask_t *flags)
         }
         if ((mask >> i) & 0x1) {
             irq = irq_maptable[i].irq;
-            if (irq < 0) {
+            if (saveall && irq < 0) {
                 NVIC_SysIrqCtrl(irq, d_true);
             } else {
                 NVIC_DisableIRQ(irq_maptable[i].irq);

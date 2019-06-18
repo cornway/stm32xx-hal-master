@@ -85,6 +85,20 @@ static fobjhdl_t *dir_handles[MAX_HANDLES] ALIGN(8);
 #define freefile(num) releasehandle(file_handles, num)
 #define freedir(num) releasehandle(dir_handles, num)
 
+#define chkfile(num) chk_handle(file_handles, num)
+#define chkdir(num) chk_handle(dir_handles, num)
+
+static inline int chk_handle (fobjhdl_t **hdls, int num)
+{
+    fobjhdl_t *hdl;
+
+    if (num < 0) {
+        return 0;
+    }
+    hdl = hdls[num];
+    return hdl->is_owned;
+}
+
 static inline void *allochandle (fobjhdl_t **hdls, int *num)
 {
     int i;
@@ -243,9 +257,7 @@ int d_tell (int h)
 void d_close (int h)
 {
     FRESULT res;
-    if (h < 0) {
-        return;
-    }
+    assert(chkfile(h));
     res = f_close(getfile(h));
     if (res != FR_OK) {
         dbg_eval(DBG_ERR) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
@@ -385,6 +397,8 @@ int d_opendir (const char *path)
 int d_closedir (int dir)
 {
     FRESULT res;
+
+    assert(chkdir(dir));
     res = f_closedir(getdir(dir));
     if (res != FR_OK) {
         dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));

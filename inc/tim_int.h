@@ -17,6 +17,7 @@ typedef struct timer_desc_s {
     irqmask_t irqmask;
     void (*handler) (struct timer_desc_s *);
     void (*init) (struct timer_desc_s *);
+    void (*deinit) (struct timer_desc_s *);
     uint32_t period;
     uint32_t presc;
     timflags_t flags;

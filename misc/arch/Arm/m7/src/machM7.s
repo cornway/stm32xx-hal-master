@@ -4,6 +4,7 @@
 ;                    EXPORT VMBOOT                  [WEAK]
                     EXPORT __arch_get_stack
                     EXPORT __arch_get_heap
+                    EXPORT __arch_asmgoto
 
                     IMPORT Stack_Mem
                     IMPORT Stack_Size
@@ -131,6 +132,11 @@ __arch_get_heap     PROC
                     STR R2, [R1]
                     POP {R2}
                     BX  LR
+                    ENDP
+                        
+__arch_asmgoto      PROC
+                    MOV PC, R0
+                    B   .
                     ENDP
 
                     END

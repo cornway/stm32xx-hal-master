@@ -108,6 +108,22 @@ int hal_tim_deinit (timer_desc_t *desc)
     return 0;
 }
 
+void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef *htim)
+{
+    tim_int_t *tim = timer_desc_head;
+    
+    assert(tim);
+
+    while (tim) {
+        if (&tim->desc->handle == htim && tim->desc->deinit) {
+            tim->desc->deinit(tim->desc);
+            return;
+        }
+        tim = tim->next;
+    }
+    assert(0);
+}
+
 /*TODO : move this outside*/
 extern TIM_HandleTypeDef profile_timer_handle;
 

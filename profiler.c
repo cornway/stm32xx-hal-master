@@ -186,6 +186,11 @@ static void profile_timer_msp_init (timer_desc_t *desc)
     __HAL_RCC_TIM2_CLK_ENABLE();
 }
 
+static void profile_timer_msp_deinit (timer_desc_t *desc)
+{
+    __HAL_RCC_TIM2_CLK_DISABLE();
+}
+
 static void profile_timer_handler (timer_desc_t *desc)
 {
 
@@ -204,6 +209,7 @@ static void profiler_timer_init (void)
     profile_timer_desc.presc = 1000000;
     profile_timer_desc.handler = profile_timer_handler;
     profile_timer_desc.init = profile_timer_msp_init;
+    profile_timer_desc.deinit = profile_timer_msp_deinit;
     profile_timer_desc.hw = TIM2;
     profile_timer_desc.irq = TIM2_IRQn;
     if (hal_tim_init(&profile_timer_desc) == 0) {

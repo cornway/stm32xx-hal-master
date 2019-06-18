@@ -330,6 +330,12 @@ static void serial_timer_msp_init (timer_desc_t *desc)
     HAL_NVIC_EnableIRQ(desc->irq);
 }
 
+static void serial_timer_msp_deinit (timer_desc_t *desc)
+{
+    __HAL_RCC_TIM3_CLK_DISABLE();
+    HAL_NVIC_DisableIRQ(desc->irq);
+}
+
 static void serial_timer_handler (timer_desc_t *desc)
 {
     serial_flush_handler(0);
@@ -355,6 +361,7 @@ void serial_init (void)
     serial_timer.presc = 10000;
     serial_timer.handler = serial_timer_handler;
     serial_timer.init = serial_timer_msp_init;
+    serial_timer.deinit = serial_timer_msp_deinit;
     serial_timer.hw = TIM3;
     serial_timer.irq = TIM3_IRQn;
     hal_tim_init(&serial_timer);

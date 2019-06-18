@@ -267,9 +267,11 @@ _EXTERN _VALUES_IN_REGS ARG_STRUCT_T export_mach_m4_svc (ARG_STRUCT_T);
 
 #define arch_get_stack __arch_get_stack
 #define arch_get_heap __arch_get_heap
+#define arch_asmgoto __arch_asmgoto
 
 extern void __arch_get_stack (void *sp, void *size);
 extern void __arch_get_heap (void *sp, void *size);
+extern void __arch_asmgoto (arch_word_t addr) __attribute__((noreturn));
 
 static inline arch_word_t __msp (void)
 {
@@ -279,6 +281,14 @@ static inline arch_word_t __msp (void)
         MRS     sp, MSP
     }
     return sp;
+}
+
+static inline void __msp_set (arch_word_t sp)
+{
+    __asm
+    {
+        MSR     MSP, sp
+    }
 }
 
 static inline arch_word_t __psp (void)
@@ -295,7 +305,6 @@ static inline arch_word_t __lr (void)
 {
     return __return_address();
 }
-
 
 #ifdef __cplusplus
     }
