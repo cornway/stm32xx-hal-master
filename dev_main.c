@@ -9,6 +9,7 @@
 #include "misc_utils.h"
 #include "nvic.h"
 #include <mpu.h>
+#include <bsp_api.h>
 
 #if (_USE_LFN == 3)
 #error "ff_malloc, ff_free must be redefined to Sys_HeapAlloc"
@@ -20,9 +21,20 @@ int const __cache_line_size = 32;
 #error "Cache line size unknown"
 #endif
 
-int g_dev_debug_level = DBG_ERR;
+bspapi_t bspapi;
+
+bspapi_t *g_bspapi;
+
+static void bsp_api_attach (bspapi_t *api);
 
 extern void VID_PreConfig (void);
+
+/** The prototype for the application's main() function */
+extern int mainloop (int argc, const char *argv[]);
+
+#if !BSP_INDIR_API
+
+int g_dev_debug_level = DBG_ERR;
 
 static void SystemDump (void);
 
@@ -54,8 +66,6 @@ static void clock_fault (void)
     bug();
 }
 
-/** The prototype for the application's main() function */
-extern int mainloop (int argc, const char *argv[]);
 
 /* Private function prototypes -----------------------------------------------*/
 static void SystemClock_Config(void);
@@ -81,6 +91,14 @@ void serial_led_off (void)
     BSP_LED_Off(LED1);
 }
 
+static int con_echo (const char *buf, int len)
+{
+    dprintf("@: %s\n", buf);
+    return 0; /*let it be processed by others*/
+}
+
+#endif
+
 void dev_tickle (void)
 {
     audio_update();
@@ -89,14 +107,9 @@ void dev_tickle (void)
     profiler_reset();
 }
 
-static int con_echo (const char *buf, int len)
-{
-    dprintf("@: %s\n", buf);
-    return 0; /*let it be processed by others*/
-}
-
 int dev_main (void)
 {
+#if !BSP_INDIR_API
     CPU_CACHE_Enable();
     SystemClock_Config();
     HAL_Init();
@@ -115,10 +128,11 @@ int dev_main (void)
     dev_io_init();
     screen_init();
     SystemDump();
+    d_dvar_int32(&g_dev_debug_level, "dbglvl");
+#endif
 
     VID_PreConfig();
-
-    d_dvar_int32(&g_dev_debug_level, "dbglvl");
+    bsp_api_attach(&bspapi);
     mainloop(0, NULL);
 
     return 0;
@@ -126,6 +140,7 @@ int dev_main (void)
 
 void dev_deinit (void)
 {
+#if BSP_INDIR_API
     irqmask_t irq = NVIC_IRQ_MASK;
     dprintf("%s() :\n", __func__);
     term_unregister_handler(con_echo);
@@ -139,6 +154,10 @@ void dev_deinit (void)
     irq_save(&irq);
     HAL_RCC_DeInit();
     HAL_DeInit();
+#else
+extern void screen_release (void);
+    screen_release();
+#endif
 }
 
 static void SystemClock_Config(void)
@@ -217,4 +236,123 @@ static void SystemDump (void)
 {
     NVIC_dump();
 }
+
+#if !BSP_INDIR_API
+
+static void bsp_api_attach (bspapi_t *api)
+{
+    arch_word_t *ptr, size;
+
+    arch_get_shared(&ptr, &size);
+    assert(ptr);
+    assert(size >= sizeof(*api));
+
+    g_bspapi = api;
+
+    api->io.io_init = dev_io_init;
+    api->io.io_deinit = dev_io_deinit;
+    api->io.open = d_open;
+    api->io.size = d_size;
+    api->io.tell = d_tell;
+    api->io.close = d_close;
+    api->io.unlink = d_unlink;
+    api->io.seek = d_seek;
+    api->io.eof = d_eof;
+    api->io.read = d_read;
+    api->io.gets = d_gets;
+    api->io.getc = d_getc;
+    api->io.write = d_write;
+    api->io.printf = d_printf;
+    api->io.mkdir = d_mkdir;
+    api->io.opendir = d_opendir;
+    api->io.closedir = d_closedir;
+    api->io.readdir = d_readdir;
+    api->io.time = d_time;
+    api->io.dirlist = d_dirlist;
+    api->io.var_reg = d_dvar_reg;
+    api->io.var_int32 = d_dvar_int32;
+    api->io.var_float = d_dvar_float;
+    api->io.var_str = d_dvar_str;
+
+    api->vid.init = screen_init;
+    api->vid.deinit = screen_deinit;
+    api->vid.get_wh = screen_get_wh;
+    api->vid.mem_avail = screen_total_mem_avail_kb;
+    api->vid.win_cfg = screen_win_cfg;
+    api->vid.set_clut = screen_set_clut;
+    api->vid.update = screen_update;
+    api->vid.direct = screen_direct;
+    api->vid.vsync = screen_vsync;
+    api->vid.input_align = screen_ts_align;
+
+    api->snd.init = audio_init;
+    api->snd.deinit = audio_deinit;
+    api->snd.mixer_ext = audio_mixer_ext;
+    api->snd.play = audio_play_channel;
+    api->snd.stop = audio_stop_channel;
+    api->snd.pause = audio_pause;
+    api->snd.stop_all = audio_stop_all;
+    api->snd.is_play = audio_is_playing;
+    api->snd.check = audio_chk_priority;
+    api->snd.set_pan = audio_set_pan;
+    api->snd.sample_volume = audio_change_sample_volume;
+    api->snd.tickle = audio_update;
+    api->snd.irq_save = audio_irq_save;
+    api->snd.irq_restore = audio_irq_restore;
+
+    api->snd.wave_open = audio_open_wave;
+    api->snd.wave_size = audio_wave_size;
+    api->snd.wave_cache = audio_cache_wave;
+    api->snd.wave_close = audio_wave_close;
+
+    api->cd.play = cd_play_name;
+    api->cd.pause = cd_pause;
+    api->cd.resume = cd_resume;
+    api->cd.stop = cd_stop;
+    api->cd.volume = cd_volume;
+    api->cd.getvol = cd_getvol;
+    api->cd.playing = cd_playing;
+
+    api->sys.fatal = fatal_error;
+    api->sys.alloc_init = Sys_AllocInit;
+    api->sys.alloc_shared = Sys_AllocShared;
+    api->sys.alloc_vid = Sys_AllocVideo;
+    api->sys.avail = Sys_AllocBytesLeft;
+    api->sys.malloc = Sys_Malloc;
+    api->sys.realloc = Sys_Realloc;
+    api->sys.calloc = Sys_Calloc;
+    api->sys.free = Sys_Free;
+    api->sys.prof_enter = _profiler_enter;
+    api->sys.prof_exit = _profiler_exit;
+    api->sys.prof_reset = profiler_reset;
+    api->sys.prof_init = profiler_init;
+
+    api->dbg.init = serial_init;
+    api->dbg.putc = serial_putc;
+    api->dbg.getc = serial_getc;
+    api->dbg.send = serial_send_buf;
+    api->dbg.flush = serial_flush;
+    api->dbg.reg_clbk = term_register_handler;
+    api->dbg.unreg_clbk = term_unregister_handler;
+    api->dbg.tickle = serial_tickle;
+
+    d_memcpy(ptr, api, sizeof(*api));
+}
+
+#else
+
+static void bsp_api_attach (bspapi_t *api)
+{
+    arch_word_t *ptr, size;
+
+    arch_get_shared(&ptr, &size);
+    assert(ptr);
+    assert(size >= sizeof(*api));
+
+    d_memcpy(api, ptr, sizeof(*api));
+    g_bspapi = api;
+}
+
+#endif /*BSP_INDIR_API*/
+
 

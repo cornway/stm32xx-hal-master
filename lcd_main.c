@@ -113,6 +113,13 @@ void screen_deinit (void)
     }
 }
 
+void screen_release (void)
+{
+    if (lcd_active_cfg && lcd_active_cfg->fb_mem) {
+        Sys_Free(lcd_active_cfg->fb_mem);
+    }
+}
+
 void screen_get_wh (screen_t *s)
 {
     assert(lcd_active_cfg && s);

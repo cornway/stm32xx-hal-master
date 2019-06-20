@@ -4,6 +4,7 @@
 #include <dev_conf.h>
 #include <arch.h>
 #include <stdint.h>
+#include <bsp_api.h>
 
 enum {
     DBG_OFF,
@@ -69,17 +70,6 @@ extern int g_dev_debug_level;
 
 #define ATTR_UNUSED __attribute__((unused))
 
-extern void fatal_error (char *message, ...);
-
-extern void Sys_AllocInit (void);
-extern void *Sys_AllocShared (int *size);
-extern void *Sys_AllocVideo (int *size);
-extern int Sys_AllocBytesLeft (void);
-extern void *Sys_Malloc (int size);
-extern void *Sys_Realloc (void *x, int32_t size);
-extern void *Sys_Calloc (int32_t size);
-extern void Sys_Free (void *p);
-
 static inline void d_memcpy(void *_dst, const void *_src, int cnt)
 {
     uint8_t *src = (uint8_t *)_src, *dst = (uint8_t *)_dst;
@@ -138,12 +128,42 @@ readPtr (const void *_p)
 
 #endif /*__LITTLE_ENDIAN__*/
 
+#if BSP_INDIR_API
+
+#define fatal_error   g_bspapi->sys.fatal
+#define Sys_AllocInit   g_bspapi->sys.alloc_init
+#define Sys_AllocShared   g_bspapi->sys.alloc_shared
+#define Sys_AllocVideo   g_bspapi->sys.alloc_vid
+#define Sys_AllocBytesLeft   g_bspapi->sys.avail
+#define Sys_Malloc   g_bspapi->sys.malloc
+#define Sys_Realloc   g_bspapi->sys.realloc
+#define Sys_Calloc   g_bspapi->sys.calloc
+#define Sys_Free   g_bspapi->sys.free
+#define _profiler_enter   g_bspapi->sys.prof_enter
+#define _profiler_exit   g_bspapi->sys.prof_exit
+#define profiler_reset   g_bspapi->sys.prof_reset
+#define profiler_init   g_bspapi->sys.prof_init
+
+#else
+extern void fatal_error (char *message, ...);
+
+extern void Sys_AllocInit (void);
+extern void *Sys_AllocShared (int *size);
+extern void *Sys_AllocVideo (int *size);
+extern int Sys_AllocBytesLeft (void);
+extern void *Sys_Malloc (int size);
+extern void *Sys_Realloc (void *x, int32_t size);
+extern void *Sys_Calloc (int32_t size);
+extern void Sys_Free (void *p);
+
 void _profiler_enter (const char *func, int line);
 void _profiler_exit (const char *func, int line);
-#define profiler_enter() _profiler_enter(__func__, __LINE__)
-#define profiler_exit() _profiler_exit(__func__, __LINE__)
 void profiler_reset (void);
 void profiler_init (void);
+#endif
+
+#define profiler_enter() _profiler_enter(__func__, __LINE__)
+#define profiler_exit() _profiler_exit(__func__, __LINE__)
 
 
 #endif /*__MISC_UTILS_H__*/

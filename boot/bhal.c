@@ -252,13 +252,14 @@ static void __bhal_boot (arch_word_t addr)
     entryptr = (arch_word_t *)(addr + sizeof(arch_word_t));
     spinitial = (arch_word_t *)(addr);
 
+/*
     SCB_DisableDCache();
     SCB_DisableICache();
     SCB_CleanInvalidateDCache();
     SCB_InvalidateICache();
-
+*/
     __DSB();
-    __vtor_reloc(addr);
+    //__vtor_reloc(addr);
     __msp_set(*spinitial);
     arch_asmgoto(*entryptr);
 }

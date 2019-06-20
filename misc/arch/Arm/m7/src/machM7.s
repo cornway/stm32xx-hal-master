@@ -5,11 +5,14 @@
                     EXPORT __arch_get_stack
                     EXPORT __arch_get_heap
                     EXPORT __arch_asmgoto
+                    EXPORT __arch_get_shared
 
                     IMPORT Stack_Mem
                     IMPORT Stack_Size
                     IMPORT Heap_Mem
                     IMPORT Heap_Size
+                    IMPORT Shared_Mem
+                    IMPORT Shared_Size
                 
                     MACRO 
 $label              WRAP $DEST
@@ -129,6 +132,16 @@ __arch_get_heap     PROC
                     LDR R2, =Heap_Mem
                     STR R2, [R0]
                     LDR R2, =Heap_Size
+                    STR R2, [R1]
+                    POP {R2}
+                    BX  LR
+                    ENDP
+                        
+__arch_get_shared   PROC
+                    PUSH {R2}
+                    LDR R2, =Shared_Mem
+                    STR R2, [R0]
+                    LDR R2, =Shared_Size
                     STR R2, [R1]
                     POP {R2}
                     BX  LR

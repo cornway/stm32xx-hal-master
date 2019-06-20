@@ -3,6 +3,7 @@
 
 #include "gfx.h"
 #include "stm32f769i_discovery_lcd.h"
+#include <bsp_api.h>
 
 /*---------------------------------------------------------------------*
  *  additional includes                                                *
@@ -43,6 +44,20 @@ typedef struct {
 /*---------------------------------------------------------------------*
  *  function prototypes                                                *
  *---------------------------------------------------------------------*/
+#if BSP_INDIR_API
+
+#define screen_init   g_bspapi->vid.init
+#define screen_deinit   g_bspapi->vid.deinit
+#define screen_get_wh   g_bspapi->vid.get_wh
+#define screen_total_mem_avail_kb   g_bspapi->vid.mem_avail
+#define screen_win_cfg   g_bspapi->vid.win_cfg
+#define screen_set_clut   g_bspapi->vid.set_clut
+#define screen_update   g_bspapi->vid.update
+#define screen_direct   g_bspapi->vid.direct
+#define screen_vsync   g_bspapi->vid.vsync
+#define screen_ts_align   g_bspapi->vid.input_align
+
+#else
 void screen_init (void);
 void screen_deinit (void);
 void screen_get_wh (screen_t *s);
@@ -53,6 +68,6 @@ void screen_update (screen_t *in);
 void screen_direct (screen_t *s);
 void screen_vsync (void);
 void screen_ts_align (int *x, int *y);
-
+#endif
 
 #endif /*_LCD_MAIN_H*/

@@ -5,7 +5,7 @@
 #include <stdarg.h>
 #include <dev_conf.h>
 #include <stdint.h>
-
+#include <bsp_api.h>
 #ifndef DEBUG_SERIAL
 #warning "DEBUG_SERIAL undefined, using TRUE"
 #define DEBUG_SERIAL 1
@@ -32,6 +32,18 @@
 
 typedef int (*serial_rx_clbk_t) (const char *buf, int len);
 
+#if BSP_INDIR_API
+
+#define serial_init   g_bspapi->dbg.init
+#define serial_putc   g_bspapi->dbg.putc
+#define serial_getc   g_bspapi->dbg.getc
+#define serial_send_buf   g_bspapi->dbg.send
+#define serial_flush   g_bspapi->dbg.flush
+#define term_register_handler   g_bspapi->dbg.reg_clbk
+#define term_unregister_handler   g_bspapi->dbg.unreg_clbk
+#define serial_tickle   g_bspapi->dbg.tickle
+
+#else
 void serial_init (void);
 void serial_putc (char c);
 char serial_getc (void);
@@ -40,7 +52,7 @@ void serial_flush (void);
 void term_register_handler (serial_rx_clbk_t);
 void term_unregister_handler (serial_rx_clbk_t);
 void serial_tickle (void);
-
+#endif
 
 void dprintf (const char *fmt, ...) PRINTF;
 void dvprintf (const char *fmt, va_list argptr);

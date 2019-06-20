@@ -4,6 +4,7 @@
 #define __DEVIO_H__
 
 #include <arch.h>
+#include <bsp_api.h>
 
 typedef enum {
     FTYPE_FILE,
@@ -45,6 +46,35 @@ typedef struct {
     void *user;
 } flist_t;
 
+#if BSP_INDIR_API
+
+#define dev_io_init    g_bspapi->io.io_init
+#define dev_io_deinit    g_bspapi->io.io_deinit
+#define d_open    g_bspapi->io.open
+#define d_size    g_bspapi->io.size
+#define d_tell    g_bspapi->io.tell
+#define d_close    g_bspapi->io.close
+#define d_unlink    g_bspapi->io.unlink
+#define d_seek    g_bspapi->io.seek
+#define d_eof    g_bspapi->io.eof
+#define d_read    g_bspapi->io.read
+#define d_gets    g_bspapi->io.gets
+#define d_getc    g_bspapi->io.getc
+#define d_write    g_bspapi->io.write
+#define d_printf    g_bspapi->io.printf
+#define d_mkdir    g_bspapi->io.mkdir
+#define d_opendir    g_bspapi->io.opendir
+#define d_closedir    g_bspapi->io.closedir
+#define d_readdir    g_bspapi->io.readdir
+#define d_time    g_bspapi->io.time
+#define d_dirlist    g_bspapi->io.dirlist
+#define d_dvar_reg    g_bspapi->io.var_reg
+#define d_dvar_int32    g_bspapi->io.var_int32
+#define d_dvar_float    g_bspapi->io.var_float
+#define d_dvar_str    g_bspapi->io.var_str
+
+#else
+
 int dev_io_init (void);
 void dev_io_deinit (void);
 int d_open (const char *path, int *hndl, char const * att);
@@ -72,5 +102,7 @@ int d_dvar_float (float *var, const char *name);
 int d_dvar_str (char *str, int len, const char *name);
 
 int d_dvar_rm (const char *name);
+
+#endif
 
 #endif
