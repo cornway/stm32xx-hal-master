@@ -168,3 +168,7 @@ int boot_audio_stop_wave (int hdl);
 void boot_audio_release_wave (int hdl);
 
 
+
+void bhal_prog_boot (void *addr) __attribute__((noreturn));
+
+

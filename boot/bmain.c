@@ -1,4 +1,3 @@
-#include <main.h>
 #include <gfx.h>
 #include <boot_int.h>
 #include <dev_io.h>
@@ -8,57 +7,15 @@
 #include <lcd_main.h>
 #include <string.h>
 
-//#define DUAL_BANK
 
-/* Base address of the Flash sectors */
-#if defined(DUAL_BANK)
-#define ADDR_FLASH_SECTOR_0     ((uint32_t)0x08000000) /* Base address of Sector 0, 16 Kbytes */
-#define ADDR_FLASH_SECTOR_1     ((uint32_t)0x08004000) /* Base address of Sector 1, 16 Kbytes */
-#define ADDR_FLASH_SECTOR_2     ((uint32_t)0x08008000) /* Base address of Sector 2, 16 Kbytes */
-#define ADDR_FLASH_SECTOR_3     ((uint32_t)0x0800C000) /* Base address of Sector 3, 16 Kbytes */
-#define ADDR_FLASH_SECTOR_4     ((uint32_t)0x08010000) /* Base address of Sector 4, 64 Kbytes */
-#define ADDR_FLASH_SECTOR_5     ((uint32_t)0x08020000) /* Base address of Sector 5, 128 Kbytes */
-#define ADDR_FLASH_SECTOR_6     ((uint32_t)0x08040000) /* Base address of Sector 6, 128 Kbytes */
-#define ADDR_FLASH_SECTOR_7     ((uint32_t)0x08060000) /* Base address of Sector 7, 128 Kbytes */
-#define ADDR_FLASH_SECTOR_8     ((uint32_t)0x08080000) /* Base address of Sector 8, 128 Kbytes */
-#define ADDR_FLASH_SECTOR_9     ((uint32_t)0x080A0000) /* Base address of Sector 9, 128 Kbytes */
-#define ADDR_FLASH_SECTOR_10    ((uint32_t)0x080C0000) /* Base address of Sector 10, 128 Kbytes */
-#define ADDR_FLASH_SECTOR_11    ((uint32_t)0x080E0000) /* Base address of Sector 11, 128 Kbytes */
-#define ADDR_FLASH_SECTOR_12    ((uint32_t)0x08100000) /* Base address of Sector 12, 16 Kbytes */
-#define ADDR_FLASH_SECTOR_13    ((uint32_t)0x08104000) /* Base address of Sector 13, 16 Kbytes */
-#define ADDR_FLASH_SECTOR_14    ((uint32_t)0x08108000) /* Base address of Sector 14, 16 Kbytes */
-#define ADDR_FLASH_SECTOR_15    ((uint32_t)0x0810C000) /* Base address of Sector 15, 16 Kbytes */
-#define ADDR_FLASH_SECTOR_16    ((uint32_t)0x08110000) /* Base address of Sector 16, 64 Kbytes */
-#define ADDR_FLASH_SECTOR_17    ((uint32_t)0x08120000) /* Base address of Sector 17, 128 Kbytes */
-#define ADDR_FLASH_SECTOR_18    ((uint32_t)0x08140000) /* Base address of Sector 18, 128 Kbytes */
-#define ADDR_FLASH_SECTOR_19    ((uint32_t)0x08160000) /* Base address of Sector 19, 128 Kbytes */
-#define ADDR_FLASH_SECTOR_20    ((uint32_t)0x08180000) /* Base address of Sector 20, 128 Kbytes */
-#define ADDR_FLASH_SECTOR_21    ((uint32_t)0x081A0000) /* Base address of Sector 21, 128 Kbytes */
-#define ADDR_FLASH_SECTOR_22    ((uint32_t)0x081C0000) /* Base address of Sector 22, 128 Kbytes */
-#define ADDR_FLASH_SECTOR_23    ((uint32_t)0x081E0000) /* Base address of Sector 23, 128 Kbytes */
-#else
-#define ADDR_FLASH_SECTOR_0     ((uint32_t)0x08000000) /* Base address of Sector 0, 32 Kbytes */
-#define ADDR_FLASH_SECTOR_1     ((uint32_t)0x08008000) /* Base address of Sector 1, 32 Kbytes */
-#define ADDR_FLASH_SECTOR_2     ((uint32_t)0x08010000) /* Base address of Sector 2, 32 Kbytes */
-#define ADDR_FLASH_SECTOR_3     ((uint32_t)0x08018000) /* Base address of Sector 3, 32 Kbytes */
-#define ADDR_FLASH_SECTOR_4     ((uint32_t)0x08020000) /* Base address of Sector 4, 128 Kbytes */
-#define ADDR_FLASH_SECTOR_5     ((uint32_t)0x08040000) /* Base address of Sector 5, 256 Kbytes */
-#define ADDR_FLASH_SECTOR_6     ((uint32_t)0x08080000) /* Base address of Sector 6, 256 Kbytes */
-#define ADDR_FLASH_SECTOR_7     ((uint32_t)0x080C0000) /* Base address of Sector 7, 256 Kbytes */
-#define ADDR_FLASH_SECTOR_8     ((uint32_t)0x08100000) /* Base address of Sector 8, 256 Kbytes */
-#define ADDR_FLASH_SECTOR_9     ((uint32_t)0x08140000) /* Base address of Sector 9, 256 Kbytes */
-#define ADDR_FLASH_SECTOR_10    ((uint32_t)0x08180000) /* Base address of Sector 10, 256 Kbytes */
-#define ADDR_FLASH_SECTOR_11    ((uint32_t)0x081C0000) /* Base address of Sector 11, 256 Kbytes */
-#endif /* DUAL_BANK */
-
-#if defined(DUAL_BANK)
-uint32_t g_app_program_addr = ADDR_FLASH_SECTOR_12;
-#else
-uint32_t g_app_program_addr = ADDR_FLASH_SECTOR_8;
-#endif
+#define BOOT_SYS_DIR_PATH "/sys"
+#define BOOT_SYS_LOG_NAME "log.txt"
+#define BOOT_SYS_LOG_PATH BOOT_SYS_DIR_PATH"/"BOOT_SYS_LOG_NAME
 
 #define BOOT_MAX_NAME 24
 #define BOOT_MAX_PATH 128
+
+extern uint32_t g_app_program_addr;
 
 component_t *com_browser;
 component_t *com_title;
@@ -68,7 +25,7 @@ pane_t *pane, *alert_pane;
 typedef struct boot_bin_s {
     struct boot_bin_s *next;
 
-
+    arch_word_t progaddr;
     char name[BOOT_MAX_NAME];
     char dirpath[BOOT_MAX_PATH];
     char path[BOOT_MAX_PATH];
@@ -140,6 +97,7 @@ void boot_read_path (const char *path)
                             bin = Sys_Malloc(sizeof(*bin));
                             assert(bin);
 
+                            bin->progaddr = g_app_program_addr;
                             snprintf(bin->dirpath, sizeof(bin->dirpath), "%s", buf);
                             snprintf(buf, sizeof(buf), "%s/%s", buf, binobj.name);
                             snprintf(bin->name, sizeof(bin->name), "%s", bindir_name);
@@ -165,15 +123,15 @@ void boot_read_path (const char *path)
     d_closedir(dir);
 }
 
-static void *cache_bin (boot_bin_t *bin, int *binsize)
+static void *cache_bin (const char *path, int *binsize)
 {
     int f;
     int fsize;
     void *cache;
 
-    fsize = d_open(bin->path, &f, "r");
+    fsize = d_open(path, &f, "r");
     if (f < 0) {
-        dprintf("%s() : open fail : \'%s\'\n", __func__, bin->path);
+        dprintf("%s() : open fail : \'%s\'\n", __func__, path);
         return NULL;
     }
     cache = Sys_Malloc(ROUND_UP(fsize, 32));
@@ -188,245 +146,52 @@ static void *cache_bin (boot_bin_t *bin, int *binsize)
     }
     d_close(f);
 
+    if (cache)
+        dprintf("Cache done : <0x%p> : 0x%8x Kb\n", cache, fsize / 1024);
+
     return cache;
 }
 
-static uint32_t GetSector(uint32_t Address);
-
-static int flash_verify (uint32_t addr, void *_bin, uint32_t size)
+int boot_execute_boot (arch_word_t *progaddr, const char *path)
 {
-    uint32_t writeaddr = addr, *bin = (uint32_t *)_bin;
-    uint32_t *flash = (uint32_t *)addr;
-    uint32_t errors = 0, errors_total = 0;
-    int blkcnt = 0;
-
-    dprintf("%s() : Verifying :\n[", __func__);
-    while (writeaddr < addr + size) {
-        uint32_t start, end;
-
-        start = writeaddr / 4;
-        end = start + 256;
-        for (; start < end; start++) {
-            if (*flash != *bin) {
-                errors++;
-            }
-            flash++;
-            bin++;
-            writeaddr += 4;
-        }
-        errors_total += errors;
-        if (errors) {
-            dprintf("X");
-        } else {
-            dprintf(".");
-        }
-        if ((blkcnt & 0x3f) == 0x3f) {
-            dprintf("\n");
-        }
-        blkcnt++;
-     }
-    dprintf("]\n Done, missed : %u words\n", errors_total);
-    if (errors_total) {
-        dprintf("Fatal : currupted .hex will be not exec.\n");
-        return -1;
-    }
-    return 0;
-}
-
-static int flash_program (uint32_t addr, void *_bin, uint32_t size)
-{
-    FLASH_EraseInitTypeDef EraseInitStruct;
-    FLASH_OBProgramInitTypeDef    OBInit = {0};
-    uint32_t sectnum, firstsector, sectorerror;
-    uint32_t writeaddr, *bin = (uint32_t *)_bin;
-    int blkcnt = 0;
-
-    dprintf("Starting program flash ...\n");
-
-    HAL_FLASH_Unlock();
-
-    HAL_FLASH_OB_Unlock();
-    HAL_FLASHEx_OBGetConfig(&OBInit);
-#if defined(DUAL_BANK)  
-    if((OBInit.USERConfig & OB_NDBANK_SINGLE_BANK) == OB_NDBANK_SINGLE_BANK)
-#else
-    if((OBInit.USERConfig & OB_NDBANK_SINGLE_BANK) == OB_NDBANK_DUAL_BANK)
-#endif
-    {
-        assert(0);
-    }
-
-    firstsector = GetSector(addr);
-    /* Get the number of sector to erase from 1st sector*/
-    sectnum = GetSector(addr + size) - firstsector + 1;
-    /* Fill EraseInit structure*/
-    EraseInitStruct.TypeErase     = FLASH_TYPEERASE_SECTORS;
-    EraseInitStruct.VoltageRange  = FLASH_VOLTAGE_RANGE_3;
-    EraseInitStruct.Sector        = firstsector;
-    EraseInitStruct.NbSectors     = sectnum;
-
-    dprintf("Start erase at [%p] size %u...\n", (uint32_t *)firstsector, sectnum);
-    if (HAL_FLASHEx_Erase(&EraseInitStruct, &sectorerror) != HAL_OK) {
-        dprintf("Flash erase fail!\n");
-        return -1;
-    }
-    dprintf("Erase done\n");
-    writeaddr = addr;
-
-    dprintf("Start program...\n [");
-    while (writeaddr < addr + size) {
-        uint32_t start, end;
-
-        start = writeaddr / 4;
-        end = start + 256;
-        for (; start < end; start++) {
-            if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, writeaddr, *bin) != HAL_OK) {
-                dprintf("%s() : Write fail at [%p]\n", __func__, (uint32_t *)writeaddr);
-                return -1;
-            }
-            bin++;
-            writeaddr += 4;
-        }
-        dprintf("#");
-        if ((blkcnt & 0x3f) == 0x3f) {
-            dprintf("\n");
-        }
-        blkcnt++;
-    }
-    HAL_FLASH_Lock();
-    dprintf("]\n");
-    dprintf("Program finished\n");
-    return 0;
-}
-
-static inline void boot_reloc_vectortable (uint32_t addr)
-{
-    register uint32_t offset = addr - FLASH_BASE;
-    SCB->VTOR = FLASH_BASE | offset;
-}
-
-static void __boot_exec (uint32_t addr) __attribute__((noreturn));
-
-static void __boot_exec (uint32_t addr)
-{
-    register volatile arch_word_t *entryptr, *spinitial;
-    
-    entryptr = (arch_word_t *)(addr + sizeof(arch_word_t));
-    spinitial = (arch_word_t *)(addr);
-
-    SCB_DisableDCache();
-    SCB_DisableICache();
-    SCB_CleanInvalidateDCache();
-    SCB_InvalidateICache();
-
-    __DSB();
-    boot_reloc_vectortable(addr);
-    __msp_set(*spinitial);
-    arch_asmgoto(*entryptr);
-}
-
-static void boot_exec (void *addr)
-{
-    dprintf("%s() :\n", __func__);
-    dev_deinit();
-    __boot_exec(((uint32_t)addr));
-    assert(0);
-}
-
-#define BOOT_SYS_DIR_PATH "/sys"
-#define BOOT_SYS_LOG_NAME "log.txt"
-#define BOOT_SYS_LOG_PATH BOOT_SYS_DIR_PATH"/"BOOT_SYS_LOG_NAME
-
-
-static int boot_get_last_bin (char *name)
-{
-    int dir, f;
-    char buf[BOOT_MAX_PATH];
-
-    name[0] = 0;
-    dir = d_opendir(BOOT_SYS_DIR_PATH);
-    if (dir < 0) {
-        if (d_mkdir(BOOT_SYS_DIR_PATH) < 0) {
-            dprintf("%s() : fail\n", __func__);
-            return -1;
-        }
-    } else {
-        d_closedir(dir);
-    }
-    d_open(BOOT_SYS_LOG_PATH, &f, "r");
-    if (f < 0) {
-        d_open(BOOT_SYS_LOG_PATH, &f, "+w");
-        if (f < 0) {
-            dprintf("%s() : fail\n", __func__);
-            return -1;
-        }
-    } else {
-        if (d_gets(f, buf, sizeof(buf))) {
-            strcpy(name, buf);
-        }
-    }
-    d_close(f);
-    return 0;
-}
-
-static int boot_set_last_bin (const char *name)
-{
-    int f, n;
-
-    d_open(BOOT_SYS_LOG_PATH, &f, "w");
-    if (f < 0) {
-        dprintf("%s() : fail\n", __func__);
-        return -1;
-    }
-    d_seek(f, 0, DSEEK_SET);
-    n = d_printf(f, "%s", name);
-    d_close(f);
-    return 0;
-}
-
-static int boot_handle_bins (pane_t *pane, component_t *com, void *user)
-{
-    gevt_t *evt = (gevt_t *)user;
-    char name[BOOT_MAX_NAME] = {0};
     void *bindata;
-    int binsize = 0;
-    d_bool flash_valid = d_true;/*REMOVE!!*/
+    int binsize = 0, err = 0;
 
-    if (boot_bin_selected == NULL) {
-        gui_print(com_title, "Search result empty\n");
-        return 0;
-    }
+    dprintf("Booting : \'%s\'\n", path);
 
-    dprintf("Cache bin : \'%s\'\n", boot_bin_selected->name);
-    bindata = cache_bin(boot_bin_selected, &binsize);
-    dprintf("Cache done : %p of size %u\n", bindata, binsize);
+    bindata = cache_bin(path, &binsize);
     if (!bindata) {
         return 0;
     }
 
-    boot_get_last_bin(name);
-    if (name[0] && strcmp(name, boot_bin_selected->name) == 0) {
-        /*Already flashed*/
-        if (flash_verify(g_app_program_addr, bindata, binsize) == 0) {
-            flash_valid = d_true;
-        }
+    if (!bhal_prog_exist(progaddr, bindata, binsize / sizeof(arch_word_t))) {
+        err = bhal_load_program(NULL, progaddr, bindata, binsize / sizeof(arch_word_t));
     }
+    if (err < 0) {
+        return 0;
+    }
+    dprintf("Starting app... \n");
 
-    if (!flash_valid) {
-        if (flash_program(g_app_program_addr, bindata, binsize) < 0) {
-            return 0;
-        }
-        if (flash_verify(g_app_program_addr, bindata, binsize) < 0) {
-            return 0;
-        }
-        boot_set_last_bin(boot_bin_selected->name);
-    }
-    dprintf("Executing... \n");
     Sys_Free(bindata);
-    boot_exec((void *)g_app_program_addr);
+    dev_deinit();
+    bhal_boot(progaddr);
 }
 
-static int boot_draw_bins (pane_t *pane, component_t *com, void *user)
+static int boot_handle_selected (pane_t *pane, component_t *com, void *user)
+{
+    boot_bin_t *bindesc = *((boot_bin_t **)com->user);
+    int binsize = 0, err = 0;
+    void *bindata;
+
+    if (bindesc == NULL) {
+        gui_print(com_title, "Search result empty\n");
+        return 0;
+    }
+
+    boot_execute_boot((arch_word_t *)bindesc->progaddr, bindesc->path);
+}
+
+static int boot_show_list (pane_t *pane, component_t *com, void *user)
 {
     boot_bin_t *bin = boot_bin_head;
     uint8_t maxbin = 8;
@@ -450,7 +215,6 @@ static void gamepad_handle (gevt_t *evt)
         break;
 
         default :
-            dprintf("%s() : unhandled event : \'%c\'\n", __func__, evt->sym);
         break;
     }
     
@@ -536,11 +300,22 @@ const kbdmap_t gamepad_to_kbd_map[JOY_STD_MAX] =
     [JOY_K10]           = {'x', PAD_FREQ_LOW},
 };
 
+static int user_execute_boot (void *p1, void *p2)
+{
+    char *path = (char *)p1;
+    int len = (int)p2;
+
+    boot_execute_boot((arch_word_t *)g_app_program_addr, path);
+
+    return len;
+}
+
 int boot_main (int argc, char **argv)
 {
     screen_t s;
     prop_t prop;
     component_t *com;
+    dvar_t dvar;
 
     input_soft_init(gamepad_to_kbd_map);
     screen_get_wh(&s);
@@ -561,21 +336,22 @@ int boot_main (int argc, char **argv)
 
     com = gui_get_comp("pad0", "");
     gui_set_prop(com, &prop);
-    gui_set_comp(pane, com, 0, 0, 120, 480);
+    gui_set_comp(pane, com, 0, 0, 120, gui.dim.h);
 
     prop.ispad = d_false;
     prop.bcolor = COLOR_GREY;
     com = gui_get_comp("title", NULL);
     gui_set_prop(com, &prop);
-    gui_set_comp(pane, com, 120, 0, 360, 80);
+    gui_set_comp(pane, com, 120, 0, gui.dim.w - 120, 80);
     com_title = com;
 
     prop.bcolor = COLOR_GREEN;
     com = gui_get_comp("browser", NULL);
     gui_set_prop(com, &prop);
-    gui_set_comp(pane, com, 120, 80, 360, 400);
-    com->draw = boot_draw_bins;
-    com->act = boot_handle_bins;
+    gui_set_comp(pane, com, 120, 80, gui.dim.w - 120, gui.dim.h - 80);
+    com->draw = boot_show_list;
+    com->act = boot_handle_selected;
+    com->user = &boot_bin_selected;
     com_browser = com;
 
     alert_pane = win_new_allert(&gui, 200, 160,
@@ -585,6 +361,11 @@ int boot_main (int argc, char **argv)
 
     boot_read_path("");
 
+    dvar.type = DVAR_FUNC;
+    dvar.ptr = user_execute_boot;
+    dvar.ptrsize = sizeof(&user_execute_boot);
+    d_dvar_reg(&dvar, "boot");
+
     while (1) {
 
         gui_draw(&gui);
@@ -593,120 +374,3 @@ int boot_main (int argc, char **argv)
     }
     return 0;
 }
-
-/**
-  * @brief  Gets the sector of a given address
-  * @param  None
-  * @retval The sector of a given address
-  */
-static uint32_t GetSector(uint32_t Address)
-{
-  uint32_t sector = 0;
-
-  if((Address < ADDR_FLASH_SECTOR_1) && (Address >= ADDR_FLASH_SECTOR_0))
-  {
-    sector = FLASH_SECTOR_0;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_2) && (Address >= ADDR_FLASH_SECTOR_1))
-  {
-    sector = FLASH_SECTOR_1;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_3) && (Address >= ADDR_FLASH_SECTOR_2))
-  {
-    sector = FLASH_SECTOR_2;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_4) && (Address >= ADDR_FLASH_SECTOR_3))
-  {
-    sector = FLASH_SECTOR_3;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_5) && (Address >= ADDR_FLASH_SECTOR_4))
-  {
-    sector = FLASH_SECTOR_4;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_6) && (Address >= ADDR_FLASH_SECTOR_5))
-  {
-    sector = FLASH_SECTOR_5;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_7) && (Address >= ADDR_FLASH_SECTOR_6))
-  {
-    sector = FLASH_SECTOR_6;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_8) && (Address >= ADDR_FLASH_SECTOR_7))
-  {
-    sector = FLASH_SECTOR_7;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_9) && (Address >= ADDR_FLASH_SECTOR_8))
-  {
-    sector = FLASH_SECTOR_8;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_10) && (Address >= ADDR_FLASH_SECTOR_9))
-  {
-    sector = FLASH_SECTOR_9;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_11) && (Address >= ADDR_FLASH_SECTOR_10))
-  {
-    sector = FLASH_SECTOR_10;
-  }
-#if defined(DUAL_BANK)
-  else if((Address < ADDR_FLASH_SECTOR_12) && (Address >= ADDR_FLASH_SECTOR_11))
-  {
-    sector = FLASH_SECTOR_11;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_13) && (Address >= ADDR_FLASH_SECTOR_12))
-  {
-    sector = FLASH_SECTOR_12;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_14) && (Address >= ADDR_FLASH_SECTOR_13))
-  {
-    sector = FLASH_SECTOR_13;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_15) && (Address >= ADDR_FLASH_SECTOR_14))
-  {
-    sector = FLASH_SECTOR_14;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_16) && (Address >= ADDR_FLASH_SECTOR_15))
-  {
-    sector = FLASH_SECTOR_15;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_17) && (Address >= ADDR_FLASH_SECTOR_16))
-  {
-    sector = FLASH_SECTOR_16;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_18) && (Address >= ADDR_FLASH_SECTOR_17))
-  {
-    sector = FLASH_SECTOR_17;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_19) && (Address >= ADDR_FLASH_SECTOR_18))
-  {
-    sector = FLASH_SECTOR_18;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_20) && (Address >= ADDR_FLASH_SECTOR_19))
-  {
-    sector = FLASH_SECTOR_19;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_21) && (Address >= ADDR_FLASH_SECTOR_20))
-  {
-    sector = FLASH_SECTOR_20;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_22) && (Address >= ADDR_FLASH_SECTOR_21))
-  {
-    sector = FLASH_SECTOR_21;
-  }
-  else if((Address < ADDR_FLASH_SECTOR_23) && (Address >= ADDR_FLASH_SECTOR_22))
-  {
-    sector = FLASH_SECTOR_22;
-  }
-  else /* (Address < FLASH_END_ADDR) && (Address >= ADDR_FLASH_SECTOR_23) */
-  {
-    sector = FLASH_SECTOR_23;
-  }  
-#else  
-  else /* (Address < FLASH_END_ADDR) && (Address >= ADDR_FLASH_SECTOR_11) */
-  {
-    sector = FLASH_SECTOR_11;
-  }
-#endif /* DUAL_BANK */  
-  return sector;
-}
-
-
