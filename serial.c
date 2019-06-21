@@ -573,20 +573,6 @@ void dprintf (const char *fmt, ...)
     __set_newline(fmt);
 }
 
-void dvprintf (const char *fmt, va_list argptr)
-{
-    char            string[1024];
-    int size, max = sizeof(string);
-
-    size = __insert_tsf(fmt, string, sizeof(string));
-    size += vsnprintf (string + size, max - size, fmt, argptr);
-
-    assert(size < arrlen(string));
-    serial_send_buf(string, size);
-    __set_newline(fmt);
-}
-
-
 #else /*SERIAL_TSF*/
 
 void dprintf (const char *fmt, ...)

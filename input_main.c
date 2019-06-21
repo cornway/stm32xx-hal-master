@@ -17,15 +17,24 @@ FIXME :
 */
 extern int joypad_read (int8_t *pads);
 
-kbdmap_t input_kbdmap[JOY_STD_MAX];
-int      input_kbdmap_ex[K_EX_MAX];
+static kbdmap_t input_kbdmap[JOY_STD_MAX];
+static int      input_kbdmap_ex[K_EX_MAX];
+
+static void *(*user_handler) (void *, void *) = NULL;
+
+#define input_post_key(a, b) {              \
+    user_handler ? user_handler(a, b) : NULL; \
+}
 
 static uint8_t ts_states_map[4][2];
 static uint8_t ts_prev_state = TS_IDLE;
 static uint8_t ts_state_cooldown_cnt = 0;
 static uint8_t ts_freeze_ticks = 0;
 
+#if !BSP_INDIR_API
 int *joy_extrafreeze = NULL;
+#endif
+
 static uint32_t joypad_timestamp = 0;
 
 
@@ -183,14 +192,14 @@ static inline void
 post_key_up (uint16_t key)
 {
     i_event_t event = {key, keyup};
-    input_post_key(NULL, event);
+    input_post_key(NULL, &event);
 }
 
 static inline void
 post_key_down (uint16_t key)
 {
     i_event_t event = {key, keydown};
-    input_post_key(NULL, event);
+    input_post_key(NULL, &event);
 }
 
 static inline void
@@ -224,7 +233,7 @@ void input_proc_keys (i_event_t *evts)
         event.sym = ts_get_key(ts_status.x, ts_status.y);
         event.x = ts_status.x;
         event.y = ts_status.y;
-        input_post_key(evts, event);
+        input_post_key(evts, &event);
     } else {
         int8_t joy_pads[JOY_STD_MAX];
         int keys_cnt;
@@ -264,10 +273,10 @@ void input_bsp_init (void)
     joypad_bsp_init();
 }
 
-void input_soft_init (const kbdmap_t kbdmap[JOY_STD_MAX])
+void input_soft_init (void *(*in_handler) (void *, void *), const kbdmap_t kbdmap[JOY_STD_MAX])
 {
     memcpy(&input_kbdmap[0], &kbdmap[0], sizeof(input_kbdmap));
-
+    user_handler = in_handler;
     ts_attach_keys(ts_zones_keymap, kbdmap);
 }
 
@@ -283,13 +292,3 @@ void input_tickle (void)
 {
     joypad_tickle();
 }
-
-__weak i_event_t *input_post_key (i_event_t  *evts, i_event_t event)
-{
-    if (evts) {
-        *evts = event;
-        return evts + 1;
-    }
-    return NULL;
-}
-

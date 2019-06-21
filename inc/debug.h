@@ -42,6 +42,7 @@ typedef int (*serial_rx_clbk_t) (const char *buf, int len);
 #define term_register_handler   g_bspapi->dbg.reg_clbk
 #define term_unregister_handler   g_bspapi->dbg.unreg_clbk
 #define serial_tickle   g_bspapi->dbg.tickle
+#define dprintf g_bspapi->dbg.dprintf
 
 #else
 void serial_init (void);
@@ -52,11 +53,9 @@ void serial_flush (void);
 void term_register_handler (serial_rx_clbk_t);
 void term_unregister_handler (serial_rx_clbk_t);
 void serial_tickle (void);
-#endif
-
 void dprintf (const char *fmt, ...) PRINTF;
-void dvprintf (const char *fmt, va_list argptr);
-void hexdump (const uint8_t *data, int len, int rowlength);
+
+#endif
 
 #else /*DEBUG_SERIAL*/
 
@@ -71,5 +70,8 @@ static inline void dvprintf (const char *fmt, va_list argptr) {}
 void hexdump (const uint8_t *data, int len, int rowlength) {}
 
 #endif /*DEBUG_SERIAL*/
+
+void dvprintf (const char *fmt, va_list argptr);
+void hexdump (const uint8_t *data, int len, int rowlength);
 
 #endif /*_SERIAL_DEBUG_H_*/

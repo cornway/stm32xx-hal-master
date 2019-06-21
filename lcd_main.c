@@ -36,6 +36,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "lcd_main.h"
+#include "stm32f769i_discovery_lcd.h"
 #include "misc_utils.h"
 #include <debug.h>
 
@@ -163,6 +164,9 @@ void screen_ts_align (int *x, int *y)
 {
 }
 
+static LCD_LayerCfgTypeDef default_laycfg;
+
+
 int screen_win_cfg (lcd_wincfg_t *cfg, screen_t *screen, uint32_t colormode, int layers_cnt)
 {
     LCD_LayerCfgTypeDef *Layercfg;
@@ -228,7 +232,9 @@ int screen_win_cfg (lcd_wincfg_t *cfg, screen_t *screen, uint32_t colormode, int
         return -1;
     }
 
-    Layercfg = &cfg->lay_halcfg;
+    cfg->lay_halcfg = &default_laycfg;
+
+    Layercfg = &default_laycfg;
     /* Layer Init */
     Layercfg->WindowX0 = x;
     Layercfg->WindowX1 = x + w;

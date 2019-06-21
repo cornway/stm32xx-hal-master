@@ -2,7 +2,6 @@
 #define _LCD_MAIN_H
 
 #include "gfx.h"
-#include "stm32f769i_discovery_lcd.h"
 #include <bsp_api.h>
 
 /*---------------------------------------------------------------------*
@@ -34,7 +33,7 @@ typedef struct {
     void *lay_mem[LCD_MAX_LAYER];
     uint32_t fb_size;
     uint32_t lay_size;
-    LCD_LayerCfgTypeDef lay_halcfg;
+    void *lay_halcfg;
     lcd_layers_t active_lay_idx;
     uint16_t w, h;
     uint8_t lay_cnt;
