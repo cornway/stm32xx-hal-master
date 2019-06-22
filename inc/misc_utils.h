@@ -135,14 +135,6 @@ readPtr (const void *_p)
 #if BSP_INDIR_API
 
 #define fatal_error   g_bspapi->sys.fatal
-#define Sys_AllocInit   g_bspapi->sys.alloc_init
-#define Sys_AllocShared   g_bspapi->sys.alloc_shared
-#define Sys_AllocVideo   g_bspapi->sys.alloc_vid
-#define Sys_AllocBytesLeft   g_bspapi->sys.avail
-#define Sys_Malloc   g_bspapi->sys.malloc
-#define Sys_Realloc   g_bspapi->sys.realloc
-#define Sys_Calloc   g_bspapi->sys.calloc
-#define Sys_Free   g_bspapi->sys.free
 #define _profiler_enter   g_bspapi->sys.prof_enter
 #define _profiler_exit   g_bspapi->sys.prof_exit
 #define profiler_reset   g_bspapi->sys.prof_reset

@@ -13,8 +13,6 @@
 #include "misc_utils.h"
 #include "nvic.h"
 #include <mpu.h>
-
-
 #include <stm32f769i_discovery.h>
 
 #if (_USE_LFN == 3)
@@ -27,12 +25,12 @@ int const __cache_line_size = 32;
 #error "Cache line size unknown"
 #endif
 
-
 extern bspapi_t bspapi;
-
 extern void bsp_api_attach (bspapi_t *api);
 
+extern void bsp_api_attach (bspapi_t *api);
 extern void VID_PreConfig (void);
+extern bspapi_t bspapi;
 
 /** The prototype for the application's main() function */
 extern int mainloop (int argc, const char *argv[]);
@@ -129,6 +127,7 @@ int dev_main (void)
 
 void dev_deinit (void)
 {
+#if 0//!BSP_INDIR_API
     irqmask_t irq = NVIC_IRQ_MASK;
     dprintf("%s() :\n", __func__);
     term_unregister_handler(con_echo);
@@ -142,6 +141,7 @@ void dev_deinit (void)
     irq_save(&irq);
     HAL_RCC_DeInit();
     HAL_DeInit();
+#endif
 }
 
 static void SystemClock_Config(void)

@@ -32,7 +32,9 @@ typedef struct {
     int32_t freeable;
 } mchunk_t;
 
-static int heap_size_total;
+static int heap_size_total = -1;
+static uint8_t *heap_user_mem_ptr = NULL;
+static arch_word_t heap_user_size = 0;
 
 static inline void
 heap_check_margin (int size)
@@ -114,9 +116,14 @@ void Sys_AllocInit (void)
     mpu_lock(heap_mem + heap_size, MPU_CACHELINE, "xwr");
 
     dprintf("%s() :\n", __func__);
-    dprintf("stack : <%p> + %u bytes\n", (void *)sp_mem, sp_size);
-    dprintf("heap : <%p> + %u bytes\n", (void *)heap_mem, heap_size);
+    dprintf("stack : <0x%p> + %u bytes\n", (void *)sp_mem, sp_size);
+    dprintf("heap : <0x%p> + %u bytes\n", (void *)heap_mem, heap_size);
     heap_size_total = heap_size - MPU_CACHELINE * 2;
+#ifdef BOOT 
+    extern void __arch_user_heap (void *mem, void *size);
+
+    __arch_user_heap(&heap_user_mem_ptr, &heap_user_size);
+#endif
 }
 
 void Sys_AllocDeInit (void)
@@ -133,11 +140,33 @@ void Sys_AllocDeInit (void)
     }
 }
 
+#ifdef BOOT
+
+void *Sys_AllocShared (int *size)
+{
+    mchunk_t *p = NULL;
+    int _size = *size + sizeof(mchunk_t);
+    if (heap_user_size < *size) {
+        return NULL;
+    }
+    p = (mchunk_t *)heap_user_mem_ptr;
+    heap_user_mem_ptr += _size;
+    heap_user_size -= _size;
+    p->freeable = 0;
+    p->magic = MALLOC_MAGIC;
+    p->size = _size;
+    return p - 1;
+}
+
+#else
+
 void *Sys_AllocShared (int *size)
 {
     heap_check_margin(*size);
     return heap_malloc(*size, 1);
 }
+
+#endif /*BOOT*/
 
 void *Sys_AllocVideo (int *size)
 {
@@ -168,10 +197,21 @@ void *Sys_Calloc (int32_t size)
     return p;
 }
 
+#ifdef BOOT
+
 void Sys_Free (void *p)
 {
     heap_free(p);
 }
+
+#else
+
+void Sys_Free (void *p)
+{
+    heap_free(p);
+}
+
+#endif
 
 #else /*DATA_IN_ExtSDRAM*/
 

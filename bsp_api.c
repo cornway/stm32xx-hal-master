@@ -5,7 +5,6 @@
 #include <misc_utils.h>
 #include <dev_io.h>
 #include <lcd_main.h>
-#include <input_main.h>
 
 bspapi_t bspapi;
 bspapi_t *g_bspapi;
@@ -89,14 +88,6 @@ void bsp_api_attach (bspapi_t *api)
     api->cd.playing = cd_playing;
 
     api->sys.fatal = fatal_error;
-    api->sys.alloc_init = Sys_AllocInit;
-    api->sys.alloc_shared = Sys_AllocShared;
-    api->sys.alloc_vid = Sys_AllocVideo;
-    api->sys.avail = Sys_AllocBytesLeft;
-    api->sys.malloc = Sys_Malloc;
-    api->sys.realloc = Sys_Realloc;
-    api->sys.calloc = Sys_Calloc;
-    api->sys.free = Sys_Free;
     api->sys.prof_enter = _profiler_enter;
     api->sys.prof_exit = _profiler_exit;
     api->sys.prof_reset = profiler_reset;

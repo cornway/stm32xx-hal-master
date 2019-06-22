@@ -120,7 +120,10 @@ void screen_deinit (void)
 void screen_release (void)
 {
     if (lcd_active_cfg && lcd_active_cfg->fb_mem) {
-        Sys_Free(lcd_active_cfg->fb_mem);
+        memset(lcd_active_cfg->fb_mem, 0, lcd_active_cfg->fb_size);
+    }
+    if (lcd_active_cfg) {
+        memset(lcd_active_cfg, 0, sizeof(*lcd_active_cfg));
     }
     lcd_active_cfg = NULL;
 }
@@ -132,7 +135,7 @@ void screen_get_wh (screen_t *s)
     s->height = lcd_y_size_var;
 }
 
-static void * screen_alloc_fb (lcd_wincfg_t *cfg, uint32_t w, uint32_t h, uint32_t pixel_deep, uint32_t layers_cnt)
+static void * screen_alloc_fb (lcd_mem_malloc_t __malloc, lcd_wincfg_t *cfg, uint32_t w, uint32_t h, uint32_t pixel_deep, uint32_t layers_cnt)
 {
     int fb_size;
     int i = layers_cnt;
@@ -145,16 +148,19 @@ static void * screen_alloc_fb (lcd_wincfg_t *cfg, uint32_t w, uint32_t h, uint32
     if (cfg->fb_mem) {
         Sys_Free(cfg->fb_mem);
     }
-    fb_mem = Sys_AllocVideo(&fb_size);
+    fb_mem = __malloc(fb_size);
     if (!fb_mem) {
         dprintf("%s() : failed to alloc %u bytes\n", __func__, fb_size);
         return NULL;
     }
     memset(fb_mem, 0, fb_size);
 
+    cfg->fb_size = fb_size;
     cfg->fb_mem = fb_mem;
     cfg->lay_size = fb_size / layers_cnt;
     cfg->lay_cnt = layers_cnt;
+    cfg->w = w;
+    cfg->h = h;
 
     while (i-- > 0) {
         cfg->lay_mem[i] = fb_mem;
@@ -171,7 +177,7 @@ void screen_ts_align (int *x, int *y)
 static LCD_LayerCfgTypeDef default_laycfg;
 
 
-int screen_win_cfg (lcd_wincfg_t *cfg, screen_t *screen, uint32_t colormode, int layers_cnt)
+int screen_win_cfg (lcd_mem_malloc_t __malloc, lcd_wincfg_t *cfg, screen_t *screen, uint32_t colormode, int layers_cnt)
 {
     LCD_LayerCfgTypeDef *Layercfg;
     int in_w = screen->width > 0 ? screen->width : bsp_lcd_width,
@@ -232,7 +238,7 @@ int screen_win_cfg (lcd_wincfg_t *cfg, screen_t *screen, uint32_t colormode, int
     lcd_x_size_var = w;
     lcd_y_size_var = h;
 
-    if (!screen_alloc_fb(cfg, w, h, screen_mode2pixdeep[colormode], layers_cnt)) {
+    if (!screen_alloc_fb(__malloc, cfg, w, h, screen_mode2pixdeep[colormode], layers_cnt)) {
         return -1;
     }
 
