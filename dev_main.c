@@ -1,4 +1,8 @@
 /* Includes ------------------------------------------------------------------*/
+#include <bsp_api.h>
+#if !BSP_INDIR_API
+
+
 #include <stdarg.h>
 #include "main.h"
 #include "lcd_main.h"
@@ -9,7 +13,9 @@
 #include "misc_utils.h"
 #include "nvic.h"
 #include <mpu.h>
-#include <bsp_api.h>
+
+
+#include <stm32f769i_discovery.h>
 
 #if (_USE_LFN == 3)
 #error "ff_malloc, ff_free must be redefined to Sys_HeapAlloc"
@@ -21,14 +27,16 @@ int const __cache_line_size = 32;
 #error "Cache line size unknown"
 #endif
 
-static void bsp_api_attach (bspapi_t *api);
+
+extern bspapi_t bspapi;
+
+extern void bsp_api_attach (bspapi_t *api);
 
 extern void VID_PreConfig (void);
 
 /** The prototype for the application's main() function */
 extern int mainloop (int argc, const char *argv[]);
 
-#if !BSP_INDIR_API
 
 int g_dev_debug_level = DBG_ERR;
 
@@ -88,11 +96,8 @@ static int con_echo (const char *buf, int len)
     return 0; /*let it be processed by others*/
 }
 
-#endif
-
 int dev_main (void)
 {
-#if !BSP_INDIR_API
     CPU_CACHE_Enable();
     SystemClock_Config();
     HAL_Init();
@@ -112,10 +117,11 @@ int dev_main (void)
     screen_init();
     SystemDump();
     d_dvar_int32(&g_dev_debug_level, "dbglvl");
-#endif
 
     VID_PreConfig();
+#ifndef BOOT
     bsp_api_attach(&bspapi);
+#endif
     mainloop(0, NULL);
 
     return 0;
@@ -123,7 +129,6 @@ int dev_main (void)
 
 void dev_deinit (void)
 {
-#if !BSP_INDIR_API
     irqmask_t irq = NVIC_IRQ_MASK;
     dprintf("%s() :\n", __func__);
     term_unregister_handler(con_echo);
@@ -137,10 +142,6 @@ void dev_deinit (void)
     irq_save(&irq);
     HAL_RCC_DeInit();
     HAL_DeInit();
-#else
-extern void screen_release (void);
-    screen_release();
-#endif
 }
 
 static void SystemClock_Config(void)
@@ -219,4 +220,6 @@ static void SystemDump (void)
 {
     NVIC_dump();
 }
+
+#endif
 

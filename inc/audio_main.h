@@ -112,6 +112,7 @@ typedef struct {
 #define cd_playing   g_bspapi->cd.playing
 
 #else
+
 void audio_init (void);
 void audio_deinit (void);
 void audio_mixer_ext (void (*mixer_callback) (int, void *, int, void *));

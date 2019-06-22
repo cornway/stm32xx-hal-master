@@ -43,6 +43,8 @@
   ******************************************************************************
   */
 
+#ifndef APPLICATION
+
 /* Includes ------------------------------------------------------------------*/
 #include "string.h"
 #include "ff_gen_drv.h"
@@ -573,6 +575,6 @@ void BSP_SD_ReadCpltCallback(void)
 }
 
 
-
+#endif
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
 

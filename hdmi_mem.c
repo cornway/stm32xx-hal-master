@@ -28,7 +28,7 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-
+#ifndef APPLICATION
 
 #include "stm32f769i_discovery_lcd.h"
 #include "main.h"
@@ -1522,4 +1522,6 @@ int hdmi_parse_edid (hdmi_timing_t *timing, hdmi_edid_seg_t *edid, int size)
 }
 
 #endif /*defined(USE_LCD_HDMI)*/
+
+#endif
 

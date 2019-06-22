@@ -176,5 +176,3 @@ void Sys_Free (void *p)
 #else /*DATA_IN_ExtSDRAM*/
 
 #error "Not supported"
-
-#endif /*DATA_IN_ExtSDRAM*/

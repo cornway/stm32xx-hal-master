@@ -1,3 +1,5 @@
+#ifndef APPLICATION
+
 #include "stdint.h"
 #include "string.h"
 #include "stdarg.h"
@@ -824,3 +826,4 @@ static void serial_flush_handler (int force)
 
 #endif /*DEBUG_SERIAL*/
 
+#endif

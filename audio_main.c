@@ -1,3 +1,6 @@
+
+#ifndef APPLICATION
+
 #include "string.h"
 #include "stm32f769i_discovery_audio.h"
 #include "audio_main.h"
@@ -484,3 +487,5 @@ audio_update (void)
 }
 
 #endif /*AUDIO_MODULE_PRESENT*/
+
+#endif

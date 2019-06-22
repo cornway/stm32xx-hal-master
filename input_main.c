@@ -1,3 +1,6 @@
+
+#ifndef APPLICATION
+
 #include <stdlib.h>
 #include "input_main.h"
 #include "input_int.h"
@@ -292,3 +295,5 @@ void input_tickle (void)
 {
     joypad_tickle();
 }
+
+#endif

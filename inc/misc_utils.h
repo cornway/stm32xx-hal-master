@@ -14,7 +14,11 @@ enum {
 };
 
 extern int g_dev_debug_level;
+#ifndef APPLICATION
 #define DEV_DBG_LVL (g_dev_debug_level)
+#else
+#define DEV_DBG_LVL 0
+#endif
 
 #define dbg_eval(lvl) \
     if (DEV_DBG_LVL >= (lvl))

@@ -246,6 +246,8 @@ void __dump_i2c_hex (const char *func, const char *name, uint8_t addr, uint8_t o
     __dump_hex(func, name, buf, len);
 }
 
+#ifndef APPLICATION
+
 /*FIXME !!! : handle interrupt with care, remove delay(s)*/
 static int ADV7533_EDID_Read_Begin (void)
 {
@@ -314,6 +316,8 @@ int ADV7533_Get_EDID (hdmi_edid_seg_t *edid, int size)
 
     return ADV7533_Read_EDID(size, edid->raw);
 }
+
+#endif
 
 /**
   * @brief  Initializes the ADV7533 bridge.

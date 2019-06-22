@@ -1,3 +1,5 @@
+#ifndef APPLICATION
+
 #include "stdint.h"
 #include "string.h"
 #include "debug.h"
@@ -308,3 +310,4 @@ static int profiler_print_dvar (void *p1, void *p2)
     return -1;
 }
 
+#endif

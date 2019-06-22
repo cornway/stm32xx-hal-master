@@ -6,6 +6,8 @@
 
 #if AUDIO_MODULE_PRESENT
 
+#ifndef APPLICATION
+
 typedef struct {
     snd_sample_t *buf;
     int samples;
@@ -142,5 +144,6 @@ void a_clear_master (void)
     master_track[0].durty = d_false;
     master_track[1].durty = d_false;
 }
+#endif
 
 #endif /*AUDIO_MODULE_PRESENT*/

@@ -4,6 +4,8 @@
 #include "audio_int.h"
 #include "dev_io.h"
 
+#ifndef APPLICATION
+
 #define A_MAXNAME 9
 #define A_MAXPATH 128
 #define A_MAXCACHE 128
@@ -177,3 +179,4 @@ audio_wave_close (int num)
     __release_slot(num);
 }
 
+#endif

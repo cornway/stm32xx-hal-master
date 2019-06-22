@@ -1,3 +1,6 @@
+
+#ifndef APPLICATION
+
 #include "main.h"
 #include "ff.h"
 #include "ff_gen_drv.h"
@@ -1011,3 +1014,4 @@ static int devio_print_env (void *p1, void *p2)
     return 0;
 }
 
+#endif

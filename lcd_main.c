@@ -35,6 +35,9 @@
   */
 
 /* Includes ------------------------------------------------------------------*/
+
+#ifndef APPLICATION
+
 #include "lcd_main.h"
 #include "stm32f769i_discovery_lcd.h"
 #include "misc_utils.h"
@@ -119,6 +122,7 @@ void screen_release (void)
     if (lcd_active_cfg && lcd_active_cfg->fb_mem) {
         Sys_Free(lcd_active_cfg->fb_mem);
     }
+    lcd_active_cfg = NULL;
 }
 
 void screen_get_wh (screen_t *s)
@@ -475,6 +479,7 @@ static void screen_update_3x3_8bpp(screen_t *in)
     }
 }
 
+#endif
 
 /**
   * @}

@@ -3,6 +3,9 @@
 #include <audio_main.h>
 #include <input_main.h>
 #include <misc_utils.h>
+#include <dev_io.h>
+#include <lcd_main.h>
+#include <input_main.h>
 
 bspapi_t bspapi;
 bspapi_t *g_bspapi;
@@ -107,16 +110,16 @@ void bsp_api_attach (bspapi_t *api)
     api->dbg.reg_clbk = term_register_handler;
     api->dbg.unreg_clbk = term_unregister_handler;
     api->dbg.tickle = serial_tickle;
-    api->dbg->dprintf = dprintf;
+    api->dbg.dprintf = dprintf;
 
-    api->dbg.bsp_init = input_bsp_init;
-    api->dbg.bsp_deinit = input_bsp_deinit;
-    api->dbg.soft_init = input_soft_init;
-    api->dbg.bind_extra input_bind_extra;
-    api->dbg.tickle = input_tickle;
-    api->dbg.proc_keys = input_proc_keys;
-    api->dbg.post_key = NULL;
-    api->dbg.touch_present = input_is_touch_present;
+    api->in.bsp_init = input_bsp_init;
+    api->in.bsp_deinit = input_bsp_deinit;
+    api->in.soft_init = input_soft_init;
+    api->in.bind_extra = input_bind_extra;
+    api->in.tickle = input_tickle;
+    api->in.proc_keys = input_proc_keys;
+    api->in.post_key = NULL;
+    api->in.touch_present = input_is_touch_present;
 
     d_memcpy(ptr, api, sizeof(*api));
 }

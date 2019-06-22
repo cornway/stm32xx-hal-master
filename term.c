@@ -1,3 +1,4 @@
+#ifndef APPLICATION
 
 #include <misc_utils.h>
 #include <debug.h>
@@ -87,5 +88,5 @@ void hexdump (const uint8_t *data, int len, int rowlength)
     }
 }
 
-
+#endif
 

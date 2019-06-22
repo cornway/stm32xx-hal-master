@@ -1,3 +1,6 @@
+
+#ifndef APPLICATION
+
 #include "string.h"
 #include "audio_main.h"
 #include "audio_int.h"
@@ -340,5 +343,7 @@ void music_tickle (cd_track_t *track)
 {
 
 }
+
+#endif
 
 #endif
