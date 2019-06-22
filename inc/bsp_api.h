@@ -55,7 +55,7 @@ typedef struct bspapi_s {
         void (*deinit) (void);
         void (*get_wh) (void *);
         uint32_t (*mem_avail) (void);
-        int (*win_cfg) (void *, void *, uint32_t, int);
+        int (*win_cfg) (void *, void *, void *, uint32_t, int);
         void (*set_clut) (void *, uint32_t);
         void (*update) (void *);
         void (*direct) (void *);
@@ -97,15 +97,6 @@ typedef struct bspapi_s {
 
     struct sys_t {
         void (*fatal) (char *, ...);
-        void (*alloc_init) (void);
-        void *(*alloc_shared) (int *);
-        void *(*alloc_vid) (int *);
-        int (*avail) (void);
-        void *(*malloc) (int);
-        void *(*realloc) (void *, int32_t);
-        void *(*calloc) (int32_t);
-        void (*free) (void *);
-
         void (*prof_enter) (const char *, int);
         void (*prof_exit) (const char *, int);
         void (*prof_reset) (void);

@@ -10,6 +10,8 @@
 #include "nvic.h"
 #include <mpu.h>
 #include <bsp_api.h>
+#if !BSP_INDIR_API
+#include <stm32f769i_discovery.h>
 
 #if (_USE_LFN == 3)
 #error "ff_malloc, ff_free must be redefined to Sys_HeapAlloc"
@@ -21,9 +23,11 @@ int const __cache_line_size = 32;
 #error "Cache line size unknown"
 #endif
 
-static void bsp_api_attach (bspapi_t *api);
+#endif
 
+extern void bsp_api_attach (bspapi_t *api);
 extern void VID_PreConfig (void);
+extern bspapi_t bspapi;
 
 /** The prototype for the application's main() function */
 extern int mainloop (int argc, const char *argv[]);
@@ -123,7 +127,7 @@ int dev_main (void)
 
 void dev_deinit (void)
 {
-#if !BSP_INDIR_API
+#if 0//!BSP_INDIR_API
     irqmask_t irq = NVIC_IRQ_MASK;
     dprintf("%s() :\n", __func__);
     term_unregister_handler(con_echo);

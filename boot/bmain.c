@@ -126,7 +126,7 @@ void boot_read_path (const char *path)
 static void *cache_bin (const char *path, int *binsize)
 {
     int f;
-    int fsize;
+    int fsize, size;
     void *cache;
 
     fsize = d_open(path, &f, "r");
@@ -134,7 +134,8 @@ static void *cache_bin (const char *path, int *binsize)
         dprintf("%s() : open fail : \'%s\'\n", __func__, path);
         return NULL;
     }
-    cache = Sys_Malloc(ROUND_UP(fsize, 32));
+    size = ROUND_UP(fsize, 32);
+    cache = Sys_AllocShared(&size);
     assert(cache);
 
     if (d_read(f, cache, fsize) < fsize) {
@@ -172,7 +173,6 @@ int boot_execute_boot (arch_word_t *progaddr, const char *path)
     }
     dprintf("Starting app... \n");
 
-    Sys_Free(bindata);
     dev_deinit();
     bhal_boot(progaddr);
 }
@@ -218,24 +218,6 @@ static void gamepad_handle (gevt_t *evt)
         break;
     }
     
-}
-
-i_event_t *input_post_key (i_event_t  *evts, i_event_t event)
-{
-    gevt_t evt;
-
-    evt.p.x = event.x;
-    evt.p.y = event.y;
-    evt.e = event.state == keydown ? GUIACT : GUIRELEASE;
-    evt.sym = event.sym;
-
-    if (event.x == 0 && event.y == 0) {
-        gamepad_handle(&evt);
-        return NULL;
-    }
-
-    gui_resp(&gui, NULL, &evt);
-    return NULL;
 }
 
 static int _alert_close_hdlr (pane_t *pane, component_t *com, void *user)
@@ -300,6 +282,24 @@ const kbdmap_t gamepad_to_kbd_map[JOY_STD_MAX] =
     [JOY_K10]           = {'x', PAD_FREQ_LOW},
 };
 
+i_event_t *__post_key (i_event_t  *evts, i_event_t *event)
+{
+    gevt_t evt;
+
+    evt.p.x = event->x;
+    evt.p.y = event->y;
+    evt.e = event->state == keydown ? GUIACT : GUIRELEASE;
+    evt.sym = event->sym;
+
+    if (event->x == 0 && event->y == 0) {
+        gamepad_handle(&evt);
+        return NULL;
+    }
+
+    gui_resp(&gui, NULL, &evt);
+    return NULL;
+}
+
 static int user_execute_boot (void *p1, void *p2)
 {
     char *path = (char *)p1;
@@ -317,7 +317,7 @@ int boot_main (int argc, char **argv)
     component_t *com;
     dvar_t dvar;
 
-    input_soft_init(gamepad_to_kbd_map);
+    input_soft_init(__post_key, gamepad_to_kbd_map);
     screen_get_wh(&s);
 
     gui.alloc_sfx = __gui_alloc_sfx;
