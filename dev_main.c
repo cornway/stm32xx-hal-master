@@ -186,11 +186,6 @@ static void SystemDump (void)
     NVIC_dump();
 }
 
-static int con_echo (const char *buf, int len)
-{
-    dprintf("@: %s\n", buf);
-    return 0; /*let it be processed by others*/
-}
 
 #if defined(BOOT)
 
@@ -237,7 +232,7 @@ void __dev_init (void)
 int dev_main (void)
 {
     bsp_api_attach(&bspapi);
-#if defined(BSP_DRIVER)
+#if defined(BSP_DRIVER) || defined(BOOT)
     CPU_CACHE_Enable();
 #endif /*BSP_DRIVER*/
     dev_init(__dev_init);
