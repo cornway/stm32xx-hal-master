@@ -102,6 +102,7 @@ typedef struct gui_s {
     void *user;
     void (*alloc_sfx) (int *, gui_sfx_std_type_t);
     void (*start_sfx) (int);
+    uint8_t destroy;
 } gui_t;
 
 typedef enum {
@@ -124,6 +125,7 @@ void dim_get_origin (point_t *d, const dim_t *s);
 void dim_set_origin (dim_t *d, const point_t *s);
 
 void gui_init (gui_t *gui, int x, int y, int w, int h);
+void gui_destroy (gui_t *gui);
 pane_t *gui_get_pane (const char *name);
 void gui_set_pane (gui_t *gui, pane_t *pane);
 void gui_set_panexy (gui_t *gui, pane_t *pane, int x, int y, int w, int h);

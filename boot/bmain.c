@@ -31,6 +31,44 @@ typedef struct boot_bin_s {
     char path[BOOT_MAX_PATH];
 } boot_bin_t;
 
+typedef struct {
+    /*Must be pointer to a static*/
+    const char *cmd;
+    const char *text;
+    void *user1, *user2;
+} boot_cmd_t;
+
+boot_cmd_t boot_cmd_pool[6];
+boot_cmd_t *boot_cmd_top = &boot_cmd_pool[0];
+
+
+static inline void boot_cmd_push (const char *cmd, const char *text, void *user1, void *user2)
+{
+    if (boot_cmd_top == &boot_cmd_pool[arrlen(boot_cmd_pool)]) {
+        return;
+    }
+    boot_cmd_top->cmd = cmd;
+    boot_cmd_top->text = text;
+    boot_cmd_top->user1 = user1;
+    boot_cmd_top->user2 = user2;
+    boot_cmd_top++;
+    dprintf("%s() : \'%s\' [%s]\n", __func__, cmd, text);
+}
+
+boot_cmd_t *boot_cmd_pop (boot_cmd_t *cmd)
+{
+    if (boot_cmd_top == &boot_cmd_pool[0]) {
+        return NULL;
+    }
+    boot_cmd_top--;
+    cmd->cmd = boot_cmd_top->cmd;
+    cmd->text = boot_cmd_top->text;
+    cmd->user1 = boot_cmd_top->user1;
+    cmd->user2 = boot_cmd_top->user2;
+    return cmd;
+}
+
+
 boot_bin_t *boot_bin_head = NULL;
 boot_bin_t *boot_bin_selected = NULL;
 
@@ -188,7 +226,9 @@ static int boot_handle_selected (pane_t *pane, component_t *com, void *user)
         return 0;
     }
 
-    boot_execute_boot((arch_word_t *)bindesc->progaddr, bindesc->path);
+    pane->parent->destroy = 1;
+    g_app_program_addr = bindesc->progaddr;
+    boot_cmd_push("boot", bindesc->path, NULL, NULL);
 }
 
 static int boot_show_list (pane_t *pane, component_t *com, void *user)
@@ -310,6 +350,19 @@ static int user_execute_boot (void *p1, void *p2)
     return len;
 }
 
+static void boot_cmd_exec (void)
+{
+     boot_cmd_t cmd;
+     boot_cmd_t *cmdptr = boot_cmd_pop(&cmd);
+     char buf[BOOT_MAX_PATH];
+
+     while (cmdptr) {
+        snprintf(buf, sizeof(buf), "%s %s\n", cmdptr->cmd, cmdptr->text);
+        term_parse(buf);
+        cmdptr = boot_cmd_pop(cmdptr);
+     }
+}
+
 int boot_main (int argc, char **argv)
 {
     screen_t s;
@@ -371,6 +424,10 @@ int boot_main (int argc, char **argv)
         gui_draw(&gui);
         dev_tickle();
         input_proc_keys(NULL);
+        if (gui.destroy) {
+            gui_destroy(&gui);
+        }
+        boot_cmd_exec();
     }
     return 0;
 }

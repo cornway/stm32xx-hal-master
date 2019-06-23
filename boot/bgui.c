@@ -133,6 +133,22 @@ void gui_init (gui_t *gui, int x, int y, int w, int h)
     d_dvar_int32(&g_gui_debug_lvl, "guidbglvl");
 }
 
+void gui_destroy (gui_t *gui)
+{
+    pane_t *pane = gui->head;
+    component_t *com;
+
+    while (pane) {
+        com = pane->head;
+        while (com) {
+            Sys_Free(com);
+            com = com->next;
+        }
+        Sys_Free(pane);
+        pane = pane->next;
+    }
+}
+
 pane_t *gui_get_pane (const char *name)
 {
     int namelen = strlen(name);

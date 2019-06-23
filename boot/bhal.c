@@ -45,9 +45,9 @@
 #endif /* DUAL_BANK */
 
 #if defined(DUAL_BANK)
-uint32_t g_app_program_addr = ADDR_FLASH_SECTOR_12;
+arch_word_t g_app_program_addr = ADDR_FLASH_SECTOR_12;
 #else
-uint32_t g_app_program_addr = ADDR_FLASH_SECTOR_8;
+arch_word_t g_app_program_addr = ADDR_FLASH_SECTOR_8;
 #endif
 
 #define RW_PORTION (1 << 8)
