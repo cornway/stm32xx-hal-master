@@ -502,6 +502,7 @@ void BSP_LCD_DeInitEx (void)
 {
     HAL_LTDC_DeInit(&hltdc_discovery);
     HAL_DSI_DeInit(&hdsi_discovery);
+    BSP_LCD_MspDeInit();
 }
 
 

@@ -432,6 +432,37 @@ static void I2Cx_MspInit(I2C_HandleTypeDef *i2c_handler)
   }
 }
 
+static void I2Cx_MspDeInit(I2C_HandleTypeDef *i2c_handler)
+{
+  GPIO_InitTypeDef  gpio_init_structure;
+
+  if (i2c_handler == (I2C_HandleTypeDef*)(&hI2cAudioHandler))
+  {
+  DISCOVERY_AUDIO_I2Cx_SCL_GPIO_CLK_DISABLE();
+  DISCOVERY_AUDIO_I2Cx_SDA_GPIO_CLK_DISABLE();
+
+  DISCOVERY_AUDIO_I2Cx_CLK_DISABLE();
+  DISCOVERY_AUDIO_I2Cx_FORCE_RESET();
+  DISCOVERY_AUDIO_I2Cx_RELEASE_RESET();
+
+
+  HAL_NVIC_DisableIRQ(DISCOVERY_AUDIO_I2Cx_EV_IRQn);
+  HAL_NVIC_DisableIRQ(DISCOVERY_AUDIO_I2Cx_ER_IRQn);    
+    
+  }
+  else
+  {
+  DISCOVERY_EXT_I2Cx_SCL_SDA_GPIO_CLK_DISABLE();
+  DISCOVERY_EXT_I2Cx_CLK_DISABLE();
+  DISCOVERY_EXT_I2Cx_FORCE_RESET();
+  DISCOVERY_EXT_I2Cx_RELEASE_RESET();
+
+  HAL_NVIC_DisableIRQ(DISCOVERY_EXT_I2Cx_EV_IRQn);
+  HAL_NVIC_DisableIRQ(DISCOVERY_EXT_I2Cx_ER_IRQn);
+  }
+}
+
+
 /**
   * @brief  Initializes I2C HAL.
   * @param  i2c_handler : I2C handler
@@ -463,6 +494,12 @@ static void I2Cx_Init(I2C_HandleTypeDef *i2c_handler)
     I2Cx_MspInit(i2c_handler);
     HAL_I2C_Init(i2c_handler);
   }
+}
+
+static void I2Cx_DeInit(I2C_HandleTypeDef *i2c_handler)
+{
+    HAL_I2C_DeInit(i2c_handler);
+    I2Cx_MspDeInit(i2c_handler);
 }
 
 /**
@@ -567,7 +604,7 @@ void AUDIO_IO_Init(void)
   */
 void AUDIO_IO_DeInit(void)
 {
-
+    I2Cx_DeInit(&hI2cAudioHandler);
 }
 
 /**
@@ -761,6 +798,12 @@ void HDMI_IO_Init(void)
 {
   I2Cx_Init(&hI2cAudioHandler);
 }
+
+void HDMI_IO_DeInit(void)
+{
+  I2Cx_DeInit(&hI2cAudioHandler);
+}
+
 
 /**
   * @brief  HDMI writes single data.

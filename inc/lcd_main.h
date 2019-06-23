@@ -24,7 +24,7 @@ typedef enum
 } lcd_layers_t;
 
 typedef struct {
-    pix_t *buf;
+    void *buf;
     int width, height;
 } screen_t;
 
@@ -64,7 +64,7 @@ void screen_deinit (void);
 void screen_get_wh (screen_t *s);
 uint32_t screen_total_mem_avail_kb (void);
 int screen_win_cfg (lcd_mem_malloc_t __malloc, lcd_wincfg_t *cfg, screen_t *screen, uint32_t colormode, int layers_cnt);
-void screen_set_clut (pal_t *palette, uint32_t clut_num_entries);
+void screen_set_clut (void *palette, uint32_t clut_num_entries);
 void screen_update (screen_t *in);
 void screen_direct (screen_t *s);
 void screen_vsync (void);

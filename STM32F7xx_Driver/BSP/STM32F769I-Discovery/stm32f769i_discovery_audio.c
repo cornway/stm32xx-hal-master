@@ -577,8 +577,32 @@ void BSP_AUDIO_OUT_SetAudioFrameSlot(uint32_t AudioFrameSlot)
   */
 void BSP_AUDIO_OUT_DeInit(void)
 {
+  uint8_t ret = AUDIO_ERROR;
+  uint32_t deviceid = 0x00;
+
   SAIx_Out_DeInit();
   /* DeInit the SAI MSP : this __weak function can be rewritten by the application */
+
+  deviceid = wm8994_drv.ReadID(AUDIO_I2C_ADDRESS);
+  
+  if((deviceid) == WM8994_ID)
+  {  
+    /* Reset the Codec Registers */
+    wm8994_drv.Reset(AUDIO_I2C_ADDRESS);
+    /* Initialize the audio driver structure */
+    audio_drv = &wm8994_drv; 
+    ret = AUDIO_OK;
+  }
+  else
+  {
+    ret = AUDIO_ERROR;
+  }
+
+  if(ret == AUDIO_OK)
+  {
+    /* Initialize the codec internal registers */
+    audio_drv->DeInit();
+  }
   BSP_AUDIO_OUT_MspDeInit(&haudio_out_sai, NULL);
 }
 

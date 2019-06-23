@@ -9,43 +9,8 @@
 #include <misc_utils.h>
 #include "stdint.h"
 
-
-#if (GFX_COLOR_MODE == GFX_COLOR_MODE_CLUT)
-
-#define GFX_RGB(r, g, b, a) GFX_RGBA8888(r, g, b, a)
-#define GFX_ARGB_R GFX_ARGB8888_R
-#define GFX_ARGB_G GFX_ARGB8888_G
-#define GFX_ARGB_B GFX_ARGB8888_B
-#define GFX_ARGB_A GFX_ARGB8888_A
-
-typedef uint32_t pal_t;
-typedef uint8_t pix_t;
-
-#elif (GFX_COLOR_MODE == GFX_COLOR_MODE_RGB565)
-
-#define GFX_RGB(r, g, b, a) GFX_RGB565(r, g, b)
-#define GFX_ARGB_R GFX_RGB565_R
-#define GFX_ARGB_G GFX_RGB565_G
-#define GFX_ARGB_B GFX_RGB565_B
-#define GFX_ARGB_A (GFX_OPAQUE)
-
-typedef uint16_t pal_t;
-typedef uint16_t pix_t;
-
-#elif (GFX_COLOR_MODE == GFX_COLOR_MODE_RGBA8888)
-
-typedef uint16_t pal_t;
-typedef uint32_t pix_t;
-
-#define GFX_RGB(r, g, b) GFX_RGBA8888(r, g, b, 0xff)
-#define GFX_RGBA(r, g, b, a) GFX_RGBA8888(r, g, b, a)
-#define GFX_ARGB_R GFX_ARGB8888_R
-#define GFX_ARGB_G GFX_ARGB8888_G
-#define GFX_ARGB_B GFX_ARGB8888_B
-#define GFX_ARGB_A GFX_ARGB8888_A
-
-#else
-#error "!"
+#ifdef GFX_COLOR_MODE
+#error "deprecated option, must be removed"
 #endif
 
 #define GFX_RGB565(r, g, b)			((((r & 0xF8) >> 3) << 11) | (((g & 0xFC) >> 2) << 5) | ((b & 0xF8) >> 3))

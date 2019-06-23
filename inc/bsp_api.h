@@ -96,6 +96,7 @@ typedef struct bspapi_s {
     } cd;
 
     struct sys_t {
+        void (*init) (void (*) (void));
         void (*fatal) (char *, ...);
         void (*prof_enter) (const char *, int);
         void (*prof_exit) (const char *, int);

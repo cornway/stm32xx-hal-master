@@ -134,11 +134,13 @@ void HAL_HCD_MspDeInit(HCD_HandleTypeDef * hhcd)
 {
   if (hhcd->Instance == USB_OTG_FS)
   {
+    HAL_NVIC_DisableIRQ(OTG_FS_IRQn);
     /* Disable USB FS Clocks */
     __HAL_RCC_USB_OTG_FS_CLK_DISABLE();
   }
   else if (hhcd->Instance == USB_OTG_HS)
   {
+    HAL_NVIC_DisableIRQ(OTG_HS_IRQn);
     /* Disable USB HS Clocks */
     __HAL_RCC_USB_OTG_HS_CLK_DISABLE();
     __HAL_RCC_USB_OTG_HS_ULPI_CLK_DISABLE();

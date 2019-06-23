@@ -87,6 +87,8 @@ void bsp_api_attach (bspapi_t *api)
     api->cd.getvol = cd_getvol;
     api->cd.playing = cd_playing;
 
+extern int dev_init (void (*userinit) (void));
+    api->sys.init = dev_init;
     api->sys.fatal = fatal_error;
     api->sys.prof_enter = _profiler_enter;
     api->sys.prof_exit = _profiler_exit;

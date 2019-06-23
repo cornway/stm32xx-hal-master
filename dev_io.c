@@ -183,10 +183,13 @@ int dev_io_init (void)
 
 void dev_io_deinit (void)
 {
+extern void SD_Deinitialize(void);
+
     dprintf("%s() :\n", __func__);
     _devio_unmount();
     d_dvar_rm_all();
     term_unregister_handler(devio_con_clbk);
+    SD_Deinitialize();
 }
 
 

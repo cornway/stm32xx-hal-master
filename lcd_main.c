@@ -52,6 +52,7 @@ static void screen_update_no_scale (screen_t *in);
 static void screen_update_2x2_8bpp (screen_t *in);
 static void screen_update_3x3_8bpp (screen_t *in);
 
+static void screen_sync (int wait);
 
 static int bsp_lcd_width = -1;
 static int bsp_lcd_height = -1;
@@ -107,11 +108,9 @@ void screen_init (void)
 
 void screen_deinit (void)
 {
+    int layer;
     dprintf("%s() :\n", __func__);
     BSP_LCD_DeInitEx();
-    if (lcd_active_cfg && lcd_active_cfg->fb_mem) {
-        Sys_Free(lcd_active_cfg->fb_mem);
-    }
 }
 
 void screen_release (void)
@@ -301,17 +300,17 @@ static void screen_sync (int wait)
 
 void screen_vsync (void)
 {
-    screen_sync(d_true);
+    screen_sync(1);
 }
 
 static void screen_get_invis_screen (screen_t *screen)
 {
     screen->width = bsp_lcd_width;
     screen->height = bsp_lcd_height;
-    screen->buf = (pix_t *)lcd_active_cfg->lay_mem[layer_switch[lcd_active_cfg->active_lay_idx]];
+    screen->buf = (void *)lcd_active_cfg->lay_mem[layer_switch[lcd_active_cfg->active_lay_idx]];
 }
 
-void screen_set_clut (pal_t *palette, uint32_t clut_num_entries)
+void screen_set_clut (void *palette, uint32_t clut_num_entries)
 {
     int layer;
 
@@ -333,34 +332,32 @@ void screen_direct (screen_t *s)
 }
 
 
+typedef uint8_t pix8_t;
+
 typedef struct {
-    pix_t a[4];
-} scanline_t;
+    pix8_t a[4];
+} scanline8_t;
 
 typedef union {
-#if (GFX_COLOR_MODE == GFX_COLOR_MODE_CLUT)
     uint32_t w;
-#elif (GFX_COLOR_MODE == GFX_COLOR_MODE_RGB565)
-    uint64_t w;
-#endif
-    scanline_t sl;
-} scanline_u;
+    scanline8_t sl;
+} scanline8_u;
 
-#define W_STEP (sizeof(scanline_t) / sizeof(pix_t))
-#define DST_NEXT_LINE(x, w, lines) (((x) + (lines) * ((w) / sizeof(scanline_u))))
+#define W_STEP8 (sizeof(scanline8_t) / sizeof(pix8_t))
+#define DST_NEXT_LINE8(x, w, lines) (((x) + (lines) * ((w) / sizeof(scanline8_u))))
 
 typedef struct {
-    scanline_u a[2];
+    scanline8_u a[2];
 } pix_outx2_t;
 
 static void screen_update_no_scale (screen_t *in)
 {
     screen_t screen;
 
-    SCB_CleanDCache();
+    screen_sync (1);
     screen_get_invis_screen(&screen);
 
-    memcpy(in->buf, screen.buf, in->width * in->height);
+    memcpy(screen.buf, in->buf, in->width * in->height);
 }
 
 static void screen_update_2x2_8bpp (screen_t *in)
@@ -368,23 +365,24 @@ static void screen_update_2x2_8bpp (screen_t *in)
     pix_outx2_t *d_y0;
     pix_outx2_t *d_y1;
     pix_outx2_t pix;
+    pix8_t *rawptr;
     int s_y, i;
-    scanline_t *scanline;
-    scanline_u d_yt0, d_yt1;
+    scanline8_t *scanline;
+    scanline8_u d_yt0, d_yt1;
     screen_t screen;
 
-    screen_sync (0);
-    SCB_CleanDCache();
+    screen_sync (1);
     screen_get_invis_screen(&screen);
 
     d_y0 = (pix_outx2_t *)screen.buf;
-    d_y1 = DST_NEXT_LINE(d_y0, in->width, 1);
+    d_y1 = DST_NEXT_LINE8(d_y0, in->width, 1);
 
+    rawptr = (pix8_t *)in->buf;
     for (s_y = 0; s_y < (in->width * in->height); s_y += in->width) {
 
-        scanline = (scanline_t *)&in->buf[s_y];
+        scanline = (scanline8_t *)&rawptr[s_y];
 
-        for (i = 0; i < in->width; i += W_STEP) {
+        for (i = 0; i < in->width; i += W_STEP8) {
 
             d_yt0.sl = *scanline++;
             d_yt1    = d_yt0;
@@ -397,51 +395,43 @@ static void screen_update_2x2_8bpp (screen_t *in)
             d_yt1.sl.a[1] = d_yt1.sl.a[2];
             d_yt1.sl.a[2] = d_yt1.sl.a[3];
 
-#if (GFX_COLOR_MODE == GFX_COLOR_MODE_CLUT)
             pix.a[0] = d_yt0;
             pix.a[1] = d_yt1;
-#elif (GFX_COLOR_MODE == GFX_COLOR_MODE_RGB565)
-            fatal_error("%s() : needs fix\n");
-            pix = d_yt0.w;
-            *d_y0++     = pix;
-            *d_y1++     = pix;
 
-            pix = d_yt1.w;
-#endif
             *d_y0++     = pix;
             *d_y1++     = pix;
         }
-        d_y0 = DST_NEXT_LINE(d_y0, in->width, 1);
-        d_y1 = DST_NEXT_LINE(d_y1, in->width, 1);
+        d_y0 = DST_NEXT_LINE8(d_y0, in->width, 1);
+        d_y1 = DST_NEXT_LINE8(d_y1, in->width, 1);
     }
 }
 
 typedef struct {
-    scanline_u a[3];
+    scanline8_u a[3];
 } pix_outx3_t;
 
 static void screen_update_3x3_8bpp(screen_t *in)
 {
     pix_outx3_t *d_y0, *d_y1, *d_y2;
     pix_outx3_t pix;
+    pix8_t *rawptr;
     int s_y, i;
-    scanline_t *scanline;
-    scanline_u d_yt0, d_yt1, d_yt2;
+    scanline8_t *scanline;
+    scanline8_u d_yt0, d_yt1, d_yt2;
     screen_t screen;
 
-    screen_sync (0);
-    SCB_CleanDCache();
+    screen_sync (1);
     screen_get_invis_screen(&screen);
 
     d_y0 = (pix_outx3_t *)screen.buf;
-    d_y1 = DST_NEXT_LINE(d_y0, in->width, 1);
-    d_y2 = DST_NEXT_LINE(d_y1, in->width, 1);
-
+    d_y1 = DST_NEXT_LINE8(d_y0, in->width, 1);
+    d_y2 = DST_NEXT_LINE8(d_y1, in->width, 1);
+    rawptr = (pix8_t *)in->buf;
     for (s_y = 0; s_y < (in->width * in->height); s_y += in->width) {
 
-        scanline = (scanline_t *)&in->buf[s_y];
+        scanline = (scanline8_t *)&rawptr[s_y];
 
-        for (i = 0; i < in->width; i += W_STEP) {
+        for (i = 0; i < in->width; i += W_STEP8) {
 
             d_yt0.sl = *scanline++;
             d_yt1    = d_yt0;
@@ -458,11 +448,10 @@ static void screen_update_3x3_8bpp(screen_t *in)
 
             d_yt0.sl.a[2] = d_yt0.sl.a[0];
             d_yt0.sl.a[1] = d_yt0.sl.a[0];
-#if (GFX_COLOR_MODE == GFX_COLOR_MODE_CLUT)
             pix.a[0] = d_yt0;
             pix.a[1] = d_yt1;
             pix.a[2] = d_yt2;
-#elif (GFX_COLOR_MODE == GFX_COLOR_MODE_RGB565)
+#if 0 && (GFX_COLOR_MODE == GFX_COLOR_MODE_RGB565)
             fatal_error("%s() : needs fix\n");
             pix = d_yt0.w;
             *d_y0++     = pix;
@@ -476,9 +465,9 @@ static void screen_update_3x3_8bpp(screen_t *in)
             *d_y2++     = pix;
         }
 
-        d_y0 = DST_NEXT_LINE(d_y0, in->width, 2);
-        d_y1 = DST_NEXT_LINE(d_y1, in->width, 2);
-        d_y2 = DST_NEXT_LINE(d_y2, in->width, 2);
+        d_y0 = DST_NEXT_LINE8(d_y0, in->width, 2);
+        d_y1 = DST_NEXT_LINE8(d_y1, in->width, 2);
+        d_y2 = DST_NEXT_LINE8(d_y2, in->width, 2);
     }
 }
 

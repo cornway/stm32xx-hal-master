@@ -94,16 +94,14 @@ static int con_echo (const char *buf, int len)
 
 #endif
 
-int dev_main (void)
+int dev_init (void (*userinit) (void))
 {
-#if !BSP_INDIR_API
-    CPU_CACHE_Enable();
     SystemClock_Config();
     HAL_Init();
-    mpu_init();
     serial_init();
-    Sys_AllocInit();
-    profiler_init();
+    userinit();
+    
+    dev_io_init();
 
     BSP_LED_Init(LED1);
     BSP_LED_Init(LED2);
@@ -112,11 +110,24 @@ int dev_main (void)
 
     audio_init();
     input_bsp_init();
-    dev_io_init();
+    profiler_init();
     screen_init();
     SystemDump();
     d_dvar_int32(&g_dev_debug_level, "dbglvl");
-#endif
+    return 0;
+}
+
+void __dev_init (void)
+{
+    Sys_AllocInit();
+    mpu_init();
+}
+
+int dev_main (void)
+{
+    bsp_api_attach(&bspapi);
+    CPU_CACHE_Enable();
+    dev_init(__dev_init);
 
     VID_PreConfig();
     bsp_api_attach(&bspapi);
@@ -125,26 +136,25 @@ int dev_main (void)
     return 0;
 }
 
+extern void screen_release (void);
+
 void dev_deinit (void)
 {
-#if 0//!BSP_INDIR_API
     irqmask_t irq = NVIC_IRQ_MASK;
     dprintf("%s() :\n", __func__);
     term_unregister_handler(con_echo);
-    input_bsp_deinit();
-    audio_deinit();
-    dev_io_deinit();
-    screen_deinit();
-    profiler_deinit();
-    Sys_AllocDeInit();
-    serial_deinit();
-    irq_save(&irq);
-    HAL_RCC_DeInit();
-    HAL_DeInit();
-#else
-extern void screen_release (void);
+
     screen_release();
-#endif
+    screen_deinit();
+    dev_io_deinit();
+    audio_deinit();
+    profiler_deinit();
+    input_bsp_deinit();
+    serial_deinit();
+
+    irq_save(&irq);
+    assert(!irq);
+    HAL_DeInit();
 }
 
 static void SystemClock_Config(void)

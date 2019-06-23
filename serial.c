@@ -63,9 +63,10 @@ struct uart_desc_s {
     UART_HandleTypeDef      handle;
     UART_InitTypeDef  const * cfg;
     uart_msp_init_t         msp_init;
-    
+    uart_msp_init_t         msp_deinit;
 #if DEBUG_SERIAL_USE_DMA
     uart_dma_init_t         dma_init;
+    uart_dma_init_t         dma_deinit;
     DMA_HandleTypeDef       hdma_tx;
     FlagStatus              uart_tx_ready;
     IRQn_Type               irq_txdma, irq_uart;
@@ -183,6 +184,11 @@ static inline void dma_tx_sync (uart_desc_t *uart_desc)
     uart_desc->uart_tx_ready = RESET;
 }
 
+static inline void dma_tx_waitflush (uart_desc_t *uart_desc)
+{
+    while (uart_desc->uart_tx_ready != SET) { }
+}
+
 #endif /*DEBUG_SERIAL_USE_DMA*/
 
 static void dma_rx_xfer_hanlder (struct __DMA_HandleTypeDef * hdma);
@@ -255,6 +261,17 @@ static void uart1_dma_init (uart_desc_t *uart_desc)
 #endif
     UNUSED(hdma_tx);
 }
+
+static void uart1_dma_deinit (uart_desc_t *uart_desc)
+{
+    HAL_NVIC_DisableIRQ(uart_desc->irq_txdma);
+    HAL_DMA_DeInit(&uart_desc->hdma_tx);
+#if DEBUG_SERIAL_USE_RX
+    HAL_NVIC_DisableIRQ(uart_desc->irq_rxdma);
+    HAL_DMA_DeInit(&uart_desc->hdma_rx);
+#endif
+}
+
 #endif /*DEBUG_SERIAL_USE_DMA*/
 
 static void uart1_msp_init (uart_desc_t *uart_desc)
@@ -286,6 +303,10 @@ static void uart1_msp_init (uart_desc_t *uart_desc)
     uart_desc->irq_uart  = USART1_IRQn;
 }
 
+static void uart1_msp_deinit (uart_desc_t *uart_desc)
+{
+    HAL_NVIC_DisableIRQ(uart_desc->irq_uart);
+}
 
 static void _serial_init (uart_desc_t *uart_desc)
 {
@@ -307,6 +328,18 @@ static void _serial_init (uart_desc_t *uart_desc)
     uart_desc->initialized = SET;
 }
 
+static void _serial_deinit (uart_desc_t *uart_desc)
+{
+    UART_HandleTypeDef *handle = &uart_desc->handle;
+
+    if(HAL_UART_DeInit(handle) != HAL_OK)
+    {
+        serial_fatal();
+    }
+    uart_desc->dma_deinit(uart_desc);
+}
+
+
 static uart_desc_t uart1_desc;
 
 static void _serial_debug_setup (uart_desc_t *uart_desc)
@@ -318,7 +351,9 @@ static void _serial_debug_setup (uart_desc_t *uart_desc)
     uart_desc->hw       = USART1;
     uart_desc->cfg      = uart_def_ptr;
     uart_desc->dma_init = uart1_dma_init;
+    uart_desc->dma_deinit = uart1_dma_deinit;
     uart_desc->msp_init = uart1_msp_init;
+    uart_desc->msp_deinit = uart1_msp_deinit;
     uart_desc->type     = SERIAL_DEBUG;
     uart_desc->uart_tx_ready = SET;
 }
@@ -369,9 +404,14 @@ void serial_init (void)
 
 void serial_deinit (void)
 {
+    int i = 0;
     dprintf("%s() :\n", __func__);
     serial_flush();
     hal_tim_deinit(&serial_timer);
+    for (i = 0; i < uart_desc_cnt; i++) {
+        _serial_deinit(uart_desc_pool[i]);
+    }
+    uart_desc_cnt = 0;
 }
 
 static HAL_StatusTypeDef serial_submit_to_hw (uart_desc_t *uart_desc, const void *data, size_t cnt)
@@ -787,6 +827,16 @@ void HAL_UART_MspInit(UART_HandleTypeDef *huart)
     }
 }
 
+void HAL_UART_MspDeInit(UART_HandleTypeDef *huart)
+{
+    uart_desc_t *uart_desc = uart_find_desc(huart->Instance);
+
+    if (uart_desc && uart_desc->msp_init) {
+        uart_desc->msp_deinit(uart_desc);
+    }
+}
+
+
 #if DEBUG_SERIAL_BUFERIZED
 
 static void serial_flush_handler (int force)
@@ -808,6 +858,9 @@ static void serial_flush_handler (int force)
                 force) {
 
                 dbgstream_send(uart_desc, stbuf);
+                if (force) {
+                    dma_tx_waitflush(uart_desc);
+                }
                 if (stbuf->bufposition == 0) {
                     break;
                 }

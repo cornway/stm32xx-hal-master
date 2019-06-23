@@ -155,7 +155,7 @@ void *Sys_AllocShared (int *size)
     p->freeable = 0;
     p->magic = MALLOC_MAGIC;
     p->size = _size;
-    return p - 1;
+    return p + 1;
 }
 
 #else

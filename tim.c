@@ -7,30 +7,29 @@ extern uint32_t SystemCoreClock;
 typedef struct tim_int_s {
     struct tim_int_s *next;
     timer_desc_t *desc;
+    uint8_t alloced;
 } tim_int_t;
 
 static tim_int_t *timer_desc_head = NULL;
 
 #define TIM_MAX 6
 
-tim_int_t tim_int_pool[TIM_MAX];
-tim_int_t *last_free_tim;
-
+tim_int_t tim_int_pool[TIM_MAX] = {{0}};
 
 static tim_int_t *tim_alloc (void)
 {
-    if (last_free_tim == NULL) {
-        last_free_tim = &tim_int_pool[0];
+    int i;
+    for (i = 0; i < TIM_MAX; i++) {
+        if (tim_int_pool[i].alloced == 0) {
+            tim_int_pool[i].alloced = 1;
+            return &tim_int_pool[i];
+        }
     }
-    if (last_free_tim == &tim_int_pool[TIM_MAX]) {
-        return NULL;
-    }
-    return last_free_tim++;
 }
 
 static void tim_free (tim_int_t *tim)
 {
-    /*TODO :!!*/
+    tim->alloced = 0;
 }
 
 static void tim_link (tim_int_t *tim)
@@ -49,7 +48,21 @@ static void tim_link (tim_int_t *tim)
 
 static void tim_unlink (tim_int_t *tim)
 {
-    /*TODO :!!*/
+    tim_int_t *prev = NULL, *cur = timer_desc_head;
+    while (cur) {
+        if (cur == tim) {
+            if (prev) {
+                prev->next = tim->next;
+            } else {
+                timer_desc_head = tim->next;
+            }
+            return;
+        }
+
+        prev = cur;
+        cur = cur->next;
+    }
+    assert(0);
 }
 
 int hal_tim_init (timer_desc_t *desc)
@@ -73,6 +86,7 @@ int hal_tim_init (timer_desc_t *desc)
         return -1;
     }
     tim->desc = desc;
+    desc->parent = tim;
     tim_link(tim);
     
     irq_bmap(&irqmask);
@@ -94,7 +108,7 @@ int hal_tim_init (timer_desc_t *desc)
             return -1;
         }
     } else {
-
+        assert(0);
     }
     return 0;
 }
@@ -102,9 +116,15 @@ int hal_tim_init (timer_desc_t *desc)
 int hal_tim_deinit (timer_desc_t *desc)
 {
     TIM_HandleTypeDef *handle = &desc->handle;
-    HAL_TIM_Base_Stop_IT(handle);
+    if (desc->flags == TIM_RUNIT) {
+        HAL_TIM_Base_Stop_IT(handle);
+    } else if (desc->flags == TIM_RUNREG) {
+        HAL_TIM_Base_Stop(handle);
+    } else {
+        assert(0);
+    }
     HAL_TIM_Base_DeInit(handle);
-    tim_unlink(container_of(desc, tim_int_t, desc));
+    tim_unlink(desc->parent);
     return 0;
 }
 

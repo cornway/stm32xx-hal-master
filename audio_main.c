@@ -190,6 +190,7 @@ static void AUDIO_InitApplication(void)
 static void AUDIO_DeInitApplication(void)
 {
   BSP_AUDIO_OUT_DeInit();
+  BSP_AUDIO_OUT_DeInit();
 }
 
 void BSP_AUDIO_OUT_HalfTransfer_CallBack(void)

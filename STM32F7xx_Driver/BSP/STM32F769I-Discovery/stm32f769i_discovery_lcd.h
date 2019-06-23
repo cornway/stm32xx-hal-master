@@ -108,8 +108,6 @@
 
 #define BSP_LCD_FB_X_MAX 800
 #define BSP_LCD_FB_Y_MAX 600
-#define BSP_LCD_LAYER_SIZE_MAX (BSP_LCD_FB_X_MAX * BSP_LCD_FB_Y_MAX * sizeof(pix_t))
-#define BSP_LCD_FB_MEM_SIZE_MAX (BSP_LCD_LAYER_SIZE_MAX * LTDC_NB_OF_LAYERS)
 /** 
   * @brief  LCD status structure definition  
   */     

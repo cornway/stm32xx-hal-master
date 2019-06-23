@@ -266,7 +266,6 @@ static void __bhal_boot (arch_word_t addr)
 
 void bhal_boot (void *addr)
 {
-    dprintf("%s() :\n", __func__);
     __bhal_boot(((arch_word_t)addr));
     assert(0);
 }
