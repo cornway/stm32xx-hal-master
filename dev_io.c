@@ -687,8 +687,10 @@ static int _devio_con_handle (dvar_int_t *v, const char *text, int len)
         break;
         case DVAR_FUNC:
         {
+            const char *p;
             dvar_func_t func = (dvar_func_t)v->dvar.ptr;
-            ret = func((void *)text, &len);
+            p = _next_token(text);
+            ret = func((void *)p, &len);
         }
         break;
     }
