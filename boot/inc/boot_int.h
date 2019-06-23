@@ -3,6 +3,8 @@
 #include <misc_utils.h>
 #include <debug.h>
 
+typedef uint32_t rgba_t;
+
 typedef enum {
     GUISFX_FIRST = 0,
     GUISFX_OPEN = GUISFX_FIRST,
@@ -36,7 +38,7 @@ struct gui_s;
 typedef int (*comp_handler_t) (struct pane_s *p, struct component_s *c, void *user);
 
 typedef struct prop_s {
-    pix_t fcolor, bcolor;
+    rgba_t fcolor, bcolor;
     d_bool ispad;
     d_bool user_draw;
     gui_sfx_t sfx;
@@ -55,7 +57,7 @@ typedef struct component_s {
              showname:  1,
              reserved: 11;
 
-    pix_t bcolor, fcolor;
+    rgba_t bcolor, fcolor;
 
     void *ctxt;
     void *user;
@@ -80,7 +82,7 @@ typedef struct pane_s {
              iswin:    1,
              reserved: 21;
 
-    pix_t bcolor, fcolor;
+    rgba_t bcolor, fcolor;
 
     void *ctxt;
     void *user;
@@ -147,12 +149,12 @@ void gui_select_pane (gui_t *gui, pane_t *pane);
 void gui_release_pane (gui_t *gui, pane_t *pane);
 
 
-#define COLOR_WHITE (GFX_RGBA(0xff, 0xff, 0xff, 0xff))
-#define COLOR_BLACK (GFX_RGBA(0x00, 0x00, 0x00, 0xff))
-#define COLOR_RED (GFX_RGBA(0xff, 0x00, 0x00, 0xff))
-#define COLOR_GREEN (GFX_RGBA(0x00, 0xff, 0x00, 0xff))
-#define COLOR_BLUE (GFX_RGBA(0x00, 0x00, 0xff, 0xff))
-#define COLOR_GREY (GFX_RGBA(0x80, 0x80, 0x80, 0xff))
+#define COLOR_WHITE (GFX_RGBA8888(0xff, 0xff, 0xff, 0xff))
+#define COLOR_BLACK (GFX_RGBA8888(0x00, 0x00, 0x00, 0xff))
+#define COLOR_RED (GFX_RGBA8888(0xff, 0x00, 0x00, 0xff))
+#define COLOR_GREEN (GFX_RGBA8888(0x00, 0xff, 0x00, 0xff))
+#define COLOR_BLUE (GFX_RGBA8888(0x00, 0x00, 0xff, 0xff))
+#define COLOR_GREY (GFX_RGBA8888(0x80, 0x80, 0x80, 0xff))
 
 
 pane_t *win_new_allert

@@ -11,6 +11,7 @@ typedef enum {
 } timflags_t;
 
 typedef struct timer_desc_s {
+    void *parent;
     TIM_TypeDef *hw;
     TIM_HandleTypeDef handle;
     IRQn_Type irq;

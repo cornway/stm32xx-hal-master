@@ -63,16 +63,25 @@ static inline void NVIC_SysIrqCtrl (IRQn_Type irq, d_bool disable)
     }
 }
 
+static int NVIC_search_irqn (IRQn_Type IRQn)
+{
+    int i;
+    for (i = 0; i < irq_maptable_index; i++) {
+        if (irq_maptable[i].irq == IRQn) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 static void NVIC_map_irq (IRQn_Type IRQn, uint8_t preempt, uint8_t preemptsub, uint8_t group)
 {
     int i;
     if (irq_maptable_index >= NVIC_IRQ_MAX) {
         fatal_error("irq_maptable_index >= NVIC_IRQ_MAX");
     }
-    for (i = 0; i < irq_maptable_index; i++) {
-        if (irq_maptable[i].irq == IRQn) {
-            return;
-        }
+    if (NVIC_search_irqn(IRQn) >= 0) {
+        return;
     }
     irq_active_mask = irq_active_mask | (1 << irq_maptable_index);
     irq_maptable[irq_maptable_index].irq = IRQn;
@@ -82,9 +91,24 @@ static void NVIC_map_irq (IRQn_Type IRQn, uint8_t preempt, uint8_t preemptsub, u
     irq_maptable_index++;
 }
 
+static void NVIC_unmap_irq (IRQn_Type IRQn)
+{
+    int bpos = NVIC_search_irqn(IRQn);
+    int bposlast = (irq_maptable_index - 1);
+
+    if (bpos < 0 || bposlast < 0) {
+        return;
+    }
+    if (bpos != bposlast) {
+        d_memcpy(&irq_maptable[bpos], &irq_maptable[bposlast], sizeof(irq_maptable[0]));
+    }
+    irq_active_mask = irq_active_mask & ~(1 << bposlast);
+    irq_maptable_index--;
+}
+
 static inline void _irq_save (irqmask_t *flags)
 {
-    int i, saveall;
+    int i, saveall = 0;
     irqmask_t mask = *flags;
     IRQn_Type irq;
 
@@ -105,8 +129,12 @@ static inline void _irq_save (irqmask_t *flags)
         }
         if ((mask >> i) & 0x1) {
             irq = irq_maptable[i].irq;
-            if (saveall && irq < 0) {
-                NVIC_SysIrqCtrl(irq, d_true);
+            if (irq < 0) {
+                if (saveall) {
+                    NVIC_SysIrqCtrl(irq, d_true);
+                } else {
+                    mask &= ~(1 << i);
+                }
             } else {
                 NVIC_DisableIRQ(irq_maptable[i].irq);
             }
@@ -168,6 +196,15 @@ void HAL_NVIC_SetPriority(IRQn_Type IRQn, uint32_t PreemptPriority, uint32_t Sub
     NVIC_SetPriority(IRQn, NVIC_EncodePriority(prioritygroup, PreemptPriority, SubPriority));
 }
 
+void HAL_NVIC_DisableIRQ(IRQn_Type IRQn)
+{
+    /* Check the parameters */
+    assert_param(IS_NVIC_DEVICE_IRQ(IRQn));
+
+    /* Disable interrupt */
+    NVIC_DisableIRQ(IRQn);
+    NVIC_unmap_irq(IRQn);
+}
 
 
 const char *NVIC_CortexM7_name[] =

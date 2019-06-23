@@ -158,6 +158,11 @@ DSTATUS SD_initialize(BYTE lun)
   return Stat;
 }
 
+void SD_Deinitialize(void)
+{
+    BSP_SD_DeInit();
+}
+
 /**
   * @brief  Gets Disk Status
   * @param  lun : not used

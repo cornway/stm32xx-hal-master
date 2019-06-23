@@ -81,23 +81,30 @@ void serial_led_off (void)
     BSP_LED_Off(LED1);
 }
 
+static int con_echo (const char *buf, int len)
+{
+    dprintf("@: %s\n", buf);
+    return 0; /*let it be processed by others*/
+}
+
 void dev_deinit (void)
 {
-#if 0//!BSP_INDIR_API
+extern void screen_release (void);
     irqmask_t irq = NVIC_IRQ_MASK;
     dprintf("%s() :\n", __func__);
     term_unregister_handler(con_echo);
-    input_bsp_deinit();
-    audio_deinit();
-    dev_io_deinit();
+
+    screen_release();
     screen_deinit();
+    dev_io_deinit();
+    audio_deinit();
     profiler_deinit();
-    Sys_AllocDeInit();
+    input_bsp_deinit();
     serial_deinit();
+
     irq_save(&irq);
-    HAL_RCC_DeInit();
+    assert(!irq);
     HAL_DeInit();
-#endif
 }
 
 #endif
@@ -187,19 +194,54 @@ static int con_echo (const char *buf, int len)
 
 #if defined(BOOT)
 
-#else
+int dev_init (void (*userinit) (void))
+{
+    SystemClock_Config();
+    HAL_Init();
+    serial_init();
+    userinit();
+    
+    dev_io_init();
+
+    BSP_LED_Init(LED1);
+    BSP_LED_Init(LED2);
+
+    term_register_handler(con_echo);
+
+    audio_init();
+    input_bsp_init();
+    profiler_init();
+    screen_init();
+    SystemDump();
+    d_dvar_int32(&g_dev_debug_level, "dbglvl");
+    return 0;
+}
+
+void __dev_init (void)
+{
+    Sys_AllocInit();
+    mpu_init();
+}
+
+#else /*BOOT*/
+
 #define dev_init(user) g_bspapi->sys.init(user)
-#endif
 
 void __dev_init (void)
 {
     Sys_AllocInit();
 }
 
+#endif /*BOOT*/
+
 int dev_main (void)
 {
     bsp_api_attach(&bspapi);
+#if defined(BSP_DRIVER)
+    CPU_CACHE_Enable();
+#endif /*BSP_DRIVER*/
     dev_init(__dev_init);
+
     VID_PreConfig();
     mainloop(0, NULL);
 
