@@ -180,13 +180,13 @@ void LCD_LOG_SetHeader (uint8_t *header)
   BSP_LCD_SetFont (&LCD_LOG_HEADER_FONT);
 
   BSP_LCD_SetTextColor(LCD_LOG_SOLID_BACKGROUND_COLOR);
-  BSP_LCD_FillRect(0, 0, BSP_LCD_GetXSize(), LCD_LOG_HEADER_FONT.Height * 3);
+  BSP_LCD_FillRect(0, 0, lcd_x_size_var, LCD_LOG_HEADER_FONT.Height * 3);
   
   /* Set the LCD Text Color */
   BSP_LCD_SetTextColor(LCD_LOG_SOLID_TEXT_COLOR);
   BSP_LCD_SetBackColor(LCD_LOG_SOLID_BACKGROUND_COLOR);
 
-  BSP_LCD_DisplayStringAt(0, LCD_LOG_HEADER_FONT.Height, header, CENTER_MODE);
+  BSP_LCD_DisplayStringAt(0, LCD_LOG_HEADER_FONT.Height, lcd_x_size_var, lcd_y_size_var, header, CENTER_MODE);
 
   BSP_LCD_SetBackColor(LCD_LOG_BACKGROUND_COLOR);
   BSP_LCD_SetTextColor(LCD_LOG_TEXT_COLOR);
@@ -204,13 +204,13 @@ void LCD_LOG_SetFooter(uint8_t *footer)
   BSP_LCD_SetFont (&LCD_LOG_FOOTER_FONT);
 
   BSP_LCD_SetTextColor(LCD_LOG_SOLID_BACKGROUND_COLOR);
-  BSP_LCD_FillRect(0, BSP_LCD_GetYSize() - LCD_LOG_FOOTER_FONT.Height - 4, BSP_LCD_GetXSize(), LCD_LOG_FOOTER_FONT.Height + 4);
+  BSP_LCD_FillRect(0, lcd_y_size_var - LCD_LOG_FOOTER_FONT.Height - 4, lcd_x_size_var, LCD_LOG_FOOTER_FONT.Height + 4);
   
   /* Set the LCD Text Color */
   BSP_LCD_SetTextColor(LCD_LOG_SOLID_TEXT_COLOR);
   BSP_LCD_SetBackColor(LCD_LOG_SOLID_BACKGROUND_COLOR);
 
-  BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() - LCD_LOG_FOOTER_FONT.Height, footer, CENTER_MODE);
+  BSP_LCD_DisplayStringAt(0, lcd_y_size_var - LCD_LOG_FOOTER_FONT.Height, lcd_x_size_var, lcd_y_size_var, footer, CENTER_MODE);
 
   BSP_LCD_SetBackColor(LCD_LOG_BACKGROUND_COLOR);
   BSP_LCD_SetTextColor(LCD_LOG_TEXT_COLOR);

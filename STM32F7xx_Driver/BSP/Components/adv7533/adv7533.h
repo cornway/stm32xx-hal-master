@@ -210,10 +210,13 @@ uint8_t  HDMI_IO_Read(uint8_t addr, uint8_t reg);
 void     HDMI_IO_Delay(uint32_t delay);
 void     AUDIO_IO_DeInit(void);
 
+#if !defined(APPLICATION) || defined(BSP_DRIVER)
+
 void ADV7533_DumpRegs (void);
 int ADV7533_Get_EDID (hdmi_edid_seg_t *edid, int size);
 int ADV7533_EDID_Size (void);
 
+#endif
 /**
   * @}
   */ 

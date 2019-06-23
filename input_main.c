@@ -1,3 +1,6 @@
+
+#if !defined(APPLICATION) || defined(BSP_DRIVER)
+
 #include <stdlib.h>
 #include "input_main.h"
 #include "input_int.h"
@@ -17,15 +20,24 @@ FIXME :
 */
 extern int joypad_read (int8_t *pads);
 
-kbdmap_t input_kbdmap[JOY_STD_MAX];
-int      input_kbdmap_ex[K_EX_MAX];
+static kbdmap_t input_kbdmap[JOY_STD_MAX];
+static int      input_kbdmap_ex[K_EX_MAX];
+
+static void *(*user_handler) (void *, void *) = NULL;
+
+#define input_post_key(a, b) {              \
+    user_handler ? user_handler(a, b) : NULL; \
+}
 
 static uint8_t ts_states_map[4][2];
 static uint8_t ts_prev_state = TS_IDLE;
 static uint8_t ts_state_cooldown_cnt = 0;
 static uint8_t ts_freeze_ticks = 0;
 
+#if !BSP_INDIR_API
 int *joy_extrafreeze = NULL;
+#endif
+
 static uint32_t joypad_timestamp = 0;
 
 
@@ -153,6 +165,14 @@ ts_get_key (int x, int y)
     return ts_zones_keymap[row][col];
 }
 
+d_bool input_is_touch_present (void)
+{
+    if (BSP_LCD_UseHDMI()) {
+        return d_false;
+    }
+    return d_true;
+}
+
 static inline int
 joypad_freezed ()
 {
@@ -175,83 +195,16 @@ static inline void
 post_key_up (uint16_t key)
 {
     i_event_t event = {key, keyup};
-    input_post_key(NULL, event);
+    input_post_key(NULL, &event);
 }
 
 static inline void
 post_key_down (uint16_t key)
 {
     i_event_t event = {key, keydown};
-    input_post_key(NULL, event);
+    input_post_key(NULL, &event);
 }
 
-#if 0
-
-static inline int
-get_lookfly_key (uint8_t flags)
-{
-    if (flags & PAD_LOOK_CONTROL) {
-        if (flags & PAD_LOOK_UP) {
-            return input_kbdmap_ex[K_EX_LOOKUP];
-        }
-        if (flags & PAD_LOOK_DOWN) {
-            return input_kbdmap_ex[K_EX_LOOKDOWN];
-        }
-        return input_kbdmap_ex[K_EX_LOOKCENTER];
-    }
-    return 0;
-}
-
-
-static inline void
-post_event (
-        i_event_t *event,
-        kbdmap_t *kbd_key,
-        int8_t action)
-{
-    uint8_t key = kbd_key->key;
-    uint8_t flags = kbd_key->flags;
-    int post_key = 0;
-
-    if (action) {
-        if (flags & PAD_FUNCTION) {
-            ctrl_key_action = 2;
-        } else if (flags & PAD_SET_FLYLOOK) {
-            lookfly_key_action = 1;
-        } else {
-            if (lookfly_key_action > 0) {
-                lookfly_key_remaped = get_lookfly_key(flags);
-                if (lookfly_key_remaped) {
-                    lookfly_key_trigger = key;
-                    key = lookfly_key_remaped;
-                } else {
-                    lookfly_key_action = 0;
-                }
-            } else if (ctrl_key_action > 0) {
-                if (flags & PAD_LOOK_CONTROL) {
-                    if (extra_key_remaped && (extra_key_remaped != input_kbdmap[JOY_K4].key)) {
-                        post_key_up(input_kbdmap[JOY_K4].key);
-                    }
-                    extra_key_remaped = input_kbdmap[JOY_K4].key;
-                    post_key_down(extra_key_remaped);
-                }
-                ctrl_key_action--;
-            }
-            post_key = 1;
-        }
-    } else if ((flags & PAD_SET_FLYLOOK) || (key == lookfly_key_trigger)) {
-        post_key_up(lookfly_key_remaped);
-        lookfly_key_action = 0;
-        lookfly_key_remaped = 0;
-    }
-
-    if (post_key) {
-        post_key_down(key);
-    }
-    ts_freeze_ticks = TSENS_SLEEP_TIME;
-    joypad_freeze(flags);
-}
-#else
 static inline void
 post_event (
         i_event_t *event,
@@ -266,14 +219,12 @@ post_event (
     joypad_freeze(kbd_key->flags);
 }
 
-#endif
-
 void input_proc_keys (i_event_t *evts)
 {
-    i_event_t event = {0, keyup};
+    i_event_t event = {0, keyup, 0, 0};
     ts_status_t ts_status = {TOUCH_IDLE, 0, 0};
 
-    if (!BSP_LCD_UseHDMI()) {
+    if (input_is_touch_present()) {
         if (!ts_freeze_ticks) {
             /*Skip sensor processing while gamepad active*/
             ts_read_status(&ts_status);
@@ -283,7 +234,9 @@ void input_proc_keys (i_event_t *evts)
     {
         event.state = (ts_status.status == TOUCH_PRESSED) ? keydown : keyup;
         event.sym = ts_get_key(ts_status.x, ts_status.y);
-        input_post_key(evts, event);
+        event.x = ts_status.x;
+        event.y = ts_status.y;
+        input_post_key(evts, &event);
     } else {
         int8_t joy_pads[JOY_STD_MAX];
         int keys_cnt;
@@ -308,6 +261,13 @@ void input_proc_keys (i_event_t *evts)
     }
 }
 
+void input_bsp_deinit (void)
+{
+    dprintf("%s() :\n", __func__);
+    BSP_TS_DeInit();
+    joypad_bsp_deinit();
+}
+
 void input_bsp_init (void)
 {
     BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
@@ -316,10 +276,10 @@ void input_bsp_init (void)
     joypad_bsp_init();
 }
 
-void input_soft_init (const kbdmap_t kbdmap[JOY_STD_MAX])
+void input_soft_init (void *(*in_handler) (void *, void *), const kbdmap_t kbdmap[JOY_STD_MAX])
 {
     memcpy(&input_kbdmap[0], &kbdmap[0], sizeof(input_kbdmap));
-
+    user_handler = in_handler;
     ts_attach_keys(ts_zones_keymap, kbdmap);
 }
 
@@ -336,12 +296,4 @@ void input_tickle (void)
     joypad_tickle();
 }
 
-__weak i_event_t *input_post_key (i_event_t  *evts, i_event_t event)
-{
-    if (evts) {
-        *evts = event;
-        return evts + 1;
-    }
-    return NULL;
-}
-
+#endif

@@ -7,6 +7,8 @@
 typedef uint32_t irqmask_t;
 #endif
 
+#define NVIC_IRQ_MASK ((1 << NVIC_IRQ_MAX) - 1)
+
 void irq_save (irqmask_t *flags);
 void irq_restore (irqmask_t flags);
 void irq_bmap (irqmask_t *flags);

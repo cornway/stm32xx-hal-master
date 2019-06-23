@@ -43,6 +43,9 @@
   ******************************************************************************
   */
 
+#if !defined(APPLICATION) || defined(BSP_DRIVER)
+
+
 /* Includes ------------------------------------------------------------------*/
 #include "string.h"
 #include "ff_gen_drv.h"
@@ -153,6 +156,11 @@ DSTATUS SD_initialize(BYTE lun)
   Stat = SD_CheckStatus(lun);
 #endif
   return Stat;
+}
+
+void SD_Deinitialize(void)
+{
+    BSP_SD_DeInit();
 }
 
 /**
@@ -573,6 +581,6 @@ void BSP_SD_ReadCpltCallback(void)
 }
 
 
-
+#endif
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
 

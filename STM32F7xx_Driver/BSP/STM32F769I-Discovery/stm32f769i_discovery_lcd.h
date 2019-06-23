@@ -108,8 +108,6 @@
 
 #define BSP_LCD_FB_X_MAX 800
 #define BSP_LCD_FB_Y_MAX 600
-#define BSP_LCD_LAYER_SIZE_MAX (BSP_LCD_FB_X_MAX * BSP_LCD_FB_Y_MAX * sizeof(pix_t))
-#define BSP_LCD_FB_MEM_SIZE_MAX (BSP_LCD_LAYER_SIZE_MAX * LTDC_NB_OF_LAYERS)
 /** 
   * @brief  LCD status structure definition  
   */     
@@ -332,6 +330,9 @@ void     BSP_LCD_MspDeInit(void);
 void     BSP_LCD_MspInit(void);
 void     BSP_LCD_Reset(void);
 
+extern uint32_t lcd_x_size_var;
+extern uint32_t lcd_y_size_var;
+
 uint32_t BSP_LCD_GetXSize(void);
 uint32_t BSP_LCD_GetYSize(void);
 void     BSP_LCD_SetXSize(uint32_t imageWidthPixels);
@@ -360,7 +361,7 @@ void     BSP_LCD_DrawPixel(uint16_t Xpos, uint16_t Ypos, uint32_t pixel);
 void     BSP_LCD_Clear(uint32_t Color);
 void     BSP_LCD_ClearStringLine(uint32_t Line);
 void     BSP_LCD_DisplayStringAtLine(uint16_t Line, uint8_t *ptr);
-void     BSP_LCD_DisplayStringAt(uint16_t Xpos, uint16_t Ypos, uint8_t *Text, Text_AlignModeTypdef Mode);
+void     BSP_LCD_DisplayStringAt(uint16_t Xpos, uint16_t Ypos, uint16_t w, uint16_t h, uint8_t *Text, Text_AlignModeTypdef Mode);
 void     BSP_LCD_DisplayChar(uint16_t Xpos, uint16_t Ypos, uint8_t Ascii);
 
 void     BSP_LCD_DrawHLine(uint16_t Xpos, uint16_t Ypos, uint16_t Length);

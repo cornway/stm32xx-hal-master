@@ -4,6 +4,7 @@
 #include <dev_conf.h>
 #include <arch.h>
 #include <stdint.h>
+#include <bsp_api.h>
 
 enum {
     DBG_OFF,
@@ -13,7 +14,11 @@ enum {
 };
 
 extern int g_dev_debug_level;
+#if !defined(APPLICATION) || defined(BSP_DRIVER)
 #define DEV_DBG_LVL (g_dev_debug_level)
+#else
+#define DEV_DBG_LVL 0
+#endif
 
 #define dbg_eval(lvl) \
     if (DEV_DBG_LVL >= (lvl))
@@ -57,6 +62,10 @@ extern int g_dev_debug_level;
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
+#define GET_PAD(x, a) ((a) - ((x) % (a)))
+#define ROUND_UP(x, a) ((x) + GET_PAD(a, x))
+#define ROUND_DOWN(x, a) ((x) - ((a) - GET_PAD(a, x)))
+
 #ifndef d_bool
 #define d_bool int
 #define d_true 1
@@ -64,17 +73,6 @@ extern int g_dev_debug_level;
 #endif
 
 #define ATTR_UNUSED __attribute__((unused))
-
-extern void fatal_error (char *message, ...);
-
-extern void Sys_AllocInit (void);
-extern void *Sys_AllocShared (int *size);
-extern void *Sys_AllocVideo (int *size);
-extern int Sys_AllocBytesLeft (void);
-extern void *Sys_Malloc (int size);
-extern void *Sys_Realloc (void *x, int32_t size);
-extern void *Sys_Calloc (int32_t size);
-extern void Sys_Free (void *p);
 
 static inline void d_memcpy(void *_dst, const void *_src, int cnt)
 {
@@ -134,12 +132,34 @@ readPtr (const void *_p)
 
 #endif /*__LITTLE_ENDIAN__*/
 
+#if BSP_INDIR_API
+
+#define fatal_error   g_bspapi->sys.fatal
+#define _profiler_enter   g_bspapi->sys.prof_enter
+#define _profiler_exit   g_bspapi->sys.prof_exit
+#define profiler_reset   g_bspapi->sys.prof_reset
+#define profiler_init   g_bspapi->sys.prof_init
+
+#else /*BSP_INDIR_API*/
+extern void fatal_error (char *message, ...);
+
 void _profiler_enter (const char *func, int line);
 void _profiler_exit (const char *func, int line);
-#define profiler_enter() _profiler_enter(__func__, __LINE__)
-#define profiler_exit() _profiler_exit(__func__, __LINE__)
 void profiler_reset (void);
 void profiler_init (void);
+#endif /*BSP_INDIR_API*/
+
+extern void Sys_AllocInit (void);
+extern void *Sys_AllocShared (int *size);
+extern void *Sys_AllocVideo (int *size);
+extern int Sys_AllocBytesLeft (void);
+extern void *Sys_Malloc (int size);
+extern void *Sys_Realloc (void *x, int32_t size);
+extern void *Sys_Calloc (int32_t size);
+extern void Sys_Free (void *p);
+
+#define profiler_enter() _profiler_enter(__func__, __LINE__)
+#define profiler_exit() _profiler_exit(__func__, __LINE__)
 
 
 #endif /*__MISC_UTILS_H__*/

@@ -1,43 +1,8 @@
-
-
-/**
-  ******************************************************************************
-  * @file    JPEG/JPEG_DecodingUsingFs_DMA/Src/main.c
-  * @author  MCD Application Team
-  * @brief   This sample code shows how to use the HW JPEG to Decode a JPEG file with DMA method.
-  ******************************************************************************
-  * @attention
-  *
-  * <h2><center>&copy; COPYRIGHT(c) 2016 STMicroelectronics</center></h2>
-  *
-  * Redistribution and use in source and binary forms, with or without modification,
-  * are permitted provided that the following conditions are met:
-  *   1. Redistributions of source code must retain the above copyright notice,
-  *      this list of conditions and the following disclaimer.
-  *   2. Redistributions in binary form must reproduce the above copyright notice,
-  *      this list of conditions and the following disclaimer in the documentation
-  *      and/or other materials provided with the distribution.
-  *   3. Neither the name of STMicroelectronics nor the names of its contributors
-  *      may be used to endorse or promote products derived from this software
-  *      without specific prior written permission.
-  *
-  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-  * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-  * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-  * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-  *
-  ******************************************************************************
-  */
-
 /* Includes ------------------------------------------------------------------*/
+#include <bsp_api.h>
 #include <stdarg.h>
 #include "main.h"
+#include <stm32f769i_discovery.h>
 #include "lcd_main.h"
 #include "audio_main.h"
 #include "input_main.h"
@@ -46,6 +11,25 @@
 #include "misc_utils.h"
 #include "nvic.h"
 #include <mpu.h>
+
+extern void bsp_api_attach (bspapi_t *api);
+extern void VID_PreConfig (void);
+extern bspapi_t bspapi;
+
+static void SystemClock_Config(void);
+static void CPU_CACHE_Enable(void);
+static void SystemDump (void);
+
+int g_dev_debug_level = DBG_ERR;
+
+extern int mainloop (int argc, const char *argv[]);
+
+static void clock_fault (void)
+{
+    bug();
+}
+
+#if !BSP_INDIR_API
 
 #if (_USE_LFN == 3)
 #error "ff_malloc, ff_free must be redefined to Sys_HeapAlloc"
@@ -57,21 +41,10 @@ int const __cache_line_size = 32;
 #error "Cache line size unknown"
 #endif
 
-int g_dev_debug_level = DBG_ERR;
-
-extern void VID_PreConfig (void);
-
-static void SystemDump (void);
-
-volatile uint32_t systime = 0;
+/** The prototype for the application's main() function */
 
 void dumpstack (void)
 {
-}
-
-void bug (void)
-{
-    for (;;) {}
 }
 
 void fatal_error (char *message, ...)
@@ -81,21 +54,12 @@ void fatal_error (char *message, ...)
     va_start (argptr, message);
     dvprintf (message, argptr);
     va_end (argptr);
-    
+
+    serial_flush();
     bug();
 }
-
-static void clock_fault (void)
-{
-    bug();
-}
-
-/** The prototype for the application's main() function */
-extern int mainloop (int argc, const char *argv[]);
 
 /* Private function prototypes -----------------------------------------------*/
-static void SystemClock_Config(void);
-static void CPU_CACHE_Enable(void);
 
 void hdd_led_on (void)
 {
@@ -117,48 +81,33 @@ void serial_led_off (void)
     BSP_LED_Off(LED1);
 }
 
-void dev_tickle (void)
-{
-    audio_update();
-    input_tickle();
-    serial_tickle();
-    profiler_reset();
-}
-
 static int con_echo (const char *buf, int len)
 {
     dprintf("@: %s\n", buf);
     return 0; /*let it be processed by others*/
 }
 
-int dev_main (void)
+void dev_deinit (void)
 {
-    CPU_CACHE_Enable();
-    SystemClock_Config();
-    HAL_Init();
-    mpu_init();
-    Sys_AllocInit();
-    serial_init();
-    profiler_init();
+extern void screen_release (void);
+    irqmask_t irq = NVIC_IRQ_MASK;
+    dprintf("%s() :\n", __func__);
+    term_unregister_handler(con_echo);
 
-    BSP_LED_Init(LED1);
-    BSP_LED_Init(LED2);
+    screen_release();
+    screen_deinit();
+    dev_io_deinit();
+    audio_deinit();
+    profiler_deinit();
+    input_bsp_deinit();
+    serial_deinit();
 
-    serial_rx_callback(con_echo);
-
-    audio_init();
-    input_bsp_init();
-    dev_io_init();
-    screen_init();
-    SystemDump();
-
-    VID_PreConfig();
-
-    d_dvar_int32(&g_dev_debug_level, "dbglvl");
-    mainloop(0, NULL);
-
-    return 0;
+    irq_save(&irq);
+    assert(!irq);
+    HAL_DeInit();
 }
+
+#endif
 
 static void SystemClock_Config(void)
 {
@@ -236,4 +185,62 @@ static void SystemDump (void)
 {
     NVIC_dump();
 }
+
+
+#if defined(BOOT)
+
+int dev_init (void (*userinit) (void))
+{
+    SystemClock_Config();
+    HAL_Init();
+    serial_init();
+    userinit();
+    
+    dev_io_init();
+
+    BSP_LED_Init(LED1);
+    BSP_LED_Init(LED2);
+
+    term_register_handler(con_echo);
+
+    audio_init();
+    input_bsp_init();
+    profiler_init();
+    screen_init();
+    SystemDump();
+    d_dvar_int32(&g_dev_debug_level, "dbglvl");
+    return 0;
+}
+
+void __dev_init (void)
+{
+    Sys_AllocInit();
+    mpu_init();
+}
+
+#else /*BOOT*/
+
+#define dev_init(user) g_bspapi->sys.init(user)
+
+void __dev_init (void)
+{
+    Sys_AllocInit();
+}
+
+#endif /*BOOT*/
+
+int dev_main (void)
+{
+    bsp_api_attach(&bspapi);
+#if defined(BSP_DRIVER) || defined(BOOT)
+    CPU_CACHE_Enable();
+#endif /*BSP_DRIVER*/
+    dev_init(__dev_init);
+
+    VID_PreConfig();
+    mainloop(0, NULL);
+
+    return 0;
+}
+
 

@@ -1,3 +1,6 @@
+
+#if !defined(APPLICATION) || defined(BSP_DRIVER)
+
 #include "main.h"
 #include "ff.h"
 #include "ff_gen_drv.h"
@@ -85,6 +88,20 @@ static fobjhdl_t *dir_handles[MAX_HANDLES] ALIGN(8);
 #define freefile(num) releasehandle(file_handles, num)
 #define freedir(num) releasehandle(dir_handles, num)
 
+#define chkfile(num) chk_handle(file_handles, num)
+#define chkdir(num) chk_handle(dir_handles, num)
+
+static inline int chk_handle (fobjhdl_t **hdls, int num)
+{
+    fobjhdl_t *hdl;
+
+    if (num < 0) {
+        return 0;
+    }
+    hdl = hdls[num];
+    return hdl->is_owned;
+}
+
 static inline void *allochandle (fobjhdl_t **hdls, int *num)
 {
     int i;
@@ -140,14 +157,15 @@ const char *str;
 }
 
 static int _devio_mount (void *p1, void *p2);
+static void _devio_unmount (void);
+void d_dvar_rm_all (void);
+
 
 int dev_io_init (void)
 {
-    FRESULT res;
     dvar_t dvar;
-    int i;
 
-    serial_rx_callback(devio_con_clbk);
+    term_register_handler(devio_con_clbk);
 
     dvar.ptr = devio_print_env;
     dvar.ptrsize = sizeof(&devio_print_env);
@@ -162,8 +180,20 @@ int dev_io_init (void)
     _d_dvar_reg(&dvar, DEVIO_CTRL_CMD);
 
     _devio_mount(SDPath, NULL);
+    
+    return 0;
 }
 
+void dev_io_deinit (void)
+{
+extern void SD_Deinitialize(void);
+
+    dprintf("%s() :\n", __func__);
+    _devio_unmount();
+    d_dvar_rm_all();
+    term_unregister_handler(devio_con_clbk);
+    SD_Deinitialize();
+}
 
 
 int d_open (const char *path, int *hndl, char const * att)
@@ -233,9 +263,7 @@ int d_tell (int h)
 void d_close (int h)
 {
     FRESULT res;
-    if (h < 0) {
-        return;
-    }
+    assert(chkfile(h));
     res = f_close(getfile(h));
     if (res != FR_OK) {
         dbg_eval(DBG_ERR) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
@@ -375,6 +403,8 @@ int d_opendir (const char *path)
 int d_closedir (int dir)
 {
     FRESULT res;
+
+    assert(chkdir(dir));
     res = f_closedir(getdir(dir));
     if (res != FR_OK) {
         dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
@@ -554,6 +584,18 @@ int d_dvar_rm (const char *name)
     return 0;
 }
 
+void d_dvar_rm_all (void)
+{
+    dvar_int_t *next = NULL;
+    dvar_int_t *v = dvar_head;
+    while (v) {
+        next = v->next;
+        Sys_Free(v);
+        v = next;
+    }
+    dvar_head = NULL;
+}
+
 static const char *_next_token (const char *buf)
 {
     while (*buf) {
@@ -645,8 +687,10 @@ static int _devio_con_handle (dvar_int_t *v, const char *text, int len)
         break;
         case DVAR_FUNC:
         {
+            const char *p;
             dvar_func_t func = (dvar_func_t)v->dvar.ptr;
-            ret = func((void *)text, &len);
+            p = _next_token(text);
+            ret = func((void *)p, &len);
         }
         break;
     }
@@ -770,6 +814,12 @@ static int _devio_mount (void *p1, void *p2)
     return 0;
 }
 
+static void _devio_unmount (void)
+{
+    /*TODO : !!!*/
+    FATFS_UnLinkDriver("0");
+}
+
 static int _devio_export (void *p1, void *p2);
 
 static int _devio_test (void *p1, void *p2)
@@ -820,10 +870,10 @@ failopen:
 
 static int _devio_mkdir (void *p1, void *p2)
 {
-    char *str = p1, *p;
+    char *str = p1;
     char path[DEVIO_MAX_PATH] = {0}, *ppath = ".";
 
-    p = (char *)_next_arg(str, "%s", path);
+    _next_arg(str, "%s", path);
     if (path[0]) {
         ppath = path;
     }
@@ -840,6 +890,7 @@ extern void SystemSoftReset (void);
     serial_flush();
     SystemSoftReset();
     exit(0);
+    return -1;
 }
 
 static int __dir_list (char *pathbuf, int recursion, const char *path);
@@ -848,9 +899,6 @@ static int _devio_list (void *p1, void *p2)
 {
     char path[DEVIO_MAX_PATH] = {0}, *ppath;
     char pathbuf[128];
-    char *p;
-    fobj_t fobj;
-    int dh;
 
     ppath = ".";
     _next_arg((char *)p1, "%16s", path);
@@ -907,24 +955,21 @@ devio_hdlr_t devio_hdlrs[] =
 
 static int _devio_export (void *p1, void *p2)
 {
-    __devio_export(devio_hdlrs + 1, arrlen(devio_hdlrs) - 1);
+    return __devio_export(devio_hdlrs + 1, arrlen(devio_hdlrs) - 1);
 }
 
 static int devio_ctrl (void *p1, void *p2)
 {
     const char *str = p1, *p;
-    int len = (int)p2, i, cnt;
+    int len = (int)p2, i;
     char tok[16] = {0};
 
     p = _next_arg(str, "%16s", tok);
     for (i = 0; i < arrlen(devio_hdlrs); i++) {
         if (strcmp(tok, devio_hdlrs[i].name) == 0) {
-            cnt = devio_hdlrs[i].h((void *)p, NULL);
+            devio_hdlrs[i].h((void *)p, NULL);
         }
     }
-    return len;
-bad:
-    dprintf("%s() : unknown arg : \'%s\'\n", __func__, str);
     return len;
 }
 
@@ -974,3 +1019,4 @@ static int devio_print_env (void *p1, void *p2)
     return 0;
 }
 
+#endif

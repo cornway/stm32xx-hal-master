@@ -1,3 +1,6 @@
+
+#if !defined(APPLICATION) || defined(BSP_DRIVER)
+
 #include "string.h"
 #include "stm32f769i_discovery_audio.h"
 #include "audio_main.h"
@@ -187,6 +190,12 @@ static void AUDIO_InitApplication(void)
   audio_irq_mask = audio_irq_mask & (~irq_flags);
 }
 
+static void AUDIO_DeInitApplication(void)
+{
+  BSP_AUDIO_OUT_DeInit();
+  BSP_AUDIO_OUT_DeInit();
+}
+
 void BSP_AUDIO_OUT_HalfTransfer_CallBack(void)
 {
     DMA_on_tx_complete(A_ISR_HALF);
@@ -277,6 +286,14 @@ void audio_init (void)
     cd_init();
 }
 
+void audio_deinit (void)
+{
+    dprintf("%s() :\n", __func__);
+    AUDIO_DeInitApplication();
+    audio_stop_all();
+    cd_init();
+}
+
 audio_channel_t *audio_play_channel (Mix_Chunk *chunk, int channel)
 {
     irqmask_t irq_flags = audio_irq_mask;
@@ -357,7 +374,11 @@ int audio_chk_priority (int priority)
 
     a_chan_foreach_safe(&chan_llist_ready, cur, next) {
 
-        if (!priority || cur->priority >= priority) {
+        if (!a_chn_play(cur)) {
+            irq_restore(irq_flags);
+            return id;
+        }
+        if (priority >= 0 && (!priority || cur->priority >= priority)) {
             irq_restore(irq_flags);
             return id;
         }
@@ -404,6 +425,11 @@ void audio_change_sample_volume (audio_channel_t *achannel, uint8_t volume)
 #else /*AUDIO_MODULE_PRESENT*/
 
 void audio_init (void)
+{
+
+}
+
+void audio_deinit (void)
 {
 
 }
@@ -462,3 +488,5 @@ audio_update (void)
 }
 
 #endif /*AUDIO_MODULE_PRESENT*/
+
+#endif

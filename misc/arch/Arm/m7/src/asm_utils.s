@@ -45,7 +45,7 @@ asmread16           PROC
                     LSL  R1, #0x3
                     MOV R0, R2, LSR R1
 return16
-                    MOV  R1, 0xffff
+                    MOV  R1, #0xffff
                     AND  R0, R1
                     POP  {R1, R2}
                     BX   LR

@@ -4,7 +4,7 @@
 #include "stdint.h"
 #include "dev_conf.h"
 #include <nvic.h>
-
+#include <bsp_api.h>
 
 #define AUDIO_SIZE_TO_MS(rate, size) (((long long)(size) * 1000) / (rate))
 #define AUDIO_MS_TO_SIZE(rate, ms) (((((rate) << 2) / 1000) * (ms)) >> 2)
@@ -77,8 +77,44 @@ typedef struct {
     int (*complete) (uint8_t *, uint32_t, cplt_stat_t);
 } audio_channel_t;
 
-void audio_init (void);
+typedef struct {
+    void *desc;
+} cd_track_t;
 
+#if BSP_INDIR_API
+
+#define audio_init   g_bspapi->snd.init
+#define audio_deinit   g_bspapi->snd.deinit
+#define audio_mixer_ext   g_bspapi->snd.mixer_ext
+#define audio_play_channel   g_bspapi->snd.play
+#define audio_stop_channel   g_bspapi->snd.stop
+#define audio_pause   g_bspapi->snd.pause
+#define audio_stop_all   g_bspapi->snd.stop_all
+#define audio_is_playing   g_bspapi->snd.is_play
+#define audio_chk_priority   g_bspapi->snd.check
+#define audio_set_pan   g_bspapi->snd.set_pan
+#define audio_change_sample_volume   api->snd.sample_volume
+#define audio_update   g_bspapi->snd.tickle
+#define audio_irq_save   g_bspapi->snd.irq_save
+#define audio_irq_restore   g_bspapi->snd.irq_restore
+
+#define audio_open_wave   g_bspapi->snd.wave_open
+#define audio_wave_size   g_bspapi->snd.wave_size
+#define audio_cache_wave   g_bspapi->snd.wave_cache
+#define audio_wave_close   g_bspapi->snd.wave_close
+
+#define cd_play_name   g_bspapi->cd.play
+#define cd_pause   g_bspapi->cd.pause
+#define cd_resume   g_bspapi->cd.resume
+#define cd_stop   g_bspapi->cd.stop
+#define cd_volume   g_bspapi->cd.volume
+#define cd_getvol   g_bspapi->cd.getvol
+#define cd_playing   g_bspapi->cd.playing
+
+#else
+
+void audio_init (void);
+void audio_deinit (void);
 void audio_mixer_ext (void (*mixer_callback) (int, void *, int, void *));
 audio_channel_t *audio_play_channel (Mix_Chunk *chunk, int channel);
 audio_channel_t *audio_stop_channel (int channel);
@@ -92,9 +128,10 @@ void audio_update (void);
 void audio_irq_save (irqmask_t *flags);
 void audio_irq_restore (irqmask_t flags);
 
-typedef struct {
-    void *desc;
-} cd_track_t;
+int audio_open_wave (const char *name, int num);
+int audio_wave_size (int num);
+int audio_cache_wave (int num, uint8_t *dest, int size);
+void audio_wave_close (int num);
 
 cd_track_t *cd_play_name (cd_track_t *track, const char *path);
 int cd_pause (cd_track_t *track);
@@ -103,6 +140,7 @@ int cd_stop (cd_track_t *track);
 int cd_volume (cd_track_t *track, uint8_t vol);
 uint8_t cd_getvol (cd_track_t *track);
 int cd_playing (void);
+#endif
 
 
 #endif /*_AUDIO_MAIN_H*/

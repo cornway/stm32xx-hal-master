@@ -1,3 +1,5 @@
+#if !defined(APPLICATION) || defined(BSP_DRIVER)
+
 #include "stdint.h"
 #include "string.h"
 #include "stdarg.h"
@@ -8,6 +10,7 @@
 #include "nvic.h"
 #include "heap.h"
 #include "misc_utils.h"
+#include <tim_int.h>
 
 #if DEBUG_SERIAL
 
@@ -62,9 +65,10 @@ struct uart_desc_s {
     UART_HandleTypeDef      handle;
     UART_InitTypeDef  const * cfg;
     uart_msp_init_t         msp_init;
-    
+    uart_msp_init_t         msp_deinit;
 #if DEBUG_SERIAL_USE_DMA
     uart_dma_init_t         dma_init;
+    uart_dma_init_t         dma_deinit;
     DMA_HandleTypeDef       hdma_tx;
     FlagStatus              uart_tx_ready;
     IRQn_Type               irq_txdma, irq_uart;
@@ -115,11 +119,12 @@ typedef struct {
     char fifo[DMA_RX_FIFO_SIZE];
 } rxstream_t;
 
+static timer_desc_t serial_timer;
+
 static rxstream_t rxstream DTCM;
 
 #endif /*DEBUG_SERIAL_USE_RX*/
 
-static void serial_timer_init (void);
 static void serial_flush_handler (int force);
 
 static int          uart_desc_cnt = 0;
@@ -173,13 +178,17 @@ static uart_desc_t *debug_port (void)
 
 #if DEBUG_SERIAL_USE_DMA
 
-static irqmask_t timer_irq_mask = 0;
 static irqmask_t dma_rx_irq_mask = 0;
 
 static inline void dma_tx_sync (uart_desc_t *uart_desc)
 {
     while (uart_desc->uart_tx_ready != SET) { }
     uart_desc->uart_tx_ready = RESET;
+}
+
+static inline void dma_tx_waitflush (uart_desc_t *uart_desc)
+{
+    while (uart_desc->uart_tx_ready != SET) { }
 }
 
 #endif /*DEBUG_SERIAL_USE_DMA*/
@@ -254,6 +263,17 @@ static void uart1_dma_init (uart_desc_t *uart_desc)
 #endif
     UNUSED(hdma_tx);
 }
+
+static void uart1_dma_deinit (uart_desc_t *uart_desc)
+{
+    HAL_NVIC_DisableIRQ(uart_desc->irq_txdma);
+    HAL_DMA_DeInit(&uart_desc->hdma_tx);
+#if DEBUG_SERIAL_USE_RX
+    HAL_NVIC_DisableIRQ(uart_desc->irq_rxdma);
+    HAL_DMA_DeInit(&uart_desc->hdma_rx);
+#endif
+}
+
 #endif /*DEBUG_SERIAL_USE_DMA*/
 
 static void uart1_msp_init (uart_desc_t *uart_desc)
@@ -285,6 +305,10 @@ static void uart1_msp_init (uart_desc_t *uart_desc)
     uart_desc->irq_uart  = USART1_IRQn;
 }
 
+static void uart1_msp_deinit (uart_desc_t *uart_desc)
+{
+    HAL_NVIC_DisableIRQ(uart_desc->irq_uart);
+}
 
 static void _serial_init (uart_desc_t *uart_desc)
 {
@@ -306,6 +330,18 @@ static void _serial_init (uart_desc_t *uart_desc)
     uart_desc->initialized = SET;
 }
 
+static void _serial_deinit (uart_desc_t *uart_desc)
+{
+    UART_HandleTypeDef *handle = &uart_desc->handle;
+
+    if(HAL_UART_DeInit(handle) != HAL_OK)
+    {
+        serial_fatal();
+    }
+    uart_desc->dma_deinit(uart_desc);
+}
+
+
 static uart_desc_t uart1_desc;
 
 static void _serial_debug_setup (uart_desc_t *uart_desc)
@@ -317,9 +353,34 @@ static void _serial_debug_setup (uart_desc_t *uart_desc)
     uart_desc->hw       = USART1;
     uart_desc->cfg      = uart_def_ptr;
     uart_desc->dma_init = uart1_dma_init;
+    uart_desc->dma_deinit = uart1_dma_deinit;
     uart_desc->msp_init = uart1_msp_init;
+    uart_desc->msp_deinit = uart1_msp_deinit;
     uart_desc->type     = SERIAL_DEBUG;
     uart_desc->uart_tx_ready = SET;
+}
+
+static void serial_timer_msp_init (timer_desc_t *desc)
+{
+    __HAL_RCC_TIM3_CLK_ENABLE();
+    HAL_NVIC_SetPriority(desc->irq, 0, 1);
+    HAL_NVIC_EnableIRQ(desc->irq);
+}
+
+static void serial_timer_msp_deinit (timer_desc_t *desc)
+{
+    __HAL_RCC_TIM3_CLK_DISABLE();
+    HAL_NVIC_DisableIRQ(desc->irq);
+}
+
+static void serial_timer_handler (timer_desc_t *desc)
+{
+    serial_flush_handler(0);
+}
+
+void TIM3_IRQHandler (void)
+{
+    HAL_TIM_IRQHandler(&serial_timer.handle);
 }
 
 void serial_init (void)
@@ -331,7 +392,28 @@ void serial_init (void)
 
     _serial_debug_setup(&uart1_desc);
     _serial_init(&uart1_desc);
-    serial_timer_init();
+
+    serial_timer.flags = TIM_RUNIT;
+    serial_timer.period = 1000;
+    serial_timer.presc = 10000;
+    serial_timer.handler = serial_timer_handler;
+    serial_timer.init = serial_timer_msp_init;
+    serial_timer.deinit = serial_timer_msp_deinit;
+    serial_timer.hw = TIM3;
+    serial_timer.irq = TIM3_IRQn;
+    hal_tim_init(&serial_timer);
+}
+
+void serial_deinit (void)
+{
+    int i = 0;
+    dprintf("%s() :\n", __func__);
+    serial_flush();
+    hal_tim_deinit(&serial_timer);
+    for (i = 0; i < uart_desc_cnt; i++) {
+        _serial_deinit(uart_desc_pool[i]);
+    }
+    uart_desc_cnt = 0;
 }
 
 static HAL_StatusTypeDef serial_submit_to_hw (uart_desc_t *uart_desc, const void *data, size_t cnt)
@@ -411,7 +493,7 @@ static inline int dbgstream_bufferize (uart_desc_t *uart_desc, const void *data,
 
 static HAL_StatusTypeDef _serial_send (const void *data, size_t cnt)
 {
-    irqmask_t irq_flags = timer_irq_mask;
+    irqmask_t irq_flags = serial_timer.irqmask;
     HAL_StatusTypeDef status = HAL_OK;
     uart_desc_t *uart_desc = debug_port();
 
@@ -431,8 +513,7 @@ static int16_t prev_putc = 0xff;
 
 static inline d_bool __newline_char (char c)
 {
-    if ('\n' == c ||
-        '\r' == c) {
+    if ('\n' == c) {
 
         return d_true;
     }
@@ -481,7 +562,7 @@ void serial_send_buf (const void *data, size_t cnt)
 
 void serial_flush (void)
 {
-    irqmask_t irq_flags = timer_irq_mask;
+    irqmask_t irq_flags = serial_timer.irqmask;
 
     irq_save(&irq_flags);
     serial_flush_handler(1);
@@ -508,7 +589,7 @@ static inline int __insert_tsf (const char *fmt, char *buf, int max)
 {
     uint32_t msec, sec;
 
-    if (prev_putc < 0 &&
+    if (prev_putc < 0 ||
         !__newline_char(prev_putc)) {
 
         return 0;
@@ -533,20 +614,6 @@ void dprintf (const char *fmt, ...)
     serial_send_buf(string, size);
     __set_newline(fmt);
 }
-
-void dvprintf (const char *fmt, va_list argptr)
-{
-    char            string[1024];
-    int size, max = sizeof(string);
-
-    size = __insert_tsf(fmt, string, sizeof(string));
-    size += vsnprintf (string + size, max - size, fmt, argptr);
-
-    assert(size < arrlen(string));
-    serial_send_buf(string, size);
-    __set_newline(fmt);
-}
-
 
 #else /*SERIAL_TSF*/
 
@@ -701,64 +768,24 @@ void DMA2_Stream7_IRQHandler (void)
 
 #if DEBUG_SERIAL_USE_RX
 
-#define DEBUG_SERIAL_MAX_CLBK 4
-
-static serial_rx_clbk_t serial_rx_clbk[DEBUG_SERIAL_MAX_CLBK] = {NULL};
-static serial_rx_clbk_t *last_rx_clbk = &serial_rx_clbk[0];
-
-void serial_rx_callback (serial_rx_clbk_t clbk)
-{
-    if (last_rx_clbk == &serial_rx_clbk[DEBUG_SERIAL_MAX_CLBK]) {
-        return;
-    }
-    *last_rx_clbk++ = clbk;
-}
+extern void term_parse (const char *buf, int size);
 
 void serial_tickle (void)
 {
     irqmask_t irq = dma_rx_irq_mask;
-    serial_rx_clbk_t *clbk = &serial_rx_clbk[0];
     char buf[DMA_RX_FIFO_SIZE + 1];
     char *pbuf = buf;
-    int cnt, prev_cnt, idx;
-    int attemption = 0;
+    int cnt;
 
-    irq_save(&irq);
-    if (!rxstream.crlf || *clbk == NULL) {
-        irq_restore(irq);
+    if (!rxstream.crlf) {
         return;
     }
 
+    irq_save(&irq);
     dma_fifo_flush(&rxstream, pbuf, &cnt);
     irq_restore(irq);
 
-    prev_cnt = cnt;
-doparse:
-    while (cnt > 0 && *pbuf && clbk != last_rx_clbk) {
-
-        idx = (*clbk)(pbuf, cnt);
-        if (idx < 0 || idx >= cnt) {
-            return;
-            /*handled*/
-        }
-        if (idx > 0) {
-            pbuf += idx;
-            cnt -= idx;
-        }
-        clbk++;
-        attemption++;
-    }
-    if (cnt > 0) {
-        /*Try until all text will be parsed*/
-        if (prev_cnt == cnt) {
-            dprintf("Cannot parse text \'%s\'\n", pbuf);
-            dprintf("Attemptions : %i\n", attemption);
-            return;
-        }
-        prev_cnt = cnt;
-        clbk = &serial_rx_clbk[0];
-        goto doparse;
-    }
+    term_parse(pbuf, cnt);
 }
 
 static void dma_rx_xfer_hanlder (struct __DMA_HandleTypeDef * hdma)
@@ -802,17 +829,17 @@ void HAL_UART_MspInit(UART_HandleTypeDef *huart)
     }
 }
 
+void HAL_UART_MspDeInit(UART_HandleTypeDef *huart)
+{
+    uart_desc_t *uart_desc = uart_find_desc(huart->Instance);
+
+    if (uart_desc && uart_desc->msp_init) {
+        uart_desc->msp_deinit(uart_desc);
+    }
+}
+
+
 #if DEBUG_SERIAL_BUFERIZED
-
-extern uint32_t SystemCoreClock;
-
-typedef struct {
-    TIM_TypeDef *hw;
-    TIM_HandleTypeDef handle;
-    IRQn_Type irq;
-} timer_desc_t;
-
-static timer_desc_t serial_timer;
 
 static void serial_flush_handler (int force)
 {
@@ -833,6 +860,9 @@ static void serial_flush_handler (int force)
                 force) {
 
                 dbgstream_send(uart_desc, stbuf);
+                if (force) {
+                    dma_tx_waitflush(uart_desc);
+                }
                 if (stbuf->bufposition == 0) {
                     break;
                 }
@@ -845,83 +875,8 @@ static void serial_flush_handler (int force)
     }
 }
 
-static void serial_timer_init (void)
-{
-    TIM_HandleTypeDef *handle = &serial_timer.handle;
-    uint32_t uwPrescalerValue = (uint32_t)((SystemCoreClock / 2) / 10000) - 1;
-    irqmask_t irq_flags;
-    serial_timer.hw = TIM3;
-    serial_timer.irq = TIM3_IRQn;
-
-    handle->Instance = serial_timer.hw;
-
-    handle->Init.Period            = 1000 - 1;
-    handle->Init.Prescaler         = uwPrescalerValue;
-    handle->Init.ClockDivision     = 0;
-    handle->Init.CounterMode       = TIM_COUNTERMODE_UP;
-    handle->Init.RepetitionCounter = 0;
-    handle->Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-
-    irq_bmap(&irq_flags);
-    if (HAL_TIM_Base_Init(handle) != HAL_OK)
-    {
-        serial_fatal();
-    }
-    irq_bmap(&timer_irq_mask);
-    timer_irq_mask = timer_irq_mask & (~irq_flags);
-
-    if (HAL_TIM_Base_Start_IT(handle) != HAL_OK)
-    {
-        serial_fatal();
-    }
-}
-
-/*TODO : move this outside*/
-extern TIM_HandleTypeDef profile_timer_handle;
-
-void HAL_TIM_Base_MspInit(TIM_HandleTypeDef *htim)
-{
-    if (&serial_timer.handle == htim) {
-        __HAL_RCC_TIM3_CLK_ENABLE();
-
-
-        HAL_NVIC_SetPriority(serial_timer.irq, 0, 1);
-
-        HAL_NVIC_EnableIRQ(serial_timer.irq);
-    } else if (&profile_timer_handle == htim) {
-        __HAL_RCC_TIM2_CLK_ENABLE();
-    }
-}
-
-void TIM3_IRQHandler (void)
-{
-    HAL_TIM_IRQHandler(&serial_timer.handle);
-}
-
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-    if (&serial_timer.handle == htim) {
-
-        serial_flush_handler(0);
-    }
-}
-
-
 #endif /*DEBUG_SERIAL_BUFERIZED*/
-
-void hexdump (const uint8_t *data, int len, int rowlength)
-{
-    int x, y, xn;
-    dprintf("%s :\n", __func__);
-    for (y = 0; y <= len / rowlength; y++) {
-        xn = len < rowlength ? len : rowlength;
-        dprintf("%d:%d    ", y, y + xn);
-        for (x = 0; x < xn; x++) {
-            dprintf("0x%02x, ", data[x + y * rowlength]);
-        }
-        dprintf("\n");
-    }
-}
 
 #endif /*DEBUG_SERIAL*/
 
+#endif

@@ -1,3 +1,6 @@
+
+#if !defined(APPLICATION) || defined(BSP_DRIVER)
+
 #include "string.h"
 #include "audio_main.h"
 #include "audio_int.h"
@@ -99,7 +102,7 @@ static int cd_cplt_hdlr (uint8_t *abuf, uint32_t alen, cplt_stat_t complete)
                 return 1;
             }
             if ((CD_IDLE_M & cdaudio.state) || !cd_track.volume) {
-                /*This will cause 'fake channel' - it will won't play, but still in 'ready'*/
+                /*This will cause 'fake channel' - it won't play, but suspend*/
                 return 0;
             }
             cd_setup_track(&cdaudio, &cd_track);
@@ -121,13 +124,8 @@ static int cd_open_stream (track_t *song, const char *path)
     if (d_read(song->file, &song->stream, sizeof(song->stream)) < 0) {
         error_handle();
     }
-    if (song->stream.BitPerSample != 16) {
-        error_handle();
-    }
-    if (song->stream.NbrChannels != 2) {
-        error_handle();
-    }
-    if (song->stream.SampleRate != AUDIO_SAMPLE_RATE) {
+    if (!a_check_wave_sup(&song->stream)) {
+        dprintf("%s() : trying to load unsupported wave\n", __func__);
         error_handle();
     }
     song->remain = song->stream.FileSize / sizeof(snd_sample_t);
@@ -345,5 +343,7 @@ void music_tickle (cd_track_t *track)
 {
 
 }
+
+#endif
 
 #endif

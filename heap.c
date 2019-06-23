@@ -1,9 +1,8 @@
 #include <arch.h>
 #include <stdlib.h>
-#include "dev_conf.h"
-#include "main.h"
-#include "gfx.h"
 #include <mpu.h>
+#include <misc_utils.h>
+#include <debug.h>
 
 #ifdef __MICROLIB
 #error "I don't want to use microlib"
@@ -22,7 +21,7 @@
 
 #endif /*USE_STM32F769I_DISCO*/
 
-#ifdef DATA_IN_ExtSDRAM
+#if defined(DATA_IN_ExtSDRAM) || defined(APPLICATION)
 
 #define MALLOC_MAGIC       0x75738910
 
@@ -32,7 +31,9 @@ typedef struct {
     int32_t freeable;
 } mchunk_t;
 
-static int heap_size_total;
+static int heap_size_total = -1;
+static uint8_t *heap_user_mem_ptr = NULL;
+static arch_word_t heap_user_size = 0;
 
 static inline void
 heap_check_margin (int size)
@@ -108,19 +109,65 @@ void Sys_AllocInit (void)
     arch_get_stack(&sp_mem, &sp_size);
     arch_get_heap(&heap_mem, &heap_size);
 
+#if defined(APPLICATION)
     mpu_lock(sp_mem, MPU_CACHELINE, "xwr");
     mpu_lock(heap_mem - MPU_CACHELINE, MPU_CACHELINE, "xwr");
     /*According to code below, heap must be as last partition in memory pool*/
     mpu_lock(heap_mem + heap_size, MPU_CACHELINE, "xwr");
-
+#endif
+    dprintf("%s() :\n", __func__);
+    dprintf("stack : <0x%p> + %u bytes\n", (void *)sp_mem, sp_size);
+    dprintf("heap : <0x%p> + %u bytes\n", (void *)heap_mem, heap_size);
     heap_size_total = heap_size - MPU_CACHELINE * 2;
+#ifdef BOOT 
+    extern void __arch_user_heap (void *mem, void *size);
+
+    __arch_user_heap(&heap_user_mem_ptr, &heap_user_size);
+    dprintf("user heap : <0x%p> + %u bytes\n", (void *)heap_user_mem_ptr, heap_user_size);
+#endif /*BOOT*/
 }
+
+void Sys_AllocDeInit (void)
+{
+    arch_word_t heap_mem, heap_size, heap_size_left;
+
+    dprintf("%s() :\n", __func__);
+    arch_get_heap(&heap_mem, &heap_size);
+
+    heap_size_left = heap_size - MPU_CACHELINE * 2 - heap_size_total;
+    assert(heap_size_left <= heap_size);
+    if (heap_size_left) {
+        dprintf("%s() : Unfreed left : %u bytes\n", __func__, heap_size_left);
+    }
+}
+
+#ifdef BOOT
+
+void *Sys_AllocShared (int *size)
+{
+    mchunk_t *p = NULL;
+    int _size = *size + sizeof(mchunk_t);
+    if (heap_user_size < *size) {
+        return NULL;
+    }
+    p = (mchunk_t *)heap_user_mem_ptr;
+    heap_user_mem_ptr += _size;
+    heap_user_size -= _size;
+    p->freeable = 0;
+    p->magic = MALLOC_MAGIC;
+    p->size = _size;
+    return p + 1;
+}
+
+#else /*BOOT*/
 
 void *Sys_AllocShared (int *size)
 {
     heap_check_margin(*size);
     return heap_malloc(*size, 1);
 }
+
+#endif /*BOOT*/
 
 void *Sys_AllocVideo (int *size)
 {
@@ -151,13 +198,24 @@ void *Sys_Calloc (int32_t size)
     return p;
 }
 
+#ifdef BOOT
+
 void Sys_Free (void *p)
 {
     heap_free(p);
 }
 
+#else /*BOOT*/
+
+void Sys_Free (void *p)
+{
+    heap_free(p);
+}
+
+#endif /*BOOT*/
+
 #else /*DATA_IN_ExtSDRAM*/
 
 #error "Not supported"
 
-#endif /*DATA_IN_ExtSDRAM*/
+#endif

@@ -135,4 +135,6 @@ void a_clear_master (void);
 
 void error_handle (void);
 
+d_bool a_check_wave_sup (wave_t *wave);
+
 #endif /*_AUDIO_INT_H*/

@@ -490,6 +490,7 @@ __weak void BSP_SD_MspDeInit(SD_HandleTypeDef *hsd, void *Params)
     /* Disable NVIC for DMA transfer complete interrupts */
     HAL_NVIC_DisableIRQ(SD_DMAx_Rx_IRQn);
     HAL_NVIC_DisableIRQ(SD_DMAx_Tx_IRQn);
+    HAL_NVIC_DisableIRQ(SDMMC2_IRQn);
 
     /* Deinitialize the stream for new transfer */
     dma_rx_handle.Instance = SD_DMAx_Rx_STREAM;

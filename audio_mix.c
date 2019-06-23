@@ -1,3 +1,5 @@
+#if !defined(APPLICATION) || defined(BSP_DRIVER)
+
 #include <stdint.h>
 #include <stddef.h>
 #include "audio_main.h"
@@ -345,4 +347,4 @@ uint8_t a_chanlist_try_reject_all (a_channel_head_t *chanlist)
     return chanlist->size;
 }
 
-
+#endif

@@ -35,8 +35,14 @@
   */
 
 /* Includes ------------------------------------------------------------------*/
+
+#if !defined(APPLICATION) || defined(BSP_DRIVER)
+
+
 #include "lcd_main.h"
+#include "stm32f769i_discovery_lcd.h"
 #include "misc_utils.h"
+#include <debug.h>
 
 extern LTDC_HandleTypeDef  hltdc_discovery;
 
@@ -46,16 +52,17 @@ static void (*screen_update_handle) (screen_t *in);
 
 #define LCD_MAX_SCALE 3
 
-static void screen_update_2x2 (screen_t *in);
-static void screen_update_3x3 (screen_t *in);
+static void screen_update_no_scale (screen_t *in);
+static void screen_update_2x2_8bpp (screen_t *in);
+static void screen_update_3x3_8bpp (screen_t *in);
 
+static void screen_sync (int wait);
 
 static int bsp_lcd_width = -1;
 static int bsp_lcd_height = -1;
-static int bsp_lcd_laysize = -1;
 
-static uint32_t layer_addr [LCD_MAX_LAYER] = {0, 0};
-static lcd_layers_t screen_layer_current = LCD_BACKGROUND;
+lcd_wincfg_t lcd_def_cfg;
+lcd_wincfg_t *lcd_active_cfg = NULL;
 
 static const lcd_layers_t layer_switch[] =
 {
@@ -74,6 +81,13 @@ static const uint32_t screen_mode2fmt_map[] =
     [GFX_COLOR_MODE_CLUT] = LTDC_PIXEL_FORMAT_L8,
     [GFX_COLOR_MODE_RGB565] = LTDC_PIXEL_FORMAT_RGB565,
     [GFX_COLOR_MODE_RGBA8888] = LTDC_PIXEL_FORMAT_ARGB8888,
+};
+
+static const uint32_t screen_mode2pixdeep[] =
+{
+    [GFX_COLOR_MODE_CLUT]       = 1,
+    [GFX_COLOR_MODE_RGB565]     = 2,
+    [GFX_COLOR_MODE_RGBA8888]   = 4,
 };
 
 void screen_load_clut (void *_buf, int size, int layer)
@@ -96,22 +110,92 @@ void screen_init (void)
     BSP_LCD_SetBrightness(100);
 }
 
-void screen_win_cfg (screen_t *screen)
+void screen_deinit (void)
 {
     int layer;
-    uint32_t scale_w = bsp_lcd_width / screen->width;
-    uint32_t scale_h = bsp_lcd_height / screen->height;
-    uint32_t scale;
-    uint32_t x, y, w, h;
-    uint32_t bsp_lcd_fb;
-    int fb_size = 0;
+    dprintf("%s() :\n", __func__);
+    BSP_LCD_DeInitEx();
+}
 
-    LCD_LayerCfgTypeDef  Layercfg;
+void screen_release (void)
+{
+    if (lcd_active_cfg && lcd_active_cfg->fb_mem) {
+        memset(lcd_active_cfg->fb_mem, 0, lcd_active_cfg->fb_size);
+    }
+    if (lcd_active_cfg) {
+        memset(lcd_active_cfg, 0, sizeof(*lcd_active_cfg));
+    }
+    lcd_active_cfg = NULL;
+}
 
-    if (bsp_lcd_laysize > 0) {
-        return;
+void screen_get_wh (screen_t *s)
+{
+    assert(lcd_active_cfg && s);
+    s->width = lcd_x_size_var;
+    s->height = lcd_y_size_var;
+}
+
+static void * screen_alloc_fb (lcd_mem_malloc_t __malloc, lcd_wincfg_t *cfg, uint32_t w, uint32_t h, uint32_t pixel_deep, uint32_t layers_cnt)
+{
+    int fb_size;
+    int i = layers_cnt;
+    uint8_t *fb_mem;
+
+    assert(layers_cnt <= LCD_MAX_LAYER)
+
+    fb_size = ((w + 1) * h) * pixel_deep * layers_cnt;
+
+    if (cfg->fb_mem) {
+        Sys_Free(cfg->fb_mem);
+    }
+    fb_mem = __malloc(fb_size);
+    if (!fb_mem) {
+        dprintf("%s() : failed to alloc %u bytes\n", __func__, fb_size);
+        return NULL;
+    }
+    memset(fb_mem, 0, fb_size);
+
+    cfg->fb_size = fb_size;
+    cfg->fb_mem = fb_mem;
+    cfg->lay_size = fb_size / layers_cnt;
+    cfg->lay_cnt = layers_cnt;
+    cfg->w = w;
+    cfg->h = h;
+
+    while (i-- > 0) {
+        cfg->lay_mem[i] = fb_mem;
+        fb_mem = fb_mem + cfg->lay_size;
     }
 
+    return cfg->fb_mem;
+}
+
+void screen_ts_align (int *x, int *y)
+{
+}
+
+static LCD_LayerCfgTypeDef default_laycfg;
+
+
+int screen_win_cfg (lcd_mem_malloc_t __malloc, lcd_wincfg_t *cfg, screen_t *screen, uint32_t colormode, int layers_cnt)
+{
+    LCD_LayerCfgTypeDef *Layercfg;
+    int in_w = screen->width > 0 ? screen->width : bsp_lcd_width,
+        in_h = screen->height > 0 ? screen->height : bsp_lcd_height;
+    uint32_t scale_w = bsp_lcd_width / in_w;
+    uint32_t scale_h = bsp_lcd_height / in_h;
+    uint32_t scale;
+    uint32_t x, y, w, h;
+    int layer;
+
+    if (!cfg) {
+        cfg = &lcd_def_cfg;
+    }
+
+    if (cfg == lcd_active_cfg) {
+        return 0;
+    }
+    lcd_active_cfg = cfg;
     if (scale_w < scale_h) {
         scale_h = scale_w;
     } else {
@@ -122,59 +206,72 @@ void screen_win_cfg (screen_t *screen)
         scale = LCD_MAX_SCALE;
     }
 
-    switch (scale) {
-        case 2:
-            screen_update_handle = screen_update_2x2;
-        break;
-        case 3:
-            screen_update_handle = screen_update_3x3;
-        break;
+    if (colormode == GFX_COLOR_MODE_CLUT) {
+        switch (scale) {
+            case 1:
+                screen_update_handle = screen_update_no_scale;
+            case 2:
+                screen_update_handle = screen_update_2x2_8bpp;
+            break;
+            case 3:
+                screen_update_handle = screen_update_3x3_8bpp;
+            break;
 
-        default:
-            fatal_error("%s() : Scale not supported yet!\n", __func__);
-        break;
+            default:
+                fatal_error("%s() : Scale not supported yet!\n", __func__);
+            break;
+        }
+    } else {
+        switch (scale) {
+            default:
+                dprintf("%s() : Only \'no scale\' mode present\n", __func__);
+                screen_update_handle = screen_update_no_scale;
+            break;
+        }
     }
 
-    w = screen->width * scale;
-    h = screen->height * scale;
+    w = in_w * scale;
+    h = in_h * scale;
     x = (bsp_lcd_width - w) / scale;
     y = (bsp_lcd_height - h) / scale;
 
-    fb_size = ((w + 1) * h) * sizeof(pix_t) * LTDC_NB_OF_LAYERS;
+    lcd_x_size_var = w;
+    lcd_y_size_var = h;
 
-    bsp_lcd_fb = (uint32_t)Sys_AllocVideo(&fb_size);
-    memset((void *)bsp_lcd_fb, 0, fb_size);
-
-    bsp_lcd_laysize = fb_size / LTDC_NB_OF_LAYERS;
-
-    layer_addr[LCD_BACKGROUND] = bsp_lcd_fb + bsp_lcd_laysize;
-    layer_addr[LCD_FOREGROUND] = bsp_lcd_fb;
-
-    /* Layer Init */
-    Layercfg.WindowX0 = x;
-    Layercfg.WindowX1 = x + w;
-    Layercfg.WindowY0 = y;
-    Layercfg.WindowY1 = y + h;
-    Layercfg.PixelFormat = screen_mode2fmt_map[GFX_COLOR_MODE];
-    Layercfg.Alpha = 255;
-    Layercfg.Alpha0 = 0;
-    Layercfg.Backcolor.Blue = 0;
-    Layercfg.Backcolor.Green = 0;
-    Layercfg.Backcolor.Red = 0;
-    Layercfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
-    Layercfg.BlendingFactor2 = LTDC_BLENDING_FACTOR1_CA;
-    Layercfg.ImageWidth = w;
-    Layercfg.ImageHeight = h;
-
-    for (layer = 0; layer < (int)LCD_MAX_LAYER; layer++) {
-        Layercfg.FBStartAdress = layer_addr[layer];
-        HAL_LTDC_ConfigLayer(&hltdc_discovery, &Layercfg, layer);
+    if (!screen_alloc_fb(__malloc, cfg, w, h, screen_mode2pixdeep[colormode], layers_cnt)) {
+        return -1;
     }
+
+    cfg->lay_halcfg = &default_laycfg;
+
+    Layercfg = &default_laycfg;
+    /* Layer Init */
+    Layercfg->WindowX0 = x;
+    Layercfg->WindowX1 = x + w;
+    Layercfg->WindowY0 = y;
+    Layercfg->WindowY1 = y + h;
+    Layercfg->PixelFormat = screen_mode2fmt_map[colormode];
+    Layercfg->Alpha = 255;
+    Layercfg->Alpha0 = 0;
+    Layercfg->Backcolor.Blue = 0;
+    Layercfg->Backcolor.Green = 0;
+    Layercfg->Backcolor.Red = 0;
+    Layercfg->BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
+    Layercfg->BlendingFactor2 = LTDC_BLENDING_FACTOR1_CA;
+    Layercfg->ImageWidth = w;
+    Layercfg->ImageHeight = h;
+
+    for (layer = 0; layer < layers_cnt; layer++) {
+        Layercfg->FBStartAdress = (uint32_t)cfg->lay_mem[layer];
+        HAL_LTDC_ConfigLayer(&hltdc_discovery, Layercfg, layer);
+    }
+    return 0;
 }
 
 uint32_t screen_total_mem_avail_kb (void)
 {
-    return ((bsp_lcd_laysize * LTDC_NB_OF_LAYERS) / 1024);
+    assert(lcd_active_cfg);
+    return ((lcd_active_cfg->lay_size * lcd_active_cfg->lay_cnt) / 1024);
 }
 
 /*
@@ -196,27 +293,39 @@ static inline void lcd_wait_ready ()
 
 static void screen_sync (int wait)
 {
+    assert(lcd_active_cfg);
     if (wait) {
         lcd_wait_ready();
     } else {
-        lcd_set_layer(screen_layer_current);
-        screen_layer_current = layer_switch[screen_layer_current];
+        lcd_set_layer(lcd_active_cfg->active_lay_idx);
+        lcd_active_cfg->active_lay_idx = layer_switch[lcd_active_cfg->active_lay_idx];
     }
+}
+
+void screen_vsync (void)
+{
+    screen_sync(1);
 }
 
 static void screen_get_invis_screen (screen_t *screen)
 {
     screen->width = bsp_lcd_width;
     screen->height = bsp_lcd_height;
-    screen->buf = (pix_t *)layer_addr[layer_switch[screen_layer_current]];
+    screen->buf = (void *)lcd_active_cfg->lay_mem[layer_switch[lcd_active_cfg->active_lay_idx]];
 }
 
-void screen_set_clut (pal_t *palette, uint32_t clut_num_entries)
+void screen_set_clut (void *palette, uint32_t clut_num_entries)
 {
     int layer;
+    LCD_LayerCfgTypeDef *Layercfg;
 
+    assert(lcd_active_cfg);
+    Layercfg = lcd_active_cfg->lay_halcfg;
+    if (Layercfg->PixelFormat != screen_mode2fmt_map[GFX_COLOR_MODE_CLUT]) {
+        return;
+    }
     screen_sync(1);
-    for (layer = 0; layer < (int)LCD_MAX_LAYER; layer++) {
+    for (layer = 0; layer < lcd_active_cfg->lay_cnt; layer++) {
         screen_load_clut (palette, clut_num_entries, layer);
     }
 }
@@ -226,48 +335,63 @@ void screen_update (screen_t *in)
     screen_update_handle(in);
 }
 
+void screen_direct (screen_t *s)
+{
+    screen_get_invis_screen(s);
+}
+
+
+typedef uint8_t pix8_t;
+
 typedef struct {
-    pix_t a[4];
-} scanline_t;
+    pix8_t a[4];
+} scanline8_t;
 
 typedef union {
-#if (GFX_COLOR_MODE == GFX_COLOR_MODE_CLUT)
     uint32_t w;
-#elif (GFX_COLOR_MODE == GFX_COLOR_MODE_RGB565)
-    uint64_t w;
-#endif
-    scanline_t sl;
-} scanline_u;
+    scanline8_t sl;
+} scanline8_u;
 
-#define W_STEP (sizeof(scanline_t) / sizeof(pix_t))
-#define DST_NEXT_LINE(x, w, lines) (((x) + (lines) * ((w) / sizeof(scanline_u))))
+#define W_STEP8 (sizeof(scanline8_t) / sizeof(pix8_t))
+#define DST_NEXT_LINE8(x, w, lines) (((x) + (lines) * ((w) / sizeof(scanline8_u))))
 
 typedef struct {
-    scanline_u a[2];
+    scanline8_u a[2];
 } pix_outx2_t;
 
-static void screen_update_2x2 (screen_t *in)
+static void screen_update_no_scale (screen_t *in)
+{
+    screen_t screen;
+
+    screen_sync (1);
+    screen_get_invis_screen(&screen);
+
+    memcpy(screen.buf, in->buf, in->width * in->height);
+}
+
+static void screen_update_2x2_8bpp (screen_t *in)
 {
     pix_outx2_t *d_y0;
     pix_outx2_t *d_y1;
     pix_outx2_t pix;
+    pix8_t *rawptr;
     int s_y, i;
-    scanline_t *scanline;
-    scanline_u d_yt0, d_yt1;
+    scanline8_t *scanline;
+    scanline8_u d_yt0, d_yt1;
     screen_t screen;
 
-    screen_sync (0);
-    SCB_CleanDCache();
+    screen_sync (1);
     screen_get_invis_screen(&screen);
 
     d_y0 = (pix_outx2_t *)screen.buf;
-    d_y1 = DST_NEXT_LINE(d_y0, in->width, 1);
+    d_y1 = DST_NEXT_LINE8(d_y0, in->width, 1);
 
+    rawptr = (pix8_t *)in->buf;
     for (s_y = 0; s_y < (in->width * in->height); s_y += in->width) {
 
-        scanline = (scanline_t *)&in->buf[s_y];
+        scanline = (scanline8_t *)&rawptr[s_y];
 
-        for (i = 0; i < in->width; i += W_STEP) {
+        for (i = 0; i < in->width; i += W_STEP8) {
 
             d_yt0.sl = *scanline++;
             d_yt1    = d_yt0;
@@ -280,51 +404,43 @@ static void screen_update_2x2 (screen_t *in)
             d_yt1.sl.a[1] = d_yt1.sl.a[2];
             d_yt1.sl.a[2] = d_yt1.sl.a[3];
 
-#if (GFX_COLOR_MODE == GFX_COLOR_MODE_CLUT)
             pix.a[0] = d_yt0;
             pix.a[1] = d_yt1;
-#elif (GFX_COLOR_MODE == GFX_COLOR_MODE_RGB565)
-            fatal_error("%s() : needs fix\n");
-            pix = d_yt0.w;
-            *d_y0++     = pix;
-            *d_y1++     = pix;
 
-            pix = d_yt1.w;
-#endif
             *d_y0++     = pix;
             *d_y1++     = pix;
         }
-        d_y0 = DST_NEXT_LINE(d_y0, in->width, 1);
-        d_y1 = DST_NEXT_LINE(d_y1, in->width, 1);
+        d_y0 = DST_NEXT_LINE8(d_y0, in->width, 1);
+        d_y1 = DST_NEXT_LINE8(d_y1, in->width, 1);
     }
 }
 
 typedef struct {
-    scanline_u a[3];
+    scanline8_u a[3];
 } pix_outx3_t;
 
-static void screen_update_3x3(screen_t *in)
+static void screen_update_3x3_8bpp(screen_t *in)
 {
     pix_outx3_t *d_y0, *d_y1, *d_y2;
     pix_outx3_t pix;
+    pix8_t *rawptr;
     int s_y, i;
-    scanline_t *scanline;
-    scanline_u d_yt0, d_yt1, d_yt2;
+    scanline8_t *scanline;
+    scanline8_u d_yt0, d_yt1, d_yt2;
     screen_t screen;
 
-    screen_sync (0);
-    SCB_CleanDCache();
+    screen_sync (1);
     screen_get_invis_screen(&screen);
 
     d_y0 = (pix_outx3_t *)screen.buf;
-    d_y1 = DST_NEXT_LINE(d_y0, in->width, 1);
-    d_y2 = DST_NEXT_LINE(d_y1, in->width, 1);
-
+    d_y1 = DST_NEXT_LINE8(d_y0, in->width, 1);
+    d_y2 = DST_NEXT_LINE8(d_y1, in->width, 1);
+    rawptr = (pix8_t *)in->buf;
     for (s_y = 0; s_y < (in->width * in->height); s_y += in->width) {
 
-        scanline = (scanline_t *)&in->buf[s_y];
+        scanline = (scanline8_t *)&rawptr[s_y];
 
-        for (i = 0; i < in->width; i += W_STEP) {
+        for (i = 0; i < in->width; i += W_STEP8) {
 
             d_yt0.sl = *scanline++;
             d_yt1    = d_yt0;
@@ -341,11 +457,10 @@ static void screen_update_3x3(screen_t *in)
 
             d_yt0.sl.a[2] = d_yt0.sl.a[0];
             d_yt0.sl.a[1] = d_yt0.sl.a[0];
-#if (GFX_COLOR_MODE == GFX_COLOR_MODE_CLUT)
             pix.a[0] = d_yt0;
             pix.a[1] = d_yt1;
             pix.a[2] = d_yt2;
-#elif (GFX_COLOR_MODE == GFX_COLOR_MODE_RGB565)
+#if 0/* (GFX_COLOR_MODE == GFX_COLOR_MODE_RGB565)*/
             fatal_error("%s() : needs fix\n");
             pix = d_yt0.w;
             *d_y0++     = pix;
@@ -359,12 +474,13 @@ static void screen_update_3x3(screen_t *in)
             *d_y2++     = pix;
         }
 
-        d_y0 = DST_NEXT_LINE(d_y0, in->width, 2);
-        d_y1 = DST_NEXT_LINE(d_y1, in->width, 2);
-        d_y2 = DST_NEXT_LINE(d_y2, in->width, 2);
+        d_y0 = DST_NEXT_LINE8(d_y0, in->width, 2);
+        d_y1 = DST_NEXT_LINE8(d_y1, in->width, 2);
+        d_y2 = DST_NEXT_LINE8(d_y2, in->width, 2);
     }
 }
 
+#endif
 
 /**
   * @}
