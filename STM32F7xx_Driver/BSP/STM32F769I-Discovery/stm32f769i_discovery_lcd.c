@@ -475,7 +475,7 @@ uint8_t BSP_LCD_InitEx(LCD_OrientationTypeDef orientation)
      To avoid any synchronization issue, the DSI shall be started after enabling the LTDC */
   HAL_DSI_Start(&hdsi_discovery);
 
-#if !defined(DATA_IN_ExtSDRAM)
+#if !defined(DATA_IN_ExtSDRAM) && !defined(BSP_DRIVER)
   /* Initialize the SDRAM */
   BSP_SDRAM_Init();
 #endif /* DATA_IN_ExtSDRAM */
@@ -520,7 +520,7 @@ int BSP_HDMI_QerryTiming (hdmi_timing_t *timing)
     if (size < 0) {
         return -1;
     }
-#ifndef APPLICATION
+#if !defined(APPLICATION) || defined(BSP_DRIVER)
     return hdmi_parse_edid(timing, &edid, size);
 #else
     return 0;

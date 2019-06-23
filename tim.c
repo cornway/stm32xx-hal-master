@@ -1,3 +1,4 @@
+#if !defined(APPLICATION) || defined(BSP_DRIVER)
 
 #include <tim_int.h>
 #include <misc_utils.h>
@@ -158,6 +159,5 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     assert(0);
 }
 
-
-
+#endif
 

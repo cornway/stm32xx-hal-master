@@ -5,12 +5,12 @@
 
 #include <nvic.h>
 
-#ifdef BOOT
+#if defined(BOOT) || defined(BSP_DRIVER)
 #define BSP_INDIR_API 0
 
 #else
 
-#ifdef APPLICATION
+#if defined(APPLICATION)
 #define BSP_INDIR_API 1
 #else
 #define BSP_INDIR_API 0
@@ -96,6 +96,7 @@ typedef struct bspapi_s {
     } cd;
 
     struct sys_t {
+        void (*init) (void (*) (void));
         void (*fatal) (char *, ...);
         void (*prof_enter) (const char *, int);
         void (*prof_exit) (const char *, int);

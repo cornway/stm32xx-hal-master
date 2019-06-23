@@ -1,9 +1,8 @@
 #include <arch.h>
 #include <stdlib.h>
-#include "dev_conf.h"
-#include "main.h"
-#include "gfx.h"
 #include <mpu.h>
+#include <misc_utils.h>
+#include <debug.h>
 
 #ifdef __MICROLIB
 #error "I don't want to use microlib"
@@ -22,7 +21,7 @@
 
 #endif /*USE_STM32F769I_DISCO*/
 
-#ifdef DATA_IN_ExtSDRAM
+#if defined(DATA_IN_ExtSDRAM) || defined(APPLICATION)
 
 #define MALLOC_MAGIC       0x75738910
 
@@ -123,7 +122,7 @@ void Sys_AllocInit (void)
     extern void __arch_user_heap (void *mem, void *size);
 
     __arch_user_heap(&heap_user_mem_ptr, &heap_user_size);
-#endif
+#endif /*BOOT*/
 }
 
 void Sys_AllocDeInit (void)
@@ -158,7 +157,7 @@ void *Sys_AllocShared (int *size)
     return p - 1;
 }
 
-#else
+#else /*BOOT*/
 
 void *Sys_AllocShared (int *size)
 {
@@ -204,15 +203,17 @@ void Sys_Free (void *p)
     heap_free(p);
 }
 
-#else
+#else /*BOOT*/
 
 void Sys_Free (void *p)
 {
     heap_free(p);
 }
 
-#endif
+#endif /*BOOT*/
 
 #else /*DATA_IN_ExtSDRAM*/
 
 #error "Not supported"
+
+#endif

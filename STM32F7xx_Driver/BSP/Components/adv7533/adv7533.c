@@ -246,7 +246,7 @@ void __dump_i2c_hex (const char *func, const char *name, uint8_t addr, uint8_t o
     __dump_hex(func, name, buf, len);
 }
 
-#ifndef APPLICATION
+#if !defined(APPLICATION) || defined(BSP_DRIVER)
 
 /*FIXME !!! : handle interrupt with care, remove delay(s)*/
 static int ADV7533_EDID_Read_Begin (void)

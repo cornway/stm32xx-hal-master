@@ -6,7 +6,7 @@
 
 #if AUDIO_MODULE_PRESENT
 
-#ifndef APPLICATION
+#if !defined(APPLICATION) || defined(BSP_DRIVER)
 
 typedef struct {
     snd_sample_t *buf;

@@ -1,4 +1,4 @@
-#ifndef APPLICATION
+#if !defined(APPLICATION) || defined(BSP_DRIVER)
 
 #include <misc_utils.h>
 #include <debug.h>

@@ -1,5 +1,5 @@
 
-#ifndef APPLICATION
+#if !defined(APPLICATION) || defined(BSP_DRIVER)
 
 #include "string.h"
 #include "stm32f769i_discovery_audio.h"

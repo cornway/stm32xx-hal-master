@@ -1,10 +1,8 @@
 /* Includes ------------------------------------------------------------------*/
 #include <bsp_api.h>
-#if !BSP_INDIR_API
-
-
 #include <stdarg.h>
 #include "main.h"
+#include <stm32f769i_discovery.h>
 #include "lcd_main.h"
 #include "audio_main.h"
 #include "input_main.h"
@@ -13,7 +11,25 @@
 #include "misc_utils.h"
 #include "nvic.h"
 #include <mpu.h>
-#include <stm32f769i_discovery.h>
+
+extern void bsp_api_attach (bspapi_t *api);
+extern void VID_PreConfig (void);
+extern bspapi_t bspapi;
+
+static void SystemClock_Config(void);
+static void CPU_CACHE_Enable(void);
+static void SystemDump (void);
+
+int g_dev_debug_level = DBG_ERR;
+
+extern int mainloop (int argc, const char *argv[]);
+
+static void clock_fault (void)
+{
+    bug();
+}
+
+#if !BSP_INDIR_API
 
 #if (_USE_LFN == 3)
 #error "ff_malloc, ff_free must be redefined to Sys_HeapAlloc"
@@ -25,22 +41,7 @@ int const __cache_line_size = 32;
 #error "Cache line size unknown"
 #endif
 
-extern bspapi_t bspapi;
-extern void bsp_api_attach (bspapi_t *api);
-
-extern void bsp_api_attach (bspapi_t *api);
-extern void VID_PreConfig (void);
-extern bspapi_t bspapi;
-
 /** The prototype for the application's main() function */
-extern int mainloop (int argc, const char *argv[]);
-
-
-int g_dev_debug_level = DBG_ERR;
-
-static void SystemDump (void);
-
-volatile uint32_t systime = 0;
 
 void dumpstack (void)
 {
@@ -58,15 +59,7 @@ void fatal_error (char *message, ...)
     bug();
 }
 
-static void clock_fault (void)
-{
-    bug();
-}
-
-
 /* Private function prototypes -----------------------------------------------*/
-static void SystemClock_Config(void);
-static void CPU_CACHE_Enable(void);
 
 void hdd_led_on (void)
 {
@@ -88,43 +81,6 @@ void serial_led_off (void)
     BSP_LED_Off(LED1);
 }
 
-static int con_echo (const char *buf, int len)
-{
-    dprintf("@: %s\n", buf);
-    return 0; /*let it be processed by others*/
-}
-
-int dev_main (void)
-{
-    CPU_CACHE_Enable();
-    SystemClock_Config();
-    HAL_Init();
-    mpu_init();
-    serial_init();
-    Sys_AllocInit();
-    profiler_init();
-
-    BSP_LED_Init(LED1);
-    BSP_LED_Init(LED2);
-
-    term_register_handler(con_echo);
-
-    audio_init();
-    input_bsp_init();
-    dev_io_init();
-    screen_init();
-    SystemDump();
-    d_dvar_int32(&g_dev_debug_level, "dbglvl");
-
-    VID_PreConfig();
-#ifndef BOOT
-    bsp_api_attach(&bspapi);
-#endif
-    mainloop(0, NULL);
-
-    return 0;
-}
-
 void dev_deinit (void)
 {
 #if 0//!BSP_INDIR_API
@@ -143,6 +99,8 @@ void dev_deinit (void)
     HAL_DeInit();
 #endif
 }
+
+#endif
 
 static void SystemClock_Config(void)
 {
@@ -221,5 +179,31 @@ static void SystemDump (void)
     NVIC_dump();
 }
 
+static int con_echo (const char *buf, int len)
+{
+    dprintf("@: %s\n", buf);
+    return 0; /*let it be processed by others*/
+}
+
+#if defined(BOOT)
+
+#else
+#define dev_init(user) g_bspapi->sys.init(user)
 #endif
+
+void __dev_init (void)
+{
+    Sys_AllocInit();
+}
+
+int dev_main (void)
+{
+    bsp_api_attach(&bspapi);
+    dev_init(__dev_init);
+    VID_PreConfig();
+    mainloop(0, NULL);
+
+    return 0;
+}
+
 
