@@ -38,8 +38,8 @@ typedef struct bsp_debug_api_s {
     char (*getc) (void);
     void (*send) (const void *, unsigned int);
     void (*flush) (void);
-    void (*reg_clbk) (void *);
-    void (*unreg_clbk) (void *);
+    void (*reg_clbk) (serial_rx_clbk_t);
+    void (*unreg_clbk) (serial_rx_clbk_t);
     void (*tickle) (void);
     void (*dprintf) (const char *, ...);
 } bsp_debug_api_t;
@@ -63,7 +63,7 @@ typedef struct bsp_debug_api_s {
 #define dprintf                 BSP_DBG_API(dprintf)
 
 #else
-void serial_init (void);
+int serial_init (void);
 void serial_putc (char c);
 char serial_getc (void);
 void serial_send_buf (const void *data, size_t cnt);

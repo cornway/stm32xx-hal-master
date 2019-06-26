@@ -23,7 +23,7 @@ extern int joypad_read (int8_t *pads);
 
 static kbdmap_t input_kbdmap[JOY_STD_MAX];
 
-static void *(*user_handler) (void *, void *) = NULL;
+static input_evt_handler_t user_handler = NULL;
 
 #define input_post_key(a, b) {              \
     user_handler ? user_handler(a, b) : NULL; \
@@ -268,18 +268,19 @@ void input_bsp_deinit (void)
     joypad_bsp_deinit();
 }
 
-void input_bsp_init (void)
+int input_bsp_init (void)
 {
     BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
     ts_init_states();
 
     joypad_bsp_init();
+    return 0;
 }
 
-void input_soft_init (void *(*in_handler) (void *, void *), const kbdmap_t kbdmap[JOY_STD_MAX])
+void input_soft_init (input_evt_handler_t handler, const kbdmap_t *kbdmap)
 {
     memcpy(&input_kbdmap[0], &kbdmap[0], sizeof(input_kbdmap));
-    user_handler = in_handler;
+    user_handler = handler;
     ts_attach_keys(ts_zones_keymap, kbdmap);
 }
 

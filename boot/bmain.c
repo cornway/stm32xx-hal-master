@@ -7,6 +7,7 @@
 #include <lcd_main.h>
 #include <string.h>
 #include <heap.h>
+#include <bsp_sys.h>
 
 
 #define BOOT_SYS_DIR_PATH "/sys"
@@ -147,7 +148,7 @@ boot_setup_bin (const char *dirpath, const char *name, bintype_t type)
     boot_bin_t *bin;
     arch_word_t entryaddr;
 
-    bin = (boot_bin_t *)Sys_Malloc(sizeof(*bin));
+    bin = (boot_bin_t *)heap_malloc(sizeof(*bin));
     assert(bin);
 
     bin->progaddr = g_app_program_addr;
@@ -234,12 +235,12 @@ static void *cache_bin (const char *path, int *binsize)
         return NULL;
     }
     size = ROUND_UP(fsize, 32);
-    cache = Sys_AllocShared(&size);
+    cache = heap_alloc_shared(size);
     assert(cache);
 
     if (d_read(f, cache, fsize) < fsize) {
         dprintf("%s() : missing part\n", __func__);
-        Sys_Free(cache);
+        heap_free(cache);
         cache = NULL;
     } else {
         *binsize = fsize;
@@ -283,7 +284,7 @@ static void boot_destroy_bins (void)
 
     while (bin) {
 
-        Sys_Free(bin);
+        heap_free(bin);
         bin = bin->next;
     }
 }
@@ -441,7 +442,7 @@ static void boot_cmd_exec (void)
      }
 }
 
-int boot_main (int argc, char **argv)
+int boot_main (int argc, const char **argv)
 {
     screen_t s;
     prop_t prop;
@@ -499,14 +500,11 @@ int boot_main (int argc, char **argv)
 
     d_dvar_int32(&boot_load_existing, "skipflash");
 
-    while (1) {
+    while (!gui.destroy) {
 
         gui_draw(&gui);
         dev_tickle();
         input_proc_keys(NULL);
-        if (gui.destroy) {
-            gui_destroy(&gui);
-        }
         boot_cmd_exec();
     }
     return 0;

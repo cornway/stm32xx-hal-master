@@ -72,7 +72,7 @@ int boot_audio_open_wave (const char *name)
     if (sfxidx < 0) {
         return -1;
     }
-    sfx = Sys_Malloc(sizeof(*sfx) + cachesize + 1);
+    sfx = heap_malloc(sizeof(*sfx) + cachesize + 1);
     if (!sfx) {
         return -1;
     }
@@ -122,6 +122,7 @@ int boot_audio_stop_wave (int hdl)
         return -1;
     }
     audio_stop_channel(hdl);
+    return 0;
 }
 
 void boot_audio_release_wave (int hdl)
@@ -131,6 +132,6 @@ void boot_audio_release_wave (int hdl)
     boot_audio_stop_wave(hdl);
     __set_sfx(hdl, NULL);
     audio_wave_close(sfx->wavenum);
-    Sys_Free(sfx);
+    heap_free(sfx);
 }
 

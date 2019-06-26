@@ -77,7 +77,6 @@ static int NVIC_search_irqn (IRQn_Type IRQn)
 
 static void NVIC_map_irq (IRQn_Type IRQn, uint8_t preempt, uint8_t preemptsub, uint8_t group)
 {
-    int i;
     if (irq_maptable_index >= NVIC_IRQ_MAX) {
         fatal_error("irq_maptable_index >= NVIC_IRQ_MAX");
     }

@@ -506,7 +506,7 @@ static int _d_dvar_reg (dvar_t *var, const char *name)
         return -1;
     }
 
-    v = (dvar_int_t *)Sys_Malloc(sizeof(dvar_int_t));
+    v = (dvar_int_t *)heap_malloc(sizeof(dvar_int_t));
     if (!v) {
         return -1;
     }
@@ -590,7 +590,7 @@ void d_dvar_rm_all (void)
     dvar_int_t *v = dvar_head;
     while (v) {
         next = v->next;
-        Sys_Free(v);
+        heap_free(v);
         v = next;
     }
     dvar_head = NULL;
@@ -889,7 +889,7 @@ extern void SystemSoftReset (void);
     dprintf("Resetting...\n");
     serial_flush();
     SystemSoftReset();
-    exit(0);
+    assert(0);
     return -1;
 }
 

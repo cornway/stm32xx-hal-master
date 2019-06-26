@@ -36,7 +36,13 @@ void profiler_reset (void);
 void profiler_init (void);
 void profiler_deinit (void);
 
+int dev_init (void (*userinit) (void));
+void dev_deinit (void);
+
+
 #endif /*BSP_INDIR_API*/
+
+void dev_tickle (void);
 
 #define profiler_enter() _profiler_enter(__func__, __LINE__)
 #define profiler_exit() _profiler_exit(__func__, __LINE__)

@@ -73,13 +73,16 @@ enum {
     K_EX_MAX,
 }; /*extra keys (activsted by hold 'ctrl' key)*/
 
+typedef i_event_t *(*input_evt_handler_t) (i_event_t *, i_event_t *);
+
+
 typedef struct bsp_input_api_s {
     bspdev_t dev;
-    void (*soft_init) (void *(*) (void *, void *), void *);
+    void (*soft_init) (input_evt_handler_t, const kbdmap_t *);
     void (*bind_extra) (int, int);
     void (*tickle) (void);
-    void (*proc_keys) (void *);
-    void *(*post_key) (void *, void *event);
+    void (*proc_keys) (i_event_t *);
+    void *(*post_key) (void *, i_event_t *event);
     int (*touch_present) (void);
 } bsp_input_api_t;
 
@@ -101,9 +104,9 @@ typedef struct bsp_input_api_s {
 #define input_is_touch_avail BSP_IN_API(touch_present)
 
 #else
-void input_bsp_init (void);
+int input_bsp_init (void);
 void input_bsp_deinit (void);
-void input_soft_init (void *(*in_handler) (void *, void *), const kbdmap_t kbdmap[JOY_STD_MAX]);
+void input_soft_init (input_evt_handler_t, const kbdmap_t *kbdmap);
 void input_bind_extra (int type, int sym);
 void input_tickle (void);
 void input_proc_keys (i_event_t *evts);

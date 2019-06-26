@@ -1,3 +1,4 @@
+#include <string.h>
 #include <bsp_api.h>
 #include <debug.h>
 #include <audio_main.h>
@@ -26,9 +27,10 @@ typedef struct {
 
 #if !BSP_INDIR_API
 
-void dev_init_stub (void)
+int dev_init_stub (void)
 {
     dprintf("%s()\n", __func__);
+    return -1;
 }
 
 void dev_deinit_stub (void)
@@ -36,9 +38,10 @@ void dev_deinit_stub (void)
     dprintf("%s()\n", __func__);
 }
 
-void dev_conf_stub (const char *arg)
+int dev_conf_stub (const char *arg)
 {
     dprintf("%s() : \'%s\'\n", __func__, arg);
+    return -1;
 }
 
 const char *dev_info_stub (void)
@@ -50,9 +53,8 @@ const char *dev_info_stub (void)
 int dev_priv_stub (int c, void *v)
 {
     dprintf("%s()\n", __func__);
+    return 0;
 }
-
-extern int dev_init (void (*userinit) (void));
 
 #define API_SETUP(api, module) \
 (api)->api.module = &(api)->module;
@@ -110,9 +112,9 @@ bspapi_t *bsp_api_attach (void)
 
     BSP_VID_API(dev.init)   = vid_init;
     BSP_VID_API(dev.deinit) = vid_deinit;
-    BSP_VID_API(dev.conf)    = dev_conf_stub;
-    BSP_VID_API(dev.info)    = dev_info_stub;
-    BSP_VID_API(dev.priv)    = dev_priv_stub;
+    BSP_VID_API(dev.conf)   = dev_conf_stub;
+    BSP_VID_API(dev.info)   = dev_info_stub;
+    BSP_VID_API(dev.priv)   = dev_priv_stub;
     BSP_VID_API(get_wh)     = vid_wh;
     BSP_VID_API(mem_avail)  = vid_mem_avail;
     BSP_VID_API(win_cfg)    = vid_config;
@@ -124,9 +126,9 @@ bspapi_t *bsp_api_attach (void)
 
     BSP_SFX_API(dev.init)   = audio_init;
     BSP_SFX_API(dev.deinit) = audio_deinit;
-    BSP_SFX_API(dev.conf)    = dev_conf_stub;
-    BSP_SFX_API(dev.info)    = dev_info_stub;
-    BSP_SFX_API(dev.priv)    = dev_priv_stub;
+    BSP_SFX_API(dev.conf)   = audio_conf;
+    BSP_SFX_API(dev.info)   = dev_info_stub;
+    BSP_SFX_API(dev.priv)   = dev_priv_stub;
     BSP_SFX_API(mixer_ext)  = audio_mixer_ext;
     BSP_SFX_API(play)       = audio_play_channel;
     BSP_SFX_API(stop)       = audio_stop_channel;
@@ -159,10 +161,10 @@ bspapi_t *bsp_api_attach (void)
     BSP_CD_API(playing)     = cd_playing;
 
     BSP_SYS_API(dev.init)   = dev_init;
-    BSP_SYS_API(dev.deinit)  = dev_deinit_stub;
-    BSP_SYS_API(dev.conf)    = dev_conf_stub;
-    BSP_SYS_API(dev.info)    = dev_info_stub;
-    BSP_SYS_API(dev.priv)    = dev_priv_stub;
+    BSP_SYS_API(dev.deinit) = dev_deinit_stub;
+    BSP_SYS_API(dev.conf)   = dev_conf_stub;
+    BSP_SYS_API(dev.info)   = dev_info_stub;
+    BSP_SYS_API(dev.priv)   = dev_priv_stub;
     BSP_SYS_API(fatal)      = fatal_error;
     BSP_SYS_API(prof_enter) = _profiler_enter;
     BSP_SYS_API(prof_exit)  = _profiler_exit;
@@ -171,10 +173,10 @@ bspapi_t *bsp_api_attach (void)
     BSP_SYS_API(prof_deinit)  = profiler_deinit;
 
     BSP_DBG_API(dev.init)   = serial_init;
-    BSP_DBG_API(dev.deinit)  = dev_deinit_stub;
-    BSP_DBG_API(dev.conf)    = dev_conf_stub;
-    BSP_DBG_API(dev.info)    = dev_info_stub;
-    BSP_DBG_API(dev.priv)    = dev_priv_stub;
+    BSP_DBG_API(dev.deinit) = dev_deinit_stub;
+    BSP_DBG_API(dev.conf)   = dev_conf_stub;
+    BSP_DBG_API(dev.info)   = dev_info_stub;
+    BSP_DBG_API(dev.priv)   = dev_priv_stub;
     BSP_DBG_API(putc)       = serial_putc;
     BSP_DBG_API(getc)       = serial_getc;
     BSP_DBG_API(send)       = serial_send_buf;
@@ -195,6 +197,7 @@ bspapi_t *bsp_api_attach (void)
     BSP_IN_API(proc_keys)   = input_proc_keys;
     BSP_IN_API(post_key)    = NULL;
     BSP_IN_API(touch_present) = input_is_touch_avail;
+    return &api->api;
 }
 
 #else /*BSP_INDIR_API*/
@@ -230,7 +233,7 @@ void dvprintf (const char *fmt, va_list argptr)
 
     vsnprintf (string, sizeof(string), fmt, argptr);
 
-    dprintf(string);
+    dprintf("%s", string);
 }
 
 

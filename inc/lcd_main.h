@@ -43,12 +43,12 @@ typedef void *(*lcd_mem_malloc_t) (uint32_t size);
 
 typedef struct bsp_video_api_s {
     bspdev_t dev;
-    void (*get_wh) (void *);
+    void (*get_wh) (screen_t *);
     uint32_t (*mem_avail) (void);
-    int (*win_cfg) (void *, void *, void *, uint32_t, int);
+    int (*win_cfg) (lcd_mem_malloc_t, lcd_wincfg_t *, screen_t *, uint32_t, int);
     void (*set_clut) (void *, uint32_t);
-    void (*update) (void *);
-    void (*direct) (void *);
+    void (*update) (screen_t *);
+    void (*direct) (screen_t *);
     void (*vsync) (void);
     void (*input_align) (int *, int *);
 } bsp_video_api_t;
@@ -72,11 +72,12 @@ typedef struct bsp_video_api_s {
 #define vid_ptr_align       BSP_VID_API(input_align)
 
 #else
-void vid_init (void);
+int vid_init (void);
 void vid_deinit (void);
 void vid_wh (screen_t *s);
 uint32_t vid_mem_avail (void);
-int vid_config (lcd_mem_malloc_t __malloc, lcd_wincfg_t *cfg, screen_t *screen, uint32_t colormode, int layers_cnt);
+int vid_config (lcd_mem_malloc_t __malloc,lcd_wincfg_t *cfg,
+                    screen_t *screen, uint32_t colormode, int layers_cnt);
 void vid_set_clut (void *palette, uint32_t clut_num_entries);
 void vid_upate (screen_t *in);
 void vid_direct (screen_t *s);

@@ -8,13 +8,12 @@
 #define IRAM2 __attribute__ ((section ("iram2")))
 
 
-void Sys_AllocInit (void);
-void *Sys_AllocShared (int *size);
-void *Sys_AllocVideo (int *size);
-int Sys_AllocBytesLeft (void);
-void *Sys_Malloc (int size);
-void *Sys_Realloc (void *x, int32_t size);
-void *Sys_Calloc (int32_t size);
-void Sys_Free (void *p);
+void heap_init (void);
+void *heap_alloc_shared (int size);
+int heap_avail (void);
+void *heap_malloc (int size);
+void *heap_realloc (void *x, int32_t size);
+void *heap_calloc (int32_t size);
+void heap_free (void *p);
 
 

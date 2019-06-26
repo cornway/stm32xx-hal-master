@@ -212,7 +212,7 @@ static void cd_dorepeat (cdaudio_t *cd, track_t *song)
     song->volume = volume;
 }
 
-void music_tickle (void)
+void cd_tickle (void)
 {
     switch (cdaudio.state) {
         case CD_PLAY:
@@ -340,7 +340,7 @@ int cd_playing (cd_track_t *track)
     return 0;
 }
 
-void music_tickle (cd_track_t *track)
+void cd_tickle (cd_track_t *track)
 {
 
 }

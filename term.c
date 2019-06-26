@@ -1,5 +1,6 @@
 #if defined(BSP_DRIVER)
 
+#include <string.h>
 #include <misc_utils.h>
 #include <debug.h>
 
@@ -71,6 +72,31 @@ void term_parse (const char *buf, int size)
         prev_cnt = cnt;
         clbk = &serial_rx_clbk[0];
     }
+}
+
+
+int str_parse_tok (const char *str, const char *tok, uint32_t *val)
+{
+    int len = strlen(tok), ret = 0;
+    tok = strstr(str, tok);
+    if (!tok) {
+        return ret;
+    }
+    str = str + len;
+    if (*str != '=') {
+        ret = -1;
+        goto done;
+    }
+    str++;
+    if (!sscanf(str, "%u", &val)) {
+        ret = -1;
+    }
+    ret = 1;
+done:
+    if (ret < 0) {
+        dprintf("invalid config : \'%s\'\n", tok);
+    }
+    return ret;
 }
 
 

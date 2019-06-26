@@ -61,7 +61,6 @@ typedef struct {
 } proghdr_t;
 
 static uint32_t GetSector(uint32_t Address);
-static void __boot_exec (uint32_t addr) __attribute__((noreturn));
 
 static void bhal_prog_begin (void)
 {
@@ -238,12 +237,6 @@ static int bhal_prog_handle_func
     return errors_total;
 }
 
-static inline void __vtor_reloc (uint32_t addr)
-{
-    register uint32_t offset = addr - FLASH_BASE;
-    SCB->VTOR = FLASH_BASE | offset;
-}
-
 static void __bhal_boot (arch_word_t addr)
 {
     register volatile arch_word_t *entryptr, *spinitial;
@@ -258,7 +251,6 @@ static void __bhal_boot (arch_word_t addr)
     SCB_InvalidateICache();
 */
     __DSB();
-    //__vtor_reloc(addr);
     __msp_set(*spinitial);
     arch_asmgoto(*entryptr);
 }

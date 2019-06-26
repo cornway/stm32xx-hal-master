@@ -63,11 +63,11 @@ typedef struct bsp_io_api_s {
     int (*mkdir) (const char *);
     int (*opendir) (const char *);
     int (*closedir) (int );
-    int (*readdir) (int , void *);
+    int (*readdir) (int , fobj_t *);
     uint32_t (*time) (void);
-    int (*dirlist) (const char *, void *);
+    int (*dirlist) (const char *, flist_t *);
 
-    int (*var_reg) (void *, const char *);
+    int (*var_reg) (dvar_t *, const char *);
     int (*var_int32) (int32_t *, const char *);
     int (*var_float) (float *, const char *);
     int (*var_str) (char *, int, const char *);

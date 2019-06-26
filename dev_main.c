@@ -62,6 +62,7 @@ void fatal_error (char *message, ...)
 
 /* Private function prototypes -----------------------------------------------*/
 
+/*TODO : move to gpio.c/gpio.h*/
 void hdd_led_on (void)
 {
     BSP_LED_On(LED2);
@@ -217,7 +218,7 @@ int dev_init (void (*userinit) (void))
 
 void __dev_init (void)
 {
-    Sys_AllocInit();
+    heap_init();
     mpu_init();
 }
 
@@ -227,7 +228,7 @@ void __dev_init (void)
 
 void __dev_init (void)
 {
-    Sys_AllocInit();
+    heap_init();
 }
 
 #endif /*BSP_DRIVER*/
@@ -239,6 +240,8 @@ int dev_main (void)
     CPU_CACHE_Enable();
 #endif /*BSP_DRIVER*/
     dev_init(__dev_init);
+
+    audio_conf("samplerate=22050, volume=100");
 
     VID_PreConfig();
     mainloop(0, NULL);

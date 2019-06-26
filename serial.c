@@ -11,6 +11,7 @@
 #include "heap.h"
 #include "misc_utils.h"
 #include <tim_int.h>
+#include <dev_io.h>
 
 #if DEBUG_SERIAL
 
@@ -383,10 +384,10 @@ void TIM3_IRQHandler (void)
     HAL_TIM_IRQHandler(&serial_timer.handle);
 }
 
-void serial_init (void)
+int serial_init (void)
 {
     if (uart_desc_cnt >= MAX_UARTS) {
-        return;
+        return -1;
     }
     uart_desc_pool[uart_desc_cnt++] = &uart1_desc;
 
@@ -401,7 +402,7 @@ void serial_init (void)
     serial_timer.deinit = serial_timer_msp_deinit;
     serial_timer.hw = TIM3;
     serial_timer.irq = TIM3_IRQn;
-    hal_tim_init(&serial_timer);
+    return hal_tim_init(&serial_timer);
 }
 
 void serial_deinit (void)

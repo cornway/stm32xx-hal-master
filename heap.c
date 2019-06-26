@@ -36,17 +36,21 @@ static int heap_size_total = -1;
 static uint8_t *heap_user_mem_ptr = NULL;
 static arch_word_t heap_user_size = 0;
 
+#if !defined(BOOT)
+
 static inline void
-heap_check_margin (int size)
+__heap_check_margin (int size)
 {
     size = heap_size_total - size - sizeof(mchunk_t);
     if (size < 0) {
-        fatal_error("heap_check_margin : exceeds by %d bytes\n", -size);
+        fatal_error("__heap_check_margin : exceeds by %d bytes\n", -size);
     }
 }
 
+#endif
+
 static inline void *
-heap_malloc (int size, int freeable)
+__heap_malloc (int size, int freeable)
 {
     size = size + sizeof(mchunk_t);
     mchunk_t *p;
@@ -64,7 +68,7 @@ heap_malloc (int size, int freeable)
 }
 
 static inline void
-heap_free (void *_p)
+__heap_free (void *_p)
 {
     mchunk_t *p = (mchunk_t *)_p;
     if (!_p) {
@@ -72,10 +76,10 @@ heap_free (void *_p)
     }
     p = p - 1;
     if (!p->freeable) {
-        fatal_error("heap_free : chunk cannot be freed\n");
+        fatal_error("__heap_free : chunk cannot be freed\n");
     }
     if (p->magic != MALLOC_MAGIC) {
-        fatal_error("heap_free : magic fail, expected= 0x%08x, token= 0x%08x\n",
+        fatal_error("__heap_free : magic fail, expected= 0x%08x, token= 0x%08x\n",
                     MALLOC_MAGIC, p->magic);
     }
     heap_size_total += p->size;
@@ -83,7 +87,7 @@ heap_free (void *_p)
 }
 
 static inline void *
-heap_realloc (void *x, int32_t size)
+__heap_realloc (void *x, int32_t size)
 {
     mchunk_t *p = (mchunk_t *)x;
     if (!p) {
@@ -98,11 +102,11 @@ heap_realloc (void *x, int32_t size)
             __func__, size, heap_size_total);
     }
     assert(p->freeable);
-    heap_free(x);
-    return heap_malloc(size, 1);
+    __heap_free(x);
+    return __heap_malloc(size, 1);
 }
 
-void Sys_LeakCheck (void)
+void heap_leak_check (void)
 {
     arch_word_t heap_mem, heap_size, heap_size_left;
 
@@ -116,7 +120,7 @@ void Sys_LeakCheck (void)
     }
 }
 
-void Sys_AllocInit (void)
+void heap_init (void)
 {
     arch_word_t heap_mem, heap_size;
     arch_word_t sp_mem, sp_size;
@@ -142,14 +146,14 @@ void Sys_AllocInit (void)
 #endif /*BOOT*/
 }
 
-void Sys_AllocDeInit (void)
+void heap_deinit (void)
 {
-    Sys_LeakCheck();
+    heap_leak_check();
 }
 
 #ifdef BOOT
 
-void *Sys_AllocShared (int *size)
+void *heap_alloc_shared (int *size)
 {
     mchunk_t *p = NULL;
     int _size = *size + sizeof(mchunk_t);
@@ -167,37 +171,32 @@ void *Sys_AllocShared (int *size)
 
 #else /*BOOT*/
 
-void *Sys_AllocShared (int *size)
+void *heap_alloc_shared (int size)
 {
-    heap_check_margin(*size);
-    return heap_malloc(*size, 1);
+    __heap_check_margin(size);
+    return __heap_malloc(size, 1);
 }
 
 #endif /*BOOT*/
 
-void *Sys_AllocVideo (int *size)
-{
-    return Sys_AllocShared(size);
-}
-
-int Sys_AllocBytesLeft (void)
+int heap_avail (void)
 {
     return (heap_size_total - sizeof(mchunk_t));
 }
 
-void *Sys_Malloc (int size)
+void *heap_malloc (int size)
 {
-    return heap_malloc(size, 1);
+    return __heap_malloc(size, 1);
 }
 
-void *Sys_Realloc (void *x, int32_t size)
+void *heap_realloc (void *x, int32_t size)
 {
-    return heap_realloc(x, size);
+    return __heap_realloc(x, size);
 }
 
-void *Sys_Calloc (int32_t size)
+void *heap_calloc (int32_t size)
 {
-    void *p = heap_malloc(size, 1);
+    void *p = __heap_malloc(size, 1);
     if (p) {
         memset(p, 0, size);
     }
@@ -206,16 +205,16 @@ void *Sys_Calloc (int32_t size)
 
 #ifdef BOOT
 
-void Sys_Free (void *p)
+void heap_free (void *p)
 {
-    heap_free(p);
+    __heap_free(p);
 }
 
 #else /*BOOT*/
 
-void Sys_Free (void *p)
+void heap_free (void *p)
 {
-    heap_free(p);
+    __heap_free(p);
 }
 
 #endif /*BOOT*/

@@ -25,9 +25,9 @@ typedef struct bspapi_s {
 } bspapi_t;
 
 typedef struct {
-    void (*init) (void);
+    int (*init) (void);
     void (*deinit) (void);
-    void (*conf) (const char *);
+    int (*conf) (const char *);
     const char *(*info) (void);
     int (*priv) (int c, void *v);
 } bspdev_t;

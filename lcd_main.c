@@ -95,7 +95,7 @@ void screen_load_clut (void *_buf, int size, int layer)
     HAL_LTDC_EnableCLUT(&hltdc_discovery, layer);
 }
 
-void vid_init (void)
+int vid_init (void)
 {
     uint32_t status = BSP_LCD_Init();
     if(status)
@@ -107,6 +107,7 @@ void vid_init (void)
     bsp_lcd_height = BSP_LCD_GetYSize();
 
     BSP_LCD_SetBrightness(100);
+    return 0;
 }
 
 void vid_deinit (void)
@@ -144,7 +145,7 @@ static void * screen_alloc_fb (lcd_mem_malloc_t __malloc, lcd_wincfg_t *cfg, uin
     fb_size = ((w + 1) * h) * pixel_deep * layers_cnt;
 
     if (cfg->fb_mem) {
-        Sys_Free(cfg->fb_mem);
+        heap_free(cfg->fb_mem);
     }
     fb_mem = __malloc(fb_size);
     if (!fb_mem) {

@@ -4,23 +4,41 @@
 #include "dev_conf.h"
 #include "misc_utils.h"
 
+#ifndef AUDIO_RATE_DEFAULT
+#define AUDIO_RATE_DEFAULT 22050U
+#endif
+
+#define AUDIO_CHANNELS_NUM_DEFAULT 2
+#define AUDIO_SAMPLEBITS_DEFAULT 16
+
+#define AUDIO_MAX_VOICES 16
+#define AUDIO_MUS_CHAN_START AUDIO_MAX_VOICES + 1
+#define AUDIO_OUT_BUFFER_SIZE 0x800
+#define AUDIO_BUFFER_MS(rate) AUDIO_SIZE_TO_MS(rate, AUDIO_OUT_BUFFER_SIZE)
+
+#define REVERB_DELAY 5/*Ms*/
+#define REVERB_SAMPLE_DELAY(rate) AUDIO_MS_TO_SIZE(rate, REVERB_DELAY)
+#define REVERB_DECAY_MAX 255
+#define REVERB_DECAY 128
+#define REVERB_LIFE_TIME 1000
+
 #define USE_STEREO 0
 #define USE_REVERB 0
 #define COMPRESSION 1
 #define USE_FLOAT 1
 
-
 /*TODO use define instead of 0*/
 #define AUDIO_PLAY_SCHEME 0
 
-extern void music_tickle (void);
+extern void cd_tickle (void);
 extern int cd_init (void);
 
 #define AUDIO_TIMEOUT_MAX 2000 /*2 s*/
 #define MAX_2BAND_VOL ((MAX_VOL) | (MAX_VOL << 8))
 #define MAX_4BAND_VOL ((MAX_2BAND_VOL) | (MAX_2BAND_VOL << 16))
-#define A_NITIAL_VOL (60)
+#define AUDIO_VOLUME_DEFAULT (60)
 #define A_MAX_MIX_SAMPLES 8
+
 typedef struct mixdata_s {
     struct mixdata_s *next;
     int size;
@@ -68,6 +86,13 @@ typedef enum {
     A_ISR_MAX,
 } isr_status_e;
 
+typedef struct {
+    uint32_t samplerate;
+    uint32_t volume;
+    uint32_t channels;
+    uint32_t samplebits;
+} a_intcfg_t;
+
 #define a_chunk_len(chan) \
     ((chan)->inst.chunk.alen)
 
@@ -106,6 +131,8 @@ void a_channel_remove (a_channel_t *desc);
 void a_paint_buffer (a_channel_head_t *chanlist, a_buf_t *abuf, int compratio);
 
 uint8_t a_chanlist_try_reject_all (a_channel_head_t *chanlist);
+
+a_intcfg_t *a_get_conf (void);
 
 void error_handle (void);
 

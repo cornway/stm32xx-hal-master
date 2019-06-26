@@ -145,12 +145,17 @@ void joypad_bsp_deinit (void)
 
 void joypad_bsp_init (void)
 {
+    irqmask_t temp;
+
+    irq_bmap(&temp);
     USBH_Init(&hUSBHost, USBH_UserProcess, 0);
     USBH_RegisterClass(&hUSBHost, USBH_HID_CLASS);
     USBH_Start(&hUSBHost);
     for (int i = 0; i < JOY_STD_MAX; i++) {
         keypads[i] = -1;
     }
+    irq_bmap(&usb_irq);
+    usb_irq = usb_irq & (~temp);
 }
 
 void USBH_HID_EventCallback(USBH_HandleTypeDef *phost)
@@ -170,21 +175,16 @@ static void USBH_UserProcess(USBH_HandleTypeDef * phost, uint8_t id)
 
 USBH_StatusTypeDef USBH_HID_GamepadInit(USBH_HandleTypeDef *phost)
 {
-  HID_HandleTypeDef *HID_Handle =  (HID_HandleTypeDef *) phost->pActiveClass->pData;
-  irqmask_t temp;
+    HID_HandleTypeDef *HID_Handle =  (HID_HandleTypeDef *) phost->pActiveClass->pData;
 
-  irq_bmap(&temp);
-
-  if(HID_Handle->length > sizeof(gamepad_data))
-  {
+    if(HID_Handle->length > sizeof(gamepad_data))
+    {
     HID_Handle->length = sizeof(gamepad_data);
-  }
-  HID_Handle->pData = (uint8_t *)gamepad_data.data;
-  fifo_init(&HID_Handle->fifo, phost->device.Data, /*HID_QUEUE_SIZE * */sizeof(gamepad_data));
+    }
+    HID_Handle->pData = (uint8_t *)gamepad_data.data;
+    fifo_init(&HID_Handle->fifo, phost->device.Data, /*HID_QUEUE_SIZE * */sizeof(gamepad_data));
 
-  irq_bmap(&usb_irq);
-  usb_irq = usb_irq & (~temp);
-  return USBH_OK;  
+    return USBH_OK;
 }
 
 

@@ -26,6 +26,7 @@ static tim_int_t *tim_alloc (void)
             return &tim_int_pool[i];
         }
     }
+    return NULL;
 }
 
 static void tim_free (tim_int_t *tim)
@@ -57,6 +58,7 @@ static void tim_unlink (tim_int_t *tim)
             } else {
                 timer_desc_head = tim->next;
             }
+            tim_free(tim);
             return;
         }
 

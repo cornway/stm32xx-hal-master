@@ -9,24 +9,6 @@
 #define AUDIO_SIZE_TO_MS(rate, size) (((long long)(size) * 1000) / (rate))
 #define AUDIO_MS_TO_SIZE(rate, ms) (((((rate) << 2) / 1000) * (ms)) >> 2)
 
-#ifndef AUDIO_SAMPLE_RATE
-#define AUDIO_SAMPLE_RATE 11025U
-#endif
-
-#define AUDIO_OUT_CHANNELS 2
-#define AUDIO_OUT_BITS 16
-
-#define AUDIO_MAX_VOICES 16
-#define AUDIO_MUS_CHAN_START AUDIO_MAX_VOICES + 1
-#define AUDIO_OUT_BUFFER_SIZE 0x800
-#define AUDIO_BUFFER_MS AUDIO_SIZE_TO_MS(AUDIO_SAMPLE_RATE, AUDIO_OUT_BUFFER_SIZE)
-
-#define REVERB_DELAY 5/*Ms*/
-#define REVERB_SAMPLE_DELAY AUDIO_MS_TO_SIZE(AUDIO_SAMPLE_RATE, REVERB_DELAY)
-#define REVERB_DECAY_MAX 255
-#define REVERB_DECAY 128
-#define REVERB_LIFE_TIME 1000
-
 #define MAX_VOL (0x7f)
 
 #define AUDIO_SAMPLES_2_BYTES(samples) ((samples) * sizeof(snd_sample_t))
@@ -84,14 +66,14 @@ typedef struct {
 typedef struct bsp_sfx_api_s {
     bspdev_t dev;
     void (*mixer_ext) (void (*) (int, void *, int, void *));
-    void *(*play) (void *, int);
-    void *(*stop) (int);
+    audio_channel_t *(*play) (Mix_Chunk *, int);
+    void (*stop) (int);
     void (*pause) (int);
     void (*stop_all) (void);
     int (*is_play) (int);
     int (*check) (int);
     void (*set_pan) (int, int, int);
-    void (*sample_volume) (void *, uint8_t);
+    void (*sample_volume) (audio_channel_t *, uint8_t);
     void (*tickle) (void);
     void (*irq_save) (irqmask_t *);
     void (*irq_restore) (irqmask_t);
@@ -106,12 +88,12 @@ typedef struct bsp_sfx_api_s {
 
 typedef struct bsp_cd_api_s {
     bspdev_t dev;
-    void *(*play) (void *, const char *);
-    int (*pause) (void *);
-    int (*resume) (void *);
-    int (*stop) (void *);
-    int (*volume) (void *, uint8_t);
-    uint8_t (*getvol) (void *);
+    cd_track_t *(*play) (cd_track_t *, const char *);
+    int (*pause) (cd_track_t *);
+    int (*resume) (cd_track_t *);
+    int (*stop) (cd_track_t *);
+    int (*volume) (cd_track_t *, uint8_t);
+    uint8_t (*getvol) (cd_track_t *);
     int (*playing) (void);
 } bsp_cd_api_t;
 
@@ -157,11 +139,12 @@ typedef struct bsp_cd_api_s {
 
 #else
 
-void audio_init (void);
+int audio_init (void);
 void audio_deinit (void);
+int audio_conf (const char *str);
 void audio_mixer_ext (void (*mixer_callback) (int, void *, int, void *));
 audio_channel_t *audio_play_channel (Mix_Chunk *chunk, int channel);
-audio_channel_t *audio_stop_channel (int channel);
+void audio_stop_channel (int channel);
 void audio_pause (int channel);
 void audio_stop_all (void);
 int audio_is_playing (int handle);

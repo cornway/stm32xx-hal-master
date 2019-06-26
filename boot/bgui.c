@@ -143,10 +143,10 @@ void gui_destroy (gui_t *gui)
     while (pane) {
         com = pane->head;
         while (com) {
-            Sys_Free(com);
+            heap_free(com);
             com = com->next;
         }
-        Sys_Free(pane);
+        heap_free(pane);
         pane = pane->next;
     }
 }
@@ -159,7 +159,7 @@ pane_t *gui_get_pane (const char *name)
 
     allocsize = sizeof(*pane) + namelen + 1;
     allocsize = ROUND_UP(allocsize, 4);
-    pane = Sys_Malloc(allocsize);
+    pane = heap_malloc(allocsize);
     memset(pane, 0, allocsize);
     snprintf(pane->name, namelen + 1, "%s", name);
     return pane;
@@ -215,7 +215,7 @@ component_t *gui_get_comp (const char *name, const char *text)
 
     allocsize = sizeof(*com) + namelen + 1 + textlen + 1;
     allocsize = ROUND_UP(allocsize, sizeof(uint32_t));
-    com = Sys_Malloc(allocsize);
+    com = heap_malloc(allocsize);
     memset(com, 0, allocsize);
     assert(name);
     snprintf(com->name_text, namelen + 1, "%s", name);
@@ -313,8 +313,6 @@ void gui_apendxy (component_t *com, int x, int y, const char *fmt, ...)
 
 static void gui_comp_draw (pane_t *pane, component_t *com)
 {
-    screen_t screen;
-
     if (com->ispad) {
         BSP_LCD_SetTextColor(com->bcolor);
         BSP_LCD_FillRect(com->dim.x, com->dim.y, com->dim.w, com->dim.h);
@@ -336,10 +334,10 @@ static void gui_comp_draw (pane_t *pane, component_t *com)
         h = com->dim.h;
 
         if (com->showname) {
-            BSP_LCD_DisplayStringAt(x, y, w, h, com->name_text, LEFT_MODE);
+            BSP_LCD_DisplayStringAt(x, y, w, h, (uint8_t *)com->name_text, LEFT_MODE);
         }
         y += g_gui_ctxt.fonth;
-        BSP_LCD_DisplayStringAt(x, y, w, h, com->name_text + com->text_offset, LEFT_MODE);
+        BSP_LCD_DisplayStringAt(x, y, w, h, (uint8_t *)com->name_text + com->text_offset, LEFT_MODE);
     } else if (com->draw) {
         com->draw(pane, com, NULL);
     }
@@ -473,8 +471,6 @@ void gui_resp (gui_t *gui, component_t *com, gevt_t *evt)
 
 static int __namecomp (component_t *com, void *user)
 {
-    const char *name = user;
-
     return !strcmp(com->name_text, user);
 }
 
