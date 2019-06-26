@@ -14,7 +14,7 @@ enum {
 };
 
 extern int g_dev_debug_level;
-#if !defined(APPLICATION) || defined(BSP_DRIVER)
+#if defined(BSP_DRIVER)
 #define DEV_DBG_LVL (g_dev_debug_level)
 #else
 #define DEV_DBG_LVL 0
@@ -132,34 +132,6 @@ readPtr (const void *_p)
 
 #endif /*__LITTLE_ENDIAN__*/
 
-#if BSP_INDIR_API
-
-#define fatal_error   g_bspapi->sys.fatal
-#define _profiler_enter   g_bspapi->sys.prof_enter
-#define _profiler_exit   g_bspapi->sys.prof_exit
-#define profiler_reset   g_bspapi->sys.prof_reset
-#define profiler_init   g_bspapi->sys.prof_init
-
-#else /*BSP_INDIR_API*/
-extern void fatal_error (char *message, ...);
-
-void _profiler_enter (const char *func, int line);
-void _profiler_exit (const char *func, int line);
-void profiler_reset (void);
-void profiler_init (void);
-#endif /*BSP_INDIR_API*/
-
-extern void Sys_AllocInit (void);
-extern void *Sys_AllocShared (int *size);
-extern void *Sys_AllocVideo (int *size);
-extern int Sys_AllocBytesLeft (void);
-extern void *Sys_Malloc (int size);
-extern void *Sys_Realloc (void *x, int32_t size);
-extern void *Sys_Calloc (int32_t size);
-extern void Sys_Free (void *p);
-
-#define profiler_enter() _profiler_enter(__func__, __LINE__)
-#define profiler_exit() _profiler_exit(__func__, __LINE__)
-
+#define bug() assert(0);
 
 #endif /*__MISC_UTILS_H__*/

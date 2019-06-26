@@ -1,10 +1,11 @@
 
-#if !defined(APPLICATION) || defined(BSP_DRIVER)
+#if defined(BSP_DRIVER)
 
 #include "string.h"
 #include "audio_main.h"
 #include "audio_int.h"
 #include "dev_io.h"
+#include <debug.h>
 #include <stdio.h>
 
 #if MUSIC_MODULE_PRESENT

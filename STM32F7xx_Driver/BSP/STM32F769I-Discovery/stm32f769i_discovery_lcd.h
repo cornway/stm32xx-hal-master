@@ -324,6 +324,7 @@ typedef enum
 int BSP_LCD_UseHDMI (void);
 uint8_t  BSP_LCD_Init(void);
 uint8_t  BSP_LCD_InitEx(LCD_OrientationTypeDef orientation);
+void BSP_LCD_DeInitEx (void);
 uint8_t  BSP_LCD_HDMIInitEx(void);
 
 void     BSP_LCD_MspDeInit(void);

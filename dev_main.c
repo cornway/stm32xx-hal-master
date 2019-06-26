@@ -11,10 +11,11 @@
 #include "misc_utils.h"
 #include "nvic.h"
 #include <mpu.h>
+#include <heap.h>
+#include <bsp_sys.h>
 
-extern void bsp_api_attach (bspapi_t *api);
+extern bspapi_t *bsp_api_attach (void);
 extern void VID_PreConfig (void);
-extern bspapi_t bspapi;
 
 static void SystemClock_Config(void);
 static void CPU_CACHE_Enable(void);
@@ -86,28 +87,6 @@ static int con_echo (const char *buf, int len)
     dprintf("@: %s\n", buf);
     return 0; /*let it be processed by others*/
 }
-
-void dev_deinit (void)
-{
-extern void screen_release (void);
-    irqmask_t irq = NVIC_IRQ_MASK;
-    dprintf("%s() :\n", __func__);
-    term_unregister_handler(con_echo);
-
-    screen_release();
-    screen_deinit();
-    dev_io_deinit();
-    audio_deinit();
-    profiler_deinit();
-    input_bsp_deinit();
-    serial_deinit();
-
-    irq_save(&irq);
-    assert(!irq);
-    HAL_DeInit();
-}
-
-#endif
 
 static void SystemClock_Config(void)
 {
@@ -186,8 +165,32 @@ static void SystemDump (void)
     NVIC_dump();
 }
 
+void dev_deinit (void)
+{
+extern void screen_release (void);
+extern void Sys_LeakCheck (void);
 
-#if defined(BOOT)
+    irqmask_t irq = NVIC_IRQ_MASK;
+    dprintf("%s() :\n", __func__);
+    debug_rm_rx_handler(con_echo);
+
+    screen_release();
+    vid_deinit();
+    dev_io_deinit();
+    audio_deinit();
+    profiler_deinit();
+    input_bsp_deinit();
+    vid_deinit();
+
+    irq_save(&irq);
+    assert(!irq);
+    HAL_DeInit();
+}
+
+#endif /*!BSP_INDIR_API*/
+
+
+#if defined(BSP_DRIVER)
 
 int dev_init (void (*userinit) (void))
 {
@@ -201,12 +204,12 @@ int dev_init (void (*userinit) (void))
     BSP_LED_Init(LED1);
     BSP_LED_Init(LED2);
 
-    term_register_handler(con_echo);
+    debug_add_rx_handler(con_echo);
 
     audio_init();
     input_bsp_init();
     profiler_init();
-    screen_init();
+    vid_init();
     SystemDump();
     d_dvar_int32(&g_dev_debug_level, "dbglvl");
     return 0;
@@ -218,7 +221,7 @@ void __dev_init (void)
     mpu_init();
 }
 
-#else /*BOOT*/
+#else /*BSP_DRIVER*/
 
 #define dev_init(user) g_bspapi->sys.init(user)
 
@@ -227,12 +230,12 @@ void __dev_init (void)
     Sys_AllocInit();
 }
 
-#endif /*BOOT*/
+#endif /*BSP_DRIVER*/
 
 int dev_main (void)
 {
-    bsp_api_attach(&bspapi);
-#if defined(BSP_DRIVER) || defined(BOOT)
+    g_bspapi = bsp_api_attach();
+#if defined(BSP_DRIVER)
     CPU_CACHE_Enable();
 #endif /*BSP_DRIVER*/
     dev_init(__dev_init);

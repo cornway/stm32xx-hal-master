@@ -1,5 +1,5 @@
 
-#if !defined(APPLICATION) || defined(BSP_DRIVER)
+#if defined(BSP_DRIVER)
 
 #include "main.h"
 #include "ff.h"
@@ -165,7 +165,7 @@ int dev_io_init (void)
 {
     dvar_t dvar;
 
-    term_register_handler(devio_con_clbk);
+    debug_add_rx_handler(devio_con_clbk);
 
     dvar.ptr = devio_print_env;
     dvar.ptrsize = sizeof(&devio_print_env);
@@ -191,7 +191,7 @@ extern void SD_Deinitialize(void);
     dprintf("%s() :\n", __func__);
     _devio_unmount();
     d_dvar_rm_all();
-    term_unregister_handler(devio_con_clbk);
+    debug_rm_rx_handler(devio_con_clbk);
     SD_Deinitialize();
 }
 

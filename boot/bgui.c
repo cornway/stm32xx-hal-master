@@ -1,9 +1,11 @@
 
 #include <stm32f769i_discovery_lcd.h>
 #include <boot_int.h>
+#include <misc_utils.h>
 #include <boot.h>
 #include <lcd_main.h>
 #include <dev_io.h>
+#include <heap.h>
 
 static int g_gui_debug_lvl = DBG_WARN;
 
@@ -261,7 +263,7 @@ void gui_set_prop (component_t *c, prop_t *prop)
 
 void gui_com_clear (component_t *com)
 {
-    screen_vsync();
+    vid_vsync();
     BSP_LCD_SetTextColor(com->bcolor);
     BSP_LCD_FillRect(com->dim.x, com->dim.y, com->dim.w, com->dim.h);
 }
@@ -288,10 +290,9 @@ static uint32_t __gui_printxy
 void gui_printxy (component_t *com, int x, int y, const char *fmt, ...)
 {
     va_list         argptr;
-    uint32_t printed;
 
     va_start (argptr, fmt);
-    printed = __gui_printxy(com, com->name_text + com->text_offset, com->text_size, x, y, fmt, argptr);
+    __gui_printxy(com, com->name_text + com->text_offset, com->text_size, x, y, fmt, argptr);
     va_end (argptr);
 }
 
@@ -350,7 +351,7 @@ static void gui_pane_draw (gui_t *gui, pane_t *pane)
 
     while (com) {
         if (com->repaint) {
-            screen_vsync();
+            vid_vsync();
             gui_comp_draw(pane, com);
             com->repaint = 0;
         }
@@ -418,7 +419,7 @@ void gui_resp (gui_t *gui, component_t *com, gevt_t *evt)
     d_bool isrelease = d_false;
     pane_t *pane = gui->selected;
 
-    screen_ts_align(&evt->p.x, &evt->p.y);
+    vid_ptr_align(&evt->p.x, &evt->p.y);
     if (com) {
         gui_act(gui, com, evt);
     }

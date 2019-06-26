@@ -1,4 +1,4 @@
-#if !defined(APPLICATION) || defined(BSP_DRIVER)
+#if defined(BSP_DRIVER)
 
 #include "stdint.h"
 #include "string.h"
@@ -767,8 +767,6 @@ void DMA2_Stream7_IRQHandler (void)
 }
 
 #if DEBUG_SERIAL_USE_RX
-
-extern void term_parse (const char *buf, int size);
 
 void serial_tickle (void)
 {

@@ -1,4 +1,5 @@
 #include <debug.h>
+#include <boot_int.h>
 #include <misc_utils.h>
 #include <stdint.h>
 #include <main.h>
@@ -58,8 +59,6 @@ arch_word_t g_app_program_addr = ADDR_FLASH_SECTOR_8;
 typedef struct {
     arch_word_t size;
 } proghdr_t;
-
-typedef void (*cplthook_t) (const char *msg, int per);
 
 static uint32_t GetSector(uint32_t Address);
 static void __boot_exec (uint32_t addr) __attribute__((noreturn));

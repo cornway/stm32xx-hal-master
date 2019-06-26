@@ -3,6 +3,7 @@
 #include <mpu.h>
 #include <misc_utils.h>
 #include <debug.h>
+#include <bsp_sys.h>
 
 #ifdef __MICROLIB
 #error "I don't want to use microlib"
@@ -101,33 +102,7 @@ heap_realloc (void *x, int32_t size)
     return heap_malloc(size, 1);
 }
 
-void Sys_AllocInit (void)
-{
-    arch_word_t heap_mem, heap_size;
-    arch_word_t sp_mem, sp_size;
-
-    arch_get_stack(&sp_mem, &sp_size);
-    arch_get_heap(&heap_mem, &heap_size);
-
-#if defined(APPLICATION)
-    mpu_lock(sp_mem, MPU_CACHELINE, "xwr");
-    mpu_lock(heap_mem - MPU_CACHELINE, MPU_CACHELINE, "xwr");
-    /*According to code below, heap must be as last partition in memory pool*/
-    mpu_lock(heap_mem + heap_size, MPU_CACHELINE, "xwr");
-#endif
-    dprintf("%s() :\n", __func__);
-    dprintf("stack : <0x%p> + %u bytes\n", (void *)sp_mem, sp_size);
-    dprintf("heap : <0x%p> + %u bytes\n", (void *)heap_mem, heap_size);
-    heap_size_total = heap_size - MPU_CACHELINE * 2;
-#ifdef BOOT 
-    extern void __arch_user_heap (void *mem, void *size);
-
-    __arch_user_heap(&heap_user_mem_ptr, &heap_user_size);
-    dprintf("user heap : <0x%p> + %u bytes\n", (void *)heap_user_mem_ptr, heap_user_size);
-#endif /*BOOT*/
-}
-
-void Sys_AllocDeInit (void)
+void Sys_LeakCheck (void)
 {
     arch_word_t heap_mem, heap_size, heap_size_left;
 
@@ -139,6 +114,37 @@ void Sys_AllocDeInit (void)
     if (heap_size_left) {
         dprintf("%s() : Unfreed left : %u bytes\n", __func__, heap_size_left);
     }
+}
+
+void Sys_AllocInit (void)
+{
+    arch_word_t heap_mem, heap_size;
+    arch_word_t sp_mem, sp_size;
+
+    arch_get_stack(&sp_mem, &sp_size);
+    arch_get_heap(&heap_mem, &heap_size);
+
+#if defined(APPLICATION) || defined(BSP_DRIVER)
+    mpu_lock(sp_mem, MPU_CACHELINE, "xwr");
+    mpu_lock(heap_mem - MPU_CACHELINE, MPU_CACHELINE, "xwr");
+    /*According to code below, heap must be as last partition in memory pool*/
+    mpu_lock(heap_mem + heap_size, MPU_CACHELINE, "xwr");
+#endif
+    dprintf("%s() :\n", __func__);
+    dprintf("stack : <0x%p> + %u bytes\n", (void *)sp_mem, sp_size);
+    dprintf("heap : <0x%p> + %u bytes\n", (void *)heap_mem, heap_size);
+    heap_size_total = heap_size - MPU_CACHELINE * 2;
+#ifdef BOOT
+    extern void __arch_user_heap (void *mem, void *size);
+
+    __arch_user_heap(&heap_user_mem_ptr, &heap_user_size);
+    dprintf("user heap : <0x%p> + %u bytes\n", (void *)heap_user_mem_ptr, heap_user_size);
+#endif /*BOOT*/
+}
+
+void Sys_AllocDeInit (void)
+{
+    Sys_LeakCheck();
 }
 
 #ifdef BOOT

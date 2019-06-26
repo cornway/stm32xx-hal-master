@@ -1,4 +1,4 @@
-#if !defined(APPLICATION) || defined(BSP_DRIVER)
+#if defined(BSP_DRIVER)
 
 #include <misc_utils.h>
 #include <debug.h>
@@ -8,7 +8,7 @@
 static serial_rx_clbk_t serial_rx_clbk[DEBUG_SERIAL_MAX_CLBK] = {NULL};
 static serial_rx_clbk_t *last_rx_clbk = &serial_rx_clbk[0];
 
-void term_register_handler (serial_rx_clbk_t clbk)
+void debug_add_rx_handler (serial_rx_clbk_t clbk)
 {
     if (last_rx_clbk == &serial_rx_clbk[DEBUG_SERIAL_MAX_CLBK]) {
         return;
@@ -16,7 +16,7 @@ void term_register_handler (serial_rx_clbk_t clbk)
     *last_rx_clbk++ = clbk;
 }
 
-void term_unregister_handler (serial_rx_clbk_t clbk)
+void debug_rm_rx_handler (serial_rx_clbk_t clbk)
 {
     serial_rx_clbk_t *first = &serial_rx_clbk[0];
     if (!last_rx_clbk) {

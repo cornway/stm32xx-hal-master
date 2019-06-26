@@ -521,7 +521,7 @@ int BSP_HDMI_QerryTiming (hdmi_timing_t *timing)
     if (size < 0) {
         return -1;
     }
-#if !defined(APPLICATION) || defined(BSP_DRIVER)
+#if defined(BSP_DRIVER)
     return hdmi_parse_edid(timing, &edid, size);
 #else
     return 0;

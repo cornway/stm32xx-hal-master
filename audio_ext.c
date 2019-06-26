@@ -4,7 +4,7 @@
 #include "audio_int.h"
 #include "dev_io.h"
 
-#if !defined(APPLICATION) || defined(BSP_DRIVER)
+#if defined(BSP_DRIVER)
 
 #define A_MAXNAME 9
 #define A_MAXPATH 128

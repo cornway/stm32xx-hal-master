@@ -1,9 +1,10 @@
 
-#if !defined(APPLICATION) || defined(BSP_DRIVER)
+#if defined(BSP_DRIVER)
 
 #include <stdlib.h>
-#include "input_main.h"
-#include "input_int.h"
+#include <input_main.h>
+#include <input_int.h>
+#include <debug.h>
 #include "stm32f769i_discovery_ts.h"
 
 
@@ -21,7 +22,6 @@ FIXME :
 extern int joypad_read (int8_t *pads);
 
 static kbdmap_t input_kbdmap[JOY_STD_MAX];
-static int      input_kbdmap_ex[K_EX_MAX];
 
 static void *(*user_handler) (void *, void *) = NULL;
 
@@ -165,7 +165,7 @@ ts_get_key (int x, int y)
     return ts_zones_keymap[row][col];
 }
 
-d_bool input_is_touch_present (void)
+d_bool input_is_touch_avail (void)
 {
     if (BSP_LCD_UseHDMI()) {
         return d_false;
@@ -224,7 +224,7 @@ void input_proc_keys (i_event_t *evts)
     i_event_t event = {0, keyup, 0, 0};
     ts_status_t ts_status = {TOUCH_IDLE, 0, 0};
 
-    if (input_is_touch_present()) {
+    if (input_is_touch_avail()) {
         if (!ts_freeze_ticks) {
             /*Skip sensor processing while gamepad active*/
             ts_read_status(&ts_status);
@@ -288,7 +288,6 @@ void input_bind_extra (int type, int sym)
     if (type >= K_EX_MAX) {
         input_fatal("input_bind_extra : type >= JOY_MAX\n");
     }
-    input_kbdmap_ex[type] = sym;
 }
 
 void input_tickle (void)

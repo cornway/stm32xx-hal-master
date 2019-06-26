@@ -36,13 +36,14 @@
 
 /* Includes ------------------------------------------------------------------*/
 
-#if !defined(APPLICATION) || defined(BSP_DRIVER)
+#if defined(BSP_DRIVER)
 
 
 #include "lcd_main.h"
 #include "stm32f769i_discovery_lcd.h"
 #include "misc_utils.h"
 #include <debug.h>
+#include <heap.h>
 
 extern LTDC_HandleTypeDef  hltdc_discovery;
 
@@ -55,8 +56,6 @@ static void (*screen_update_handle) (screen_t *in);
 static void screen_update_no_scale (screen_t *in);
 static void screen_update_2x2_8bpp (screen_t *in);
 static void screen_update_3x3_8bpp (screen_t *in);
-
-static void screen_sync (int wait);
 
 static int bsp_lcd_width = -1;
 static int bsp_lcd_height = -1;
@@ -96,7 +95,7 @@ void screen_load_clut (void *_buf, int size, int layer)
     HAL_LTDC_EnableCLUT(&hltdc_discovery, layer);
 }
 
-void screen_init (void)
+void vid_init (void)
 {
     uint32_t status = BSP_LCD_Init();
     if(status)
@@ -110,9 +109,8 @@ void screen_init (void)
     BSP_LCD_SetBrightness(100);
 }
 
-void screen_deinit (void)
+void vid_deinit (void)
 {
-    int layer;
     dprintf("%s() :\n", __func__);
     BSP_LCD_DeInitEx();
 }
@@ -128,7 +126,7 @@ void screen_release (void)
     lcd_active_cfg = NULL;
 }
 
-void screen_get_wh (screen_t *s)
+void vid_wh (screen_t *s)
 {
     assert(lcd_active_cfg && s);
     s->width = lcd_x_size_var;
@@ -170,14 +168,14 @@ static void * screen_alloc_fb (lcd_mem_malloc_t __malloc, lcd_wincfg_t *cfg, uin
     return cfg->fb_mem;
 }
 
-void screen_ts_align (int *x, int *y)
+void vid_ptr_align (int *x, int *y)
 {
 }
 
 static LCD_LayerCfgTypeDef default_laycfg;
 
 
-int screen_win_cfg (lcd_mem_malloc_t __malloc, lcd_wincfg_t *cfg, screen_t *screen, uint32_t colormode, int layers_cnt)
+int vid_config (lcd_mem_malloc_t __malloc, lcd_wincfg_t *cfg, screen_t *screen, uint32_t colormode, int layers_cnt)
 {
     LCD_LayerCfgTypeDef *Layercfg;
     int in_w = screen->width > 0 ? screen->width : bsp_lcd_width,
@@ -268,7 +266,7 @@ int screen_win_cfg (lcd_mem_malloc_t __malloc, lcd_wincfg_t *cfg, screen_t *scre
     return 0;
 }
 
-uint32_t screen_total_mem_avail_kb (void)
+uint32_t vid_mem_avail (void)
 {
     assert(lcd_active_cfg);
     return ((lcd_active_cfg->lay_size * lcd_active_cfg->lay_cnt) / 1024);
@@ -291,7 +289,7 @@ static inline void lcd_wait_ready ()
     while (!(LTDC->CDSR & LTDC_CDSR_VSYNCS));
 }
 
-static void screen_sync (int wait)
+static void vid_sync (int wait)
 {
     assert(lcd_active_cfg);
     if (wait) {
@@ -302,9 +300,9 @@ static void screen_sync (int wait)
     }
 }
 
-void screen_vsync (void)
+void vid_vsync (void)
 {
-    screen_sync(1);
+    vid_sync(1);
 }
 
 static void screen_get_invis_screen (screen_t *screen)
@@ -314,7 +312,7 @@ static void screen_get_invis_screen (screen_t *screen)
     screen->buf = (void *)lcd_active_cfg->lay_mem[layer_switch[lcd_active_cfg->active_lay_idx]];
 }
 
-void screen_set_clut (void *palette, uint32_t clut_num_entries)
+void vid_set_clut (void *palette, uint32_t clut_num_entries)
 {
     int layer;
     LCD_LayerCfgTypeDef *Layercfg;
@@ -324,18 +322,18 @@ void screen_set_clut (void *palette, uint32_t clut_num_entries)
     if (Layercfg->PixelFormat != screen_mode2fmt_map[GFX_COLOR_MODE_CLUT]) {
         return;
     }
-    screen_sync(1);
+    vid_sync(1);
     for (layer = 0; layer < lcd_active_cfg->lay_cnt; layer++) {
         screen_load_clut (palette, clut_num_entries, layer);
     }
 }
 
-void screen_update (screen_t *in)
+void vid_upate (screen_t *in)
 {
     screen_update_handle(in);
 }
 
-void screen_direct (screen_t *s)
+void vid_direct (screen_t *s)
 {
     screen_get_invis_screen(s);
 }
@@ -363,7 +361,7 @@ static void screen_update_no_scale (screen_t *in)
 {
     screen_t screen;
 
-    screen_sync (1);
+    vid_sync (1);
     screen_get_invis_screen(&screen);
 
     memcpy(screen.buf, in->buf, in->width * in->height);
@@ -380,7 +378,7 @@ static void screen_update_2x2_8bpp (screen_t *in)
     scanline8_u d_yt0, d_yt1;
     screen_t screen;
 
-    screen_sync (1);
+    vid_sync (1);
     screen_get_invis_screen(&screen);
 
     d_y0 = (pix_outx2_t *)screen.buf;
@@ -429,7 +427,7 @@ static void screen_update_3x3_8bpp(screen_t *in)
     scanline8_u d_yt0, d_yt1, d_yt2;
     screen_t screen;
 
-    screen_sync (1);
+    vid_sync(1);
     screen_get_invis_screen(&screen);
 
     d_y0 = (pix_outx3_t *)screen.buf;

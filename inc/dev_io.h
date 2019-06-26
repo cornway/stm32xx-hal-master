@@ -46,32 +46,67 @@ typedef struct {
     void *user;
 } flist_t;
 
+typedef struct bsp_io_api_s {
+    bspdev_t dev;
+    int (*open) (const char *, int *, char const * );
+    int (*size) (int);
+    int (*tell) (int);
+    void (*close) (int);
+    int (*unlink) (const char *);
+    int (*seek) (int, int, uint32_t);
+    int (*eof) (int);
+    int (*read) (int, PACKED void *, int);
+    char *(*gets) (int, PACKED char *, int);
+    char (*getc) (int);
+    int (*write) (int, PACKED const void *, int);
+    int (*printf) (int, char *, ...);
+    int (*mkdir) (const char *);
+    int (*opendir) (const char *);
+    int (*closedir) (int );
+    int (*readdir) (int , void *);
+    uint32_t (*time) (void);
+    int (*dirlist) (const char *, void *);
+
+    int (*var_reg) (void *, const char *);
+    int (*var_int32) (int32_t *, const char *);
+    int (*var_float) (float *, const char *);
+    int (*var_str) (char *, int, const char *);
+
+    int (*var_rm) (const char *);
+} bsp_io_api_t;
+
+#define BSP_IO_API(func) ((bsp_io_api_t *)(g_bspapi->io))->func
+
 #if BSP_INDIR_API
 
-#define dev_io_init    g_bspapi->io.io_init
-#define dev_io_deinit    g_bspapi->io.io_deinit
-#define d_open    g_bspapi->io.open
-#define d_size    g_bspapi->io.size
-#define d_tell    g_bspapi->io.tell
-#define d_close    g_bspapi->io.close
-#define d_unlink    g_bspapi->io.unlink
-#define d_seek    g_bspapi->io.seek
-#define d_eof    g_bspapi->io.eof
-#define d_read    g_bspapi->io.read
-#define d_gets    g_bspapi->io.gets
-#define d_getc    g_bspapi->io.getc
-#define d_write    g_bspapi->io.write
-#define d_printf    g_bspapi->io.printf
-#define d_mkdir    g_bspapi->io.mkdir
-#define d_opendir    g_bspapi->io.opendir
-#define d_closedir    g_bspapi->io.closedir
-#define d_readdir    g_bspapi->io.readdir
-#define d_time    g_bspapi->io.time
-#define d_dirlist    g_bspapi->io.dirlist
-#define d_dvar_reg    g_bspapi->io.var_reg
-#define d_dvar_int32    g_bspapi->io.var_int32
-#define d_dvar_float    g_bspapi->io.var_float
-#define d_dvar_str    g_bspapi->io.var_str
+#define dev_io_init     BSP_IO_API(dev.io_init)
+#define dev_io_deinit   BSP_IO_API(dev.io_deinit)
+#define dev_io_conf     BSP_IO_API(dev.conf)
+#define dev_io_info     BSP_IO_API(dev.info)
+#define dev_io_priv     BSP_IO_API(dev.priv)
+
+#define d_open          BSP_IO_API(open)
+#define d_size          BSP_IO_API(size)
+#define d_tell          BSP_IO_API(tell)
+#define d_close         BSP_IO_API(close)
+#define d_unlink        BSP_IO_API(unlink)
+#define d_seek          BSP_IO_API(seek)
+#define d_eof           BSP_IO_API(eof)
+#define d_read          BSP_IO_API(read)
+#define d_gets          BSP_IO_API(gets)
+#define d_getc          BSP_IO_API(getc)
+#define d_write         BSP_IO_API(write)
+#define d_printf        BSP_IO_API(printf)
+#define d_mkdir         BSP_IO_API(mkdir)
+#define d_opendir       BSP_IO_API(opendir)
+#define d_closedir      BSP_IO_API(closedir)
+#define d_readdir       BSP_IO_API(readdir)
+#define d_time          BSP_IO_API(time)
+#define d_dirlist       BSP_IO_API(dirlist)
+#define d_dvar_reg      BSP_IO_API(var_reg)
+#define d_dvar_int32    BSP_IO_API(var_int32)
+#define d_dvar_float    BSP_IO_API(var_float)
+#define d_dvar_str      BSP_IO_API(var_str)
 
 #else
 
@@ -102,6 +137,8 @@ int d_dvar_float (float *var, const char *name);
 int d_dvar_str (char *str, int len, const char *name);
 
 int d_dvar_rm (const char *name);
+
+void term_parse (const char *buf, int size);
 
 #endif
 

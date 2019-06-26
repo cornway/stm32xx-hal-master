@@ -3,6 +3,7 @@
 #include "dev_conf.h"
 #include "debug.h"
 #include "misc_utils.h"
+#include <bsp_sys.h>
 
 #ifndef USE_STM32F769I_DISCO
 #error "Not supported"

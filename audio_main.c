@@ -1,5 +1,5 @@
 
-#if !defined(APPLICATION) || defined(BSP_DRIVER)
+#if defined(BSP_DRIVER)
 
 #include "string.h"
 #include "stm32f769i_discovery_audio.h"
@@ -412,7 +412,7 @@ void audio_set_pan (int handle, int l, int r)
     irq_restore(irq_flags);
 }
 
-void audio_change_sample_volume (audio_channel_t *achannel, uint8_t volume)
+void audio_sample_vol (audio_channel_t *achannel, uint8_t volume)
 {
     irqmask_t irq_flags = audio_irq_mask;
 

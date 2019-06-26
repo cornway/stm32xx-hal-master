@@ -1,4 +1,4 @@
-#if !defined(APPLICATION) || defined(BSP_DRIVER)
+#if defined(BSP_DRIVER)
 
 #include "stdint.h"
 #include "string.h"

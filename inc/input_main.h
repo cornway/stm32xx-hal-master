@@ -73,16 +73,32 @@ enum {
     K_EX_MAX,
 }; /*extra keys (activsted by hold 'ctrl' key)*/
 
+typedef struct bsp_input_api_s {
+    bspdev_t dev;
+    void (*soft_init) (void *(*) (void *, void *), void *);
+    void (*bind_extra) (int, int);
+    void (*tickle) (void);
+    void (*proc_keys) (void *);
+    void *(*post_key) (void *, void *event);
+    int (*touch_present) (void);
+} bsp_input_api_t;
+
+#define BSP_IN_API(func) ((bsp_input_api_t *)(g_bspapi->in))->func
+
 #if BSP_INDIR_API
 
-#define input_bsp_init        g_bspapi->in.bsp_init
-#define input_bsp_deinit      g_bspapi->in.bsp_deinit
-#define input_soft_init       g_bspapi->in.soft_init
-#define input_bind_extra      g_bspapi->in.bind_extra
-#define input_tickle          g_bspapi->in.tickle
-#define input_proc_keys       g_bspapi->in.proc_keys
-#define input_post_key        g_bspapi->in.post_key
-#define input_is_touch_present g_bspapi->in.touch_present
+#define input_bsp_init        BSP_IN_API(dev.init)
+#define input_bsp_deinit      BSP_IN_API(dev.deinit)
+#define input_bsp_conf        BSP_IN_API(dev.conf)
+#define input_bsp_info        BSP_IN_API(dev.info)
+#define input_bsp_priv        BSP_IN_API(dev.priv)
+
+#define input_soft_init       BSP_IN_API(soft_init)
+#define input_bind_extra      BSP_IN_API(bind_extra)
+#define input_tickle          BSP_IN_API(tickle)
+#define input_proc_keys       BSP_IN_API(proc_keys)
+#define input_post_key        BSP_IN_API(post_key)
+#define input_is_touch_avail BSP_IN_API(touch_present)
 
 #else
 void input_bsp_init (void);
@@ -91,7 +107,7 @@ void input_soft_init (void *(*in_handler) (void *, void *), const kbdmap_t kbdma
 void input_bind_extra (int type, int sym);
 void input_tickle (void);
 void input_proc_keys (i_event_t *evts);
-d_bool input_is_touch_present (void);
+d_bool input_is_touch_avail (void);
 #endif
 
 #endif /*_INPUT_MAIN_H*/
