@@ -22,6 +22,7 @@ typedef struct bspapi_s {
     void *dbg;
     void *in;
     void *gui;
+    void *mod;
 } bspapi_t;
 
 typedef struct {

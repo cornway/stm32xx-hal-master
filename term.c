@@ -3,6 +3,9 @@
 #include <string.h>
 #include <misc_utils.h>
 #include <debug.h>
+#include "int/term_int.h"
+
+#define TERM_MAX_CMD_BUF 256
 
 #define DEBUG_SERIAL_MAX_CLBK 4
 
@@ -112,6 +115,54 @@ void hexdump (const uint8_t *data, int len, int rowlength)
         }
         dprintf("\n");
     }
+}
+
+cmdexec_t boot_cmd_pool[6];
+cmdexec_t *boot_cmd_top = &boot_cmd_pool[0];
+
+void exec_cmd_push (const char *cmd, const char *text, void *user1, void *user2)
+{
+    if (boot_cmd_top == &boot_cmd_pool[arrlen(boot_cmd_pool)]) {
+        return;
+    }
+    boot_cmd_top->cmd = cmd;
+    boot_cmd_top->text = text;
+    boot_cmd_top->user1 = user1;
+    boot_cmd_top->user2 = user2;
+    boot_cmd_top++;
+    dprintf("%s() : \'%s\' [%s]\n", __func__, cmd, text);
+}
+
+cmdexec_t *exec_cmd_pop (cmdexec_t *cmd)
+{
+    if (boot_cmd_top == &boot_cmd_pool[0]) {
+        return NULL;
+    }
+    boot_cmd_top--;
+    cmd->cmd = boot_cmd_top->cmd;
+    cmd->text = boot_cmd_top->text;
+    cmd->user1 = boot_cmd_top->user1;
+    cmd->user2 = boot_cmd_top->user2;
+    return cmd;
+}
+
+void exec_iterate_cmd (cmd_handler_t hdlr)
+{
+     cmdexec_t cmd;
+     cmdexec_t *cmdptr = exec_cmd_pop(&cmd);
+     char buf[TERM_MAX_CMD_BUF];
+     int len;
+
+     while (cmdptr) {
+        len = snprintf(buf, sizeof(buf), "%s %s\n", cmdptr->cmd, cmdptr->text);
+        hdlr(buf, len);
+        cmdptr = exec_cmd_pop(cmdptr);
+     }
+}
+
+void exec_cmd_execute (const char *cmd, int len)
+{
+    term_parse(cmd, len);
 }
 
 #endif

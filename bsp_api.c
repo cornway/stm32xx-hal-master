@@ -9,6 +9,7 @@
 #include <heap.h>
 #include <bsp_sys.h>
 #include <gui.h>
+#include "../int/bsp_mod_int.h"
 
 bspapi_t *g_bspapi;
 
@@ -165,6 +166,7 @@ bspapi_t *bsp_api_attach (void)
     BSP_SYS_API(dev.conf)   = dev_conf_stub;
     BSP_SYS_API(dev.info)   = dev_info_stub;
     BSP_SYS_API(dev.priv)   = dev_priv_stub;
+    BSP_SYS_API(hal_init)   = dev_hal_init;
     BSP_SYS_API(fatal)      = fatal_error;
     BSP_SYS_API(prof_enter) = _profiler_enter;
     BSP_SYS_API(prof_exit)  = _profiler_exit;
@@ -197,6 +199,18 @@ bspapi_t *bsp_api_attach (void)
     BSP_IN_API(proc_keys)   = input_proc_keys;
     BSP_IN_API(post_key)    = NULL;
     BSP_IN_API(touch_present) = input_is_touch_avail;
+
+    BSP_MOD_API(dev.init)   = dev_init_stub;
+    BSP_MOD_API(dev.deinit) = dev_deinit_stub;
+    BSP_MOD_API(dev.conf)   = dev_conf_stub;
+    BSP_MOD_API(dev.info)   = dev_info_stub;
+    BSP_MOD_API(dev.priv)   = dev_priv_stub;
+    BSP_MOD_API(insert)    =  bspmod_insert;
+    BSP_MOD_API(remove)     = bspmod_remove;
+    BSP_MOD_API(probe)      = bspmod_probe;
+    BSP_MOD_API(register_api) = bspmod_register_api;
+    BSP_MOD_API(get_api)    = bspmod_get_api;
+
     return &api->api;
 }
 

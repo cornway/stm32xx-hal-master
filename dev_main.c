@@ -193,13 +193,16 @@ extern void Sys_LeakCheck (void);
 
 #if defined(BSP_DRIVER)
 
-int dev_init (void (*userinit) (void))
+int dev_hal_init (void)
 {
     SystemClock_Config();
     HAL_Init();
     serial_init();
-    userinit();
-    
+    return 0;
+}
+
+int dev_init (void)
+{
     dev_io_init();
 
     BSP_LED_Init(LED1);
@@ -216,20 +219,10 @@ int dev_init (void (*userinit) (void))
     return 0;
 }
 
-void __dev_init (void)
-{
-    heap_init();
-    mpu_init();
-}
 
 #else /*BSP_DRIVER*/
 
 #define dev_init(user) g_bspapi->sys.init(user)
-
-void __dev_init (void)
-{
-    heap_init();
-}
 
 #endif /*BSP_DRIVER*/
 
@@ -239,7 +232,10 @@ int dev_main (void)
 #if defined(BSP_DRIVER)
     CPU_CACHE_Enable();
 #endif /*BSP_DRIVER*/
-    dev_init(__dev_init);
+    dev_hal_init();
+    mpu_init();
+    heap_init();
+    dev_init();
 
     audio_conf("samplerate=22050, volume=100");
 

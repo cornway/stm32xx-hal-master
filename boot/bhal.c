@@ -3,6 +3,8 @@
 #include <misc_utils.h>
 #include <stdint.h>
 #include <main.h>
+#include <bsp_sys.h>
+#include "../int/bsp_mod_int.h"
 
 /* Base address of the Flash sectors */
 #if defined(DUAL_BANK)
@@ -59,6 +61,8 @@ arch_word_t g_app_program_addr = ADDR_FLASH_SECTOR_8;
 typedef struct {
     arch_word_t size;
 } proghdr_t;
+
+exec_region_t g_exec_region = EXEC_DRIVER;
 
 static uint32_t GetSector(uint32_t Address);
 
@@ -255,24 +259,46 @@ static void __bhal_boot (arch_word_t addr)
     arch_asmgoto(*entryptr);
 }
 
-void bhal_boot (void *addr)
+void bhal_execute_app (void *addr)
 {
+    exec_region_t exec_prev = g_exec_region;
+
+    assert(g_exec_region != EXEC_APPLICATION);
+
+    g_exec_region = EXEC_APPLICATION;
     __bhal_boot(((arch_word_t)addr));
     assert(0);
+    g_exec_region = exec_prev;
 }
+
+int bhal_execute_module (arch_word_t addr)
+{
+typedef int (*exec_t) (void);
+    exec_region_t exec_prev = g_exec_region;
+    register volatile arch_word_t *entryptr;
+    exec_t exec;
+    int ret = 0;
+
+    assert(g_exec_region != EXEC_DRIVER);
+    g_exec_region = EXEC_APPLICATION;
+
+    entryptr = (arch_word_t *)(addr + sizeof(arch_word_t));
+    exec = (exec_t)entryptr;
+
+    __DSB();
+    ret = exec();
+    g_exec_region = exec_prev;
+    return ret;
+}
+
 
 d_bool bhal_prog_exist (arch_word_t *progaddr, void *progdata, size_t progsize)
 {
-    proghdr_t hdr;
     progsize = progsize / sizeof(arch_word_t);
     uint32_t pad = sizeof(arch_word_t) - 1;
 
     assert(!((arch_word_t)progdata & pad));
-    bhal_prog_read_chunk((arch_word_t *)&hdr, progaddr + progsize, sizeof(hdr) / sizeof(arch_word_t));
 
-    //if (hdr.size != progsize) {
-    //    return d_false;
-    //}
     if (bhal_prog_handle_func(NULL, &func_compare, progaddr, progdata, progsize)) {
         return d_false;
     }

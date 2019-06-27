@@ -8,14 +8,12 @@
 #include <string.h>
 #include <heap.h>
 #include <bsp_sys.h>
+#include "../int/term_int.h"
 
 
 #define BOOT_SYS_DIR_PATH "/sys"
 #define BOOT_SYS_LOG_NAME "log.txt"
 #define BOOT_SYS_LOG_PATH BOOT_SYS_DIR_PATH"/"BOOT_SYS_LOG_NAME
-
-#define BOOT_MAX_NAME 24
-#define BOOT_MAX_PATH 128
 
 extern uint32_t g_app_program_addr;
 
@@ -26,76 +24,16 @@ component_t *com_title;
 gui_t gui;
 pane_t *pane, *alert_pane;
 
-typedef enum {
-    BIN_NONE = 0,
-    BIN_FILE,
-    BIN_LINK,
-} bintype_t;
-
-typedef struct {
-    bintype_t type;
-    const char *ext;
-} typebind_t;
-
-typedef struct boot_bin_s {
-    struct boot_bin_s *next;
-    bintype_t type;
-
-    arch_word_t progaddr;
-    char name[BOOT_MAX_NAME];
-    char dirpath[BOOT_MAX_PATH];
-    char path[BOOT_MAX_PATH];
-} boot_bin_t;
-
-typedef struct {
-    /*Must be pointer to a static*/
-    const char *cmd;
-    const char *text;
-    void *user1, *user2;
-} boot_cmd_t;
-
-typebind_t typebind[] =
+static const typebind_t typebind[] =
 {
     {BIN_FILE, ".bin"},
     {BIN_LINK, ".lnk"},
 };
 
+bsp_bin_t *boot_bin_head = NULL;
+bsp_bin_t *boot_bin_selected = NULL;
 
-boot_cmd_t boot_cmd_pool[6];
-boot_cmd_t *boot_cmd_top = &boot_cmd_pool[0];
-
-
-static inline void boot_cmd_push (const char *cmd, const char *text, void *user1, void *user2)
-{
-    if (boot_cmd_top == &boot_cmd_pool[arrlen(boot_cmd_pool)]) {
-        return;
-    }
-    boot_cmd_top->cmd = cmd;
-    boot_cmd_top->text = text;
-    boot_cmd_top->user1 = user1;
-    boot_cmd_top->user2 = user2;
-    boot_cmd_top++;
-    dprintf("%s() : \'%s\' [%s]\n", __func__, cmd, text);
-}
-
-boot_cmd_t *boot_cmd_pop (boot_cmd_t *cmd)
-{
-    if (boot_cmd_top == &boot_cmd_pool[0]) {
-        return NULL;
-    }
-    boot_cmd_top--;
-    cmd->cmd = boot_cmd_top->cmd;
-    cmd->text = boot_cmd_top->text;
-    cmd->user1 = boot_cmd_top->user1;
-    cmd->user2 = boot_cmd_top->user2;
-    return cmd;
-}
-
-
-boot_bin_t *boot_bin_head = NULL;
-boot_bin_t *boot_bin_selected = NULL;
-
-static void boot_bin_link (boot_bin_t *bin)
+static void boot_bin_link (bsp_bin_t *bin)
 {
     bin->next = NULL;
     if (!boot_bin_head) {
@@ -107,59 +45,51 @@ static void boot_bin_link (boot_bin_t *bin)
     }
 }
 
-static inline bintype_t
-boot_check_bin_compat (const char *in)
+bintype_t
+bsp_bin_file_compat (const char *in)
 {
 #define EXT_LEN (4)
     int pos = strlen(in) - EXT_LEN;
     int i;
 
     for (i = 0; i < arrlen(typebind); i++) {
-        if (!strcasecmp(in + pos, typebind->ext)) {
-            return typebind->type;
+        if (!strcasecmp(in + pos, typebind[i].ext)) {
+            return typebind[i].type;
         }
     }
     return BIN_NONE;
 }
 
-arch_word_t
-boot_get_entry_addr (boot_bin_t *bin)
+void
+bsp_setup_bin_param (bsp_bin_t *bin)
 {
-    int f;
+    int f, size;
     arch_word_t entry;
 
-    d_open(bin->path, &f, "r");
+    size = d_open(bin->path, &f, "r");
     if (f < 0) {
-        return 0;
     }
-    d_read(f, &entry, sizeof(entry));
-    d_read(f, &entry, sizeof(entry));
+    d_read(f, &bin->spinitial, sizeof(entry));
+    d_read(f, &bin->entrypoint, sizeof(entry));
     d_close(f);
-    return entry;
+    bin->size = size;
 }
 
 #define _GET_PAD(x, a) ((a) - ((x) % (a)))
 #define _ROUND_UP(x, a) ((x) + _GET_PAD(a, x))
 #define _ROUND_DOWN(x, a) ((x) - ((x) % (a)))
 
-static boot_bin_t *
-boot_setup_bin (const char *dirpath, const char *name, bintype_t type)
+bsp_bin_t *
+bsp_setup_bin_desc (bsp_bin_t *bin, const char *path,
+                           const char *originname, bintype_t type)
 {
-    boot_bin_t *bin;
-    arch_word_t entryaddr;
+#define BOOT_MIN_SECTOR (0x4000)
 
-    bin = (boot_bin_t *)heap_malloc(sizeof(*bin));
-    assert(bin);
-
-    bin->progaddr = g_app_program_addr;
-    snprintf(bin->dirpath, sizeof(bin->dirpath), "%s", dirpath);
-    snprintf(bin->name, sizeof(bin->name), "%s", name);
-    snprintf(bin->path, sizeof(bin->path), "%s/%s", dirpath, name);
+    snprintf(bin->name, sizeof(bin->name), "%s", originname);
+    snprintf(bin->path, sizeof(bin->path), "%s", path);
     bin->type = type;
-    entryaddr = boot_get_entry_addr(bin);
-    entryaddr = _ROUND_DOWN(entryaddr, 0x4000);
-    assert(g_app_program_addr == entryaddr);
-    boot_bin_link(bin);
+    bsp_setup_bin_param(bin);
+    bin->progaddr = _ROUND_DOWN(bin->entrypoint, BOOT_MIN_SECTOR);
     return bin;
 }
 
@@ -168,7 +98,7 @@ void boot_read_path (const char *path)
     fobj_t fobj;
     int dir, bindir;
     char buf[BOOT_MAX_PATH];
-    char bindir_name[BOOT_MAX_NAME];
+    char origin_name[BOOT_MAX_NAME];
 
     dir = d_opendir(path);
     if (dir < 0) {
@@ -184,7 +114,7 @@ void boot_read_path (const char *path)
                 dprintf("%s() : Cannot open : \'%s\'\n", __func__, buf);
                 continue;
             }
-            snprintf(bindir_name, sizeof(bindir_name), "%s", fobj.name);
+            snprintf(origin_name, sizeof(origin_name), "%s", fobj.name);
             while (d_readdir(bindir, &binobj) >= 0) {
                 d_bool hexpresent;
 
@@ -199,10 +129,15 @@ void boot_read_path (const char *path)
                     hexpresent = d_false;
                     while (d_readdir(bindir, &binobj) >= 0) {
                         if (binobj.type == FTYPE_FILE) {
-                            bintype_t type = boot_check_bin_compat(binobj.name);
+                            bintype_t type = bsp_bin_file_compat(binobj.name);
 
                             if (type != BIN_NONE) {
-                                boot_setup_bin(buf, binobj.name, type);
+                                bsp_bin_t *bin = (bsp_bin_t *)heap_malloc(sizeof(*bin));
+
+                                snprintf(buf, sizeof(buf), "%s/%s", buf, binobj.name);
+                                bin = bsp_setup_bin_desc(bin, buf, origin_name, type);
+                                assert(g_app_program_addr == bin->progaddr);
+                                boot_bin_link(bin);
                                 hexpresent = d_true;
                             }
                         }
@@ -223,7 +158,7 @@ void boot_read_path (const char *path)
     d_closedir(dir);
 }
 
-static void *cache_bin (const char *path, int *binsize)
+void *bsp_cache_bin_file (const bsp_heap_api_t *heapapi, const char *path, int *binsize)
 {
     int f;
     int fsize, size;
@@ -235,7 +170,7 @@ static void *cache_bin (const char *path, int *binsize)
         return NULL;
     }
     size = ROUND_UP(fsize, 32);
-    cache = heap_alloc_shared(size);
+    cache = heapapi->malloc(size);
     assert(cache);
 
     if (d_read(f, cache, fsize) < fsize) {
@@ -257,10 +192,11 @@ int boot_execute_boot (arch_word_t *progaddr, const char *path, const char *argv
 {
     void *bindata;
     int binsize = 0, err = 0;
+    bsp_heap_api_t heap = {.malloc = heap_alloc_shared, .free = NULL};
 
     dprintf("Booting : \'%s\'\n", path);
 
-    bindata = cache_bin(path, &binsize);
+    bindata = bsp_cache_bin_file(&heap, path, &binsize);
     if (!bindata) {
         return 0;
     }
@@ -274,13 +210,13 @@ int boot_execute_boot (arch_word_t *progaddr, const char *path, const char *argv
     dprintf("Starting app... \n");
 
     dev_deinit();
-    bhal_boot(progaddr);
+    bhal_execute_app(progaddr);
     return 0;
 }
 
 static void boot_destroy_bins (void)
 {
-    boot_bin_t *bin = boot_bin_head;
+    bsp_bin_t *bin = boot_bin_head;
 
     while (bin) {
 
@@ -291,7 +227,7 @@ static void boot_destroy_bins (void)
 
 static int boot_handle_selected (pane_t *pane, component_t *com, void *user)
 {
-    boot_bin_t *bindesc = *((boot_bin_t **)com->user);
+    bsp_bin_t *bindesc = *((bsp_bin_t **)com->user);
 
     if (bindesc == NULL) {
         gui_print(com_title, "Search result empty\n");
@@ -300,14 +236,14 @@ static int boot_handle_selected (pane_t *pane, component_t *com, void *user)
 
     pane->parent->destroy = 1;
     g_app_program_addr = bindesc->progaddr;
-    boot_cmd_push("boot", bindesc->path, NULL, NULL);
+    exec_cmd_push("boot", bindesc->path, NULL, NULL);
     boot_destroy_bins();
     return 1;
 }
 
 static int boot_show_list (pane_t *pane, component_t *com, void *user)
 {
-    boot_bin_t *bin = boot_bin_head;
+    bsp_bin_t *bin = boot_bin_head;
     uint8_t maxbin = 8;
     uint8_t texty = 0;
 
@@ -369,7 +305,7 @@ static void __gui_alloc_sfx (int *num, gui_sfx_std_type_t type)
 
         default:
             if (gui_sfx_type_to_name[type]) {
-                *num = boot_audio_open_wave(gui_sfx_type_to_name[type]);
+                *num = bsp_open_wave_sfx(gui_sfx_type_to_name[type]);
             }
         break;
     }
@@ -380,7 +316,7 @@ static void __gui_start_sfx (int num)
     if (num < 0) {
         return;
     }
-    boot_audio_play_wave(num, 127);
+    bsp_play_wave_sfx(num, 127);
 }
 
 const kbdmap_t gamepad_to_kbd_map[JOY_STD_MAX] =
@@ -427,19 +363,6 @@ static int user_execute_boot (void *p1, void *p2)
     boot_execute_boot((arch_word_t *)g_app_program_addr, path, NULL);
 
     return len;
-}
-
-static void boot_cmd_exec (void)
-{
-     boot_cmd_t cmd;
-     boot_cmd_t *cmdptr = boot_cmd_pop(&cmd);
-     char buf[BOOT_MAX_PATH];
-
-     while (cmdptr) {
-        snprintf(buf, sizeof(buf), "%s %s\n", cmdptr->cmd, cmdptr->text);
-        term_parse(buf, sizeof(buf));
-        cmdptr = boot_cmd_pop(cmdptr);
-     }
 }
 
 int boot_main (int argc, const char **argv)
@@ -505,7 +428,10 @@ int boot_main (int argc, const char **argv)
         gui_draw(&gui);
         dev_tickle();
         input_proc_keys(NULL);
-        boot_cmd_exec();
+        if (gui.destroy) {
+            gui_destroy(&gui);
+        }
+        exec_iterate_cmd(exec_cmd_execute);
     }
     return 0;
 }

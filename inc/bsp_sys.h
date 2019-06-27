@@ -1,7 +1,11 @@
+#ifndef __BSP_SYS_H__
+#define __BSP_SYS_H__
+
 #include <bsp_api.h>
 
 typedef struct bsp_sytem_api_s {
     bspdev_t dev;
+    int (*hal_init) (void);
     void (*fatal) (char *, ...);
     void (*prof_enter) (const char *, int);
     void (*prof_exit) (const char *, int);
@@ -15,6 +19,7 @@ typedef struct bsp_sytem_api_s {
 #if BSP_INDIR_API
 
 #define sys_init          BSP_SYS_API(dev.init)
+#define dev_hal_init        BSP_SYS_API(hal_init)
 #define sys_deinit        BSP_SYS_API(dev.deinit)
 #define sys_conf          BSP_SYS_API(dev.conf)
 #define sys_info          BSP_SYS_API(dev.info)
@@ -36,7 +41,8 @@ void profiler_reset (void);
 void profiler_init (void);
 void profiler_deinit (void);
 
-int dev_init (void (*userinit) (void));
+int dev_hal_init (void);
+int dev_init (void);
 void dev_deinit (void);
 
 
@@ -47,3 +53,14 @@ void dev_tickle (void);
 #define profiler_enter() _profiler_enter(__func__, __LINE__)
 #define profiler_exit() _profiler_exit(__func__, __LINE__)
 
+typedef enum {
+    EXEC_DRIVER,
+    EXEC_APPLICATION,
+    EXEC_MODULE,
+    EXEC_ISR,
+    EXEC_MAX,
+} exec_region_t;
+
+extern exec_region_t g_exec_region;
+
+#endif /*__BSP_SYS_H__*/
