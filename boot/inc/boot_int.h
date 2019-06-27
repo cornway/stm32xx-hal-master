@@ -4,24 +4,21 @@
 #include <debug.h>
 #include <gui.h>
 #include <heap.h>
+#include <bsp_sys.h>
 
 #define BOOT_MAX_NAME 24
 #define BOOT_MAX_PATH 128
 
 typedef enum {
-    BIN_NONE = 0,
     BIN_FILE,
     BIN_LINK,
-} bintype_t;
-
-typedef struct {
-    bintype_t type;
-    const char *ext;
-} typebind_t;
+    BIN_MAX,
+} bsp_exec_file_type_t;
 
 typedef struct boot_bin_s {
     struct boot_bin_s *next;
-    bintype_t type;
+    bsp_exec_file_type_t filetype;
+    exec_mem_type_t memtype;
 
     arch_word_t size;
     arch_word_t progaddr;
@@ -35,11 +32,11 @@ typedef void (*cplthook_t) (const char *msg, int per);
 
 void *bsp_cache_bin_file (const bsp_heap_api_t *heapapi, const char *path, int *binsize);
 bsp_bin_t *bsp_setup_bin_desc (bsp_bin_t *bin, const char *path,
-                           const char *originname, bintype_t type);
+                           const char *originname, bsp_exec_file_type_t type);
 void bsp_setup_bin_param (bsp_bin_t *bin);
 int bhal_load_program (cplthook_t cplth, arch_word_t *progaddr,
                             void *progdata, size_t progsize);
-bintype_t bsp_bin_file_compat (const char *in);
+bsp_exec_file_type_t bsp_bin_file_compat (const char *in);
 d_bool bhal_prog_exist (arch_word_t *progaddr, void *progdata, size_t progsize);
 void bhal_execute_app (void *addr);
 int bhal_execute_module (arch_word_t addr);

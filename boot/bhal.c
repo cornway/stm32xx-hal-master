@@ -5,6 +5,7 @@
 #include <main.h>
 #include <bsp_sys.h>
 #include "../int/bsp_mod_int.h"
+#include <stm32f769i_discovery_sdram.h>
 
 /* Base address of the Flash sectors */
 #if defined(DUAL_BANK)
@@ -66,6 +67,21 @@ exec_region_t g_exec_region = EXEC_DRIVER;
 
 static uint32_t GetSector(uint32_t Address);
 
+static exec_mem_type_t
+bsp_get_exec_mem_type (arch_word_t addr)
+{
+    if ((addr >= FLASH_BASE) && (addr <= FLASH_END)) {
+        return EXEC_ROM;
+    }
+    if ((addr >= SDRAM_DEVICE_ADDR) && (addr <= (SDRAM_DEVICE_ADDR + SDRAM_DEVICE_SIZE))) {
+        return EXEC_SDRAM;
+    }
+    if ((addr >= SRAM1_BASE) && (addr <= SRAM2_BASE)) {
+        return EXEC_SRAM;
+    }
+    return EXEC_INVAL;
+}
+
 static void bhal_prog_begin (void)
 {
     FLASH_OBProgramInitTypeDef OBInit = {0};
@@ -116,7 +132,7 @@ static int bhal_prog_erase (cplthook_t cplth, arch_word_t *_addr, void *_bin, ui
     return 0;
 }
 
-static int bhal_prog_write_chunk (arch_word_t *dst, const arch_word_t *src, int size)
+static int bhal_prog_prog_chunk (arch_word_t *dst, const arch_word_t *src, int size)
 {
     int errcnt = 0;
     while (size > 0) {
@@ -141,6 +157,11 @@ static int bhal_prog_read_chunk (arch_word_t *dst, const arch_word_t *src, int s
     return 0;
 }
 
+static int bhal_prog_write_chunk (arch_word_t *dst, const arch_word_t *src, int size)
+{
+    return bhal_prog_read_chunk(dst, src, size);
+}
+
 static int bhal_prog_cmp_chunk (arch_word_t *dst, const arch_word_t *src, int size)
 {
     int miss = 0;
@@ -163,17 +184,17 @@ typedef struct {
     int (*func) (arch_word_t *dst, const arch_word_t *src, int size);
 } prog_func_t;
 
-const prog_func_t func_write =
+const prog_func_t func_program =
 {
     "Write memory",
     "",
     "Corrupted memory",
     "#O",
     d_true,
-    bhal_prog_write_chunk,
+    bhal_prog_prog_chunk,
 };
 
-prog_func_t func_compare =
+const prog_func_t func_compare =
 {
     "Compare memory",
     "",
@@ -183,7 +204,7 @@ prog_func_t func_compare =
     bhal_prog_cmp_chunk,
 };
 
-prog_func_t func_read =
+const prog_func_t func_read =
 {
     "Read memory",
     "",
@@ -191,6 +212,16 @@ prog_func_t func_read =
     "..",
     d_false,
     bhal_prog_read_chunk,
+};
+
+const prog_func_t func_write =
+{
+    "Write memory",
+    "",
+    "Write fail",
+    "#O",
+    d_true,
+    bhal_prog_write_chunk,
 };
 
 static int bhal_prog_handle_func 
@@ -305,20 +336,50 @@ d_bool bhal_prog_exist (arch_word_t *progaddr, void *progdata, size_t progsize)
     return d_true;
 }
 
-int bhal_load_program (cplthook_t cplth, arch_word_t *progaddr,
+int __bhal_write_ROM (cplthook_t cplth, arch_word_t *progaddr,
                             void *progdata, size_t progsize)
 {
     int err = 0;
     bhal_prog_begin();
     err = bhal_prog_erase(cplth, progaddr, progdata, progsize);
     if (err >= 0) {
-        err = bhal_prog_handle_func(cplth, &func_write, progaddr, progdata, progsize);
+        err = bhal_prog_handle_func(cplth, &func_program, progaddr, progdata, progsize);
     }
     bhal_prog_end();
     if (err >= 0) {
         err = bhal_prog_handle_func(cplth, &func_compare, progaddr, progdata, progsize);
     }
     return err;
+}
+
+int __bhal_write_RAM (cplthook_t cplth, arch_word_t *progaddr,
+                            void *progdata, size_t progsize)
+{
+    return bhal_prog_handle_func(cplth, &func_write, progaddr, progdata, progsize);
+}
+
+int bhal_load_program (cplthook_t cplth, arch_word_t *progaddr,
+                            void *progdata, size_t progsize)
+{
+    int (*bhal_op) (cplthook_t, arch_word_t *, void *, size_t) = NULL;
+    exec_mem_type_t exec_mem_type = bsp_get_exec_mem_type((arch_word_t)progaddr);
+
+    switch (exec_mem_type) {
+        case EXEC_ROM :
+            bhal_op = __bhal_write_ROM;
+        break;
+        case EXEC_SDRAM :
+        case EXEC_SRAM :
+            bhal_op = __bhal_write_RAM;
+        break;
+        default:
+        break;
+    }
+    if (bhal_op) {
+        return bhal_op(cplth, progaddr, progdata, progsize);
+    }
+    dprintf("Unsupported memory region type : %i\n", exec_mem_type);
+    return -1;
 }
 
 

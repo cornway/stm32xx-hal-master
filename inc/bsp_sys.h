@@ -61,6 +61,15 @@ typedef enum {
     EXEC_MAX,
 } exec_region_t;
 
+typedef enum {
+    EXEC_ROM, /*on-board FLASH*/
+    EXEC_SDRAM,
+    EXEC_SRAM,
+    EXEC_INVAL,
+} exec_mem_type_t;
+
+exec_mem_type_t bsp_get_exec_mem_type (arch_word_t addr);
+
 extern exec_region_t g_exec_region;
 
 #endif /*__BSP_SYS_H__*/

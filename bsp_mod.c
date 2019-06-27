@@ -6,8 +6,8 @@
 
 #define MOD_MAX_NAME 24
 
-#define MOD_EXEC_ALLOWED() (g_exec_region == EXEC_APPLICATION)
-#define MOD_EXEC_REGION()  (g_exec_region == EXEC_MODULE)
+#define EXEC_REGION_APP() (g_exec_region == EXEC_APPLICATION)
+#define EXEC_REGION_MODULE() (g_exec_region == EXEC_MODULE)
 
 typedef struct bspmod_s {
     struct bspmod_s *next;
@@ -67,7 +67,7 @@ static bspmod_t *bspmod_search_mod (const char *name)
     return NULL;
 }
 
-static d_bool bspmod_check_to_insert (bspmod_t *modchk)
+static d_bool bspmod_check_mod_allowed (bspmod_t *modchk)
 {
     bspmod_t *mod = bspmod_list.head;
 
@@ -84,10 +84,11 @@ void *bspmod_insert (const bsp_heap_api_t *heap, const char *path, const char *n
 {
     bspmod_t *mod;
     bsp_bin_t *bin;
-    bintype_t bintype;
+    bsp_exec_file_type_t bintype;
     void *rawptr;
+    int err = -1;
 
-    assert(MOD_EXEC_ALLOWED());
+    assert(EXEC_REGION_APP());
 
     mod = bspmod_search_mod(name);
     if (mod) {
@@ -105,18 +106,25 @@ void *bspmod_insert (const bsp_heap_api_t *heap, const char *path, const char *n
 
     bin = bsp_setup_bin_desc(&mod->bin, path, name, bintype);
 
-    if (!bin || !bspmod_check_to_insert(mod)) {
+    if (!bin || !bspmod_check_mod_allowed(mod)) {
         heap->free(mod);
         return NULL;
     }
 
     rawptr = bsp_cache_bin_file(heap, bin->path, (int *)&bin->size);
 
-    if (!rawptr || bhal_load_program(NULL, (arch_word_t *)bin->progaddr, rawptr, bin->size) < 0) {
+    if (rawptr) {
+        err = 0;
+        if (!bhal_prog_exist((arch_word_t *)bin->progaddr, rawptr, bin->size)) {
+            err = bhal_load_program(NULL, (arch_word_t *)bin->progaddr, rawptr, bin->size);
+        }
+    }
+    if (err < 0) {
         heap->free(mod);
         return NULL;
     }
     mod->heap = (bsp_heap_api_t *)heap;
+
     bspmod_link(mod);
     heap->free(rawptr);
 
@@ -127,7 +135,7 @@ int bspmod_remove (const char *name)
 {
     bspmod_t *mod;
 
-    assert(MOD_EXEC_ALLOWED());
+    assert(EXEC_REGION_APP());
 
     mod = bspmod_search_mod(name);
     if (!mod) {
@@ -142,7 +150,7 @@ int bspmod_probe (const void *_mod)
 {
     bspmod_t *mod = (bspmod_t *)_mod;
 
-    assert(MOD_EXEC_ALLOWED());
+    assert(EXEC_REGION_APP());
 
     return bhal_execute_module(mod->bin.entrypoint);
 }
@@ -152,7 +160,7 @@ int bspmod_register_api (const char *name, const void *api, int apisize)
 {
     bspmod_t *mod;
 
-    assert(MOD_EXEC_REGION())
+    assert(EXEC_REGION_MODULE())
 
     mod = bspmod_search_mod(name);
     if (!mod) {
@@ -167,7 +175,7 @@ const void *bspmod_get_api (const char *name, int *apisize)
 {
     bspmod_t *mod;
 
-    assert(MOD_EXEC_ALLOWED());
+    assert(EXEC_REGION_APP());
 
     mod = bspmod_search_mod(name);
     if (!mod) {

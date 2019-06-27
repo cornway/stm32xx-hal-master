@@ -13,27 +13,47 @@
 
 #define BOOT_SYS_DIR_PATH "/sys"
 #define BOOT_SYS_LOG_NAME "log.txt"
+#define BOOT_BIN_DIR_NAME "BIN"
 #define BOOT_SYS_LOG_PATH BOOT_SYS_DIR_PATH"/"BOOT_SYS_LOG_NAME
 
 extern uint32_t g_app_program_addr;
 
-static int boot_load_existing = 0;
+static int boot_program_bypas = 0;
 
 component_t *com_browser;
 component_t *com_title;
 gui_t gui;
 pane_t *pane, *alert_pane;
 
-static const typebind_t typebind[] =
-{
-    {BIN_FILE, ".bin"},
-    {BIN_LINK, ".lnk"},
-};
-
 bsp_bin_t *boot_bin_head = NULL;
 bsp_bin_t *boot_bin_selected = NULL;
 
-static void boot_bin_link (bsp_bin_t *bin)
+bsp_exec_file_type_t
+bsp_bin_file_compat (const char *in)
+{
+#define EXT_LEN (4)
+
+    const struct exec_file_ext_map {
+        bsp_exec_file_type_t type;
+        const char *ext;
+    } extmap[BIN_MAX] =
+    {
+        {BIN_FILE, ".bin"},
+        {BIN_LINK, ".lnk"},
+    };
+
+    int pos = strlen(in) - EXT_LEN;
+    int i;
+
+    for (i = 0; i < arrlen(extmap); i++) {
+        if (!strcasecmp(in + pos, extmap[i].ext)) {
+            return extmap[i].type;
+        }
+    }
+    return BIN_MAX;
+}
+
+static void boot_add_exec_2_list (bsp_bin_t *bin)
 {
     bin->next = NULL;
     if (!boot_bin_head) {
@@ -45,20 +65,18 @@ static void boot_bin_link (bsp_bin_t *bin)
     }
 }
 
-bintype_t
-bsp_bin_file_compat (const char *in)
+static void boot_destr_exec_list (void)
 {
-#define EXT_LEN (4)
-    int pos = strlen(in) - EXT_LEN;
-    int i;
+    bsp_bin_t *bin = boot_bin_head;
 
-    for (i = 0; i < arrlen(typebind); i++) {
-        if (!strcasecmp(in + pos, typebind[i].ext)) {
-            return typebind[i].type;
-        }
+    while (bin) {
+
+        heap_free(bin);
+        bin = bin->next;
     }
-    return BIN_NONE;
+    boot_bin_head = NULL;
 }
+
 
 void
 bsp_setup_bin_param (bsp_bin_t *bin)
@@ -81,15 +99,27 @@ bsp_setup_bin_param (bsp_bin_t *bin)
 
 bsp_bin_t *
 bsp_setup_bin_desc (bsp_bin_t *bin, const char *path,
-                           const char *originname, bintype_t type)
+                           const char *originname, bsp_exec_file_type_t type)
 {
 #define BOOT_MIN_SECTOR (0x4000)
 
     snprintf(bin->name, sizeof(bin->name), "%s", originname);
     snprintf(bin->path, sizeof(bin->path), "%s", path);
-    bin->type = type;
+    bin->filetype = type;
     bsp_setup_bin_param(bin);
     bin->progaddr = _ROUND_DOWN(bin->entrypoint, BOOT_MIN_SECTOR);
+    return bin;
+}
+
+static bsp_bin_t *
+boot_alloc_bin_desc (const char *path,
+                           const char *originname, bsp_exec_file_type_t type)
+{
+    bsp_bin_t *bin = (bsp_bin_t *)heap_malloc(sizeof(*bin));
+
+    bin = bsp_setup_bin_desc(bin, path, originname, type);
+    assert(bin && g_app_program_addr == bin->progaddr);
+    boot_add_exec_2_list(bin);
     return bin;
 }
 
@@ -99,6 +129,7 @@ void boot_read_path (const char *path)
     int dir, bindir;
     char buf[BOOT_MAX_PATH];
     char origin_name[BOOT_MAX_NAME];
+    d_bool filesfound = 0;
 
     dir = d_opendir(path);
     if (dir < 0) {
@@ -108,54 +139,33 @@ void boot_read_path (const char *path)
 
         if (fobj.type == FTYPE_DIR) {
             fobj_t binobj;
-            snprintf(buf, sizeof(buf), "%s/%s", path, fobj.name);
+            snprintf(buf, sizeof(buf), "%s/%s/"BOOT_BIN_DIR_NAME, path, fobj.name);
+
             bindir = d_opendir(buf);
             if (bindir < 0) {
                 dprintf("%s() : Cannot open : \'%s\'\n", __func__, buf);
                 continue;
             }
-            snprintf(origin_name, sizeof(origin_name), "%s", fobj.name);
             while (d_readdir(bindir, &binobj) >= 0) {
-                d_bool hexpresent;
+                if (binobj.type == FTYPE_FILE) {
+                    bsp_exec_file_type_t type = bsp_bin_file_compat(binobj.name);
 
-                if (binobj.type == FTYPE_DIR && strcmp(binobj.name, "BIN") == 0) {
-                    d_closedir(bindir);
-                    snprintf(buf, sizeof(buf), "%s/%s", buf, binobj.name);
-                    bindir = d_opendir(buf);
-                    if (bindir < 0) {
-                        dprintf("%s() : Cannot open : \'%s\'\n", __func__, buf);
-                        break;
-                    }
-                    hexpresent = d_false;
-                    while (d_readdir(bindir, &binobj) >= 0) {
-                        if (binobj.type == FTYPE_FILE) {
-                            bintype_t type = bsp_bin_file_compat(binobj.name);
-
-                            if (type != BIN_NONE) {
-                                bsp_bin_t *bin = (bsp_bin_t *)heap_malloc(sizeof(*bin));
-
-                                snprintf(buf, sizeof(buf), "%s/%s", buf, binobj.name);
-                                bin = bsp_setup_bin_desc(bin, buf, origin_name, type);
-                                assert(g_app_program_addr == bin->progaddr);
-                                boot_bin_link(bin);
-                                hexpresent = d_true;
-                            }
+                    if (type != BIN_MAX) {
+                        snprintf(buf, sizeof(buf), "%s/%s", buf, fobj.name);
+                        if (boot_alloc_bin_desc(buf, origin_name, type)) {
+                            filesfound++;
                         }
                     }
-                    if (!hexpresent) {
-                        dprintf("%s() : bin dir with no .hex file!\n", __func__);
-                    }
-                    d_closedir(bindir);
-                    bindir = -1;
-                    break;
                 }
             }
-            if (bindir >= 0) {
-                d_closedir(bindir);
+            if (!filesfound) {
+                dprintf("%s() : no exe here : \'%s\'\n", __func__, buf);
             }
+            d_closedir(bindir);
         }
     }
     d_closedir(dir);
+    dprintf("%s() : Found : %u files\n", __func__, filesfound);
 }
 
 void *bsp_cache_bin_file (const bsp_heap_api_t *heapapi, const char *path, int *binsize)
@@ -201,7 +211,7 @@ int boot_execute_boot (arch_word_t *progaddr, const char *path, const char *argv
         return 0;
     }
 
-    if (!boot_load_existing && !bhal_prog_exist(progaddr, bindata, binsize / sizeof(arch_word_t))) {
+    if (!boot_program_bypas && !bhal_prog_exist(progaddr, bindata, binsize / sizeof(arch_word_t))) {
         err = bhal_load_program(NULL, progaddr, bindata, binsize / sizeof(arch_word_t));
     }
     if (err < 0) {
@@ -212,17 +222,6 @@ int boot_execute_boot (arch_word_t *progaddr, const char *path, const char *argv
     dev_deinit();
     bhal_execute_app(progaddr);
     return 0;
-}
-
-static void boot_destroy_bins (void)
-{
-    bsp_bin_t *bin = boot_bin_head;
-
-    while (bin) {
-
-        heap_free(bin);
-        bin = bin->next;
-    }
 }
 
 static int boot_handle_selected (pane_t *pane, component_t *com, void *user)
@@ -237,7 +236,8 @@ static int boot_handle_selected (pane_t *pane, component_t *com, void *user)
     pane->parent->destroy = 1;
     g_app_program_addr = bindesc->progaddr;
     exec_cmd_push("boot", bindesc->path, NULL, NULL);
-    boot_destroy_bins();
+    boot_destr_exec_list();
+    com->user = NULL;
     return 1;
 }
 
@@ -421,7 +421,7 @@ int boot_main (int argc, const char **argv)
     dvar.ptrsize = sizeof(&user_execute_boot);
     d_dvar_reg(&dvar, "boot");
 
-    d_dvar_int32(&boot_load_existing, "skipflash");
+    d_dvar_int32(&boot_program_bypas, "skipflash");
 
     while (!gui.destroy) {
 
