@@ -6,16 +6,6 @@
 #include <dev_conf.h>
 #include <stdint.h>
 #include <bsp_api.h>
-#ifndef DEBUG_SERIAL
-#warning "DEBUG_SERIAL undefined, using TRUE"
-#define DEBUG_SERIAL 1
-#endif
-
-#if DEBUG_SERIAL
-#define PRINTF_SERIAL  1
-#else
-#define PRINTF_SERIAL  0
-#endif
 
 #define __func__ __FUNCTION__
 #define PRINTF __attribute__((format(printf, 1, 2)))
@@ -23,14 +13,7 @@
 #define PRINTF_ATTR(a, b) __attribute__((format(printf, a, b)))
 #endif
 
-#if DEBUG_SERIAL
-
-#ifndef SERIAL_TSF
-#warning "SERIAL_TSF undefined, using TRUE"
-#define SERIAL_TSF 1
-#endif
-
-typedef int (*serial_rx_clbk_t) (const char *buf, int len);
+typedef int (*serial_rx_clbk_t) (int, char **);
 
 typedef struct bsp_debug_api_s {
     bspdev_t dev;
@@ -43,6 +26,18 @@ typedef struct bsp_debug_api_s {
     void (*tickle) (void);
     void (*dprintf) (const char *, ...);
 } bsp_debug_api_t;
+
+#ifndef DEBUG_SERIAL
+#define DEBUG_SERIAL 1
+#endif
+
+#if DEBUG_SERIAL
+
+#define PRINTF_SERIAL  1
+
+#ifndef SERIAL_TSF
+#define SERIAL_TSF 1
+#endif
 
 #define BSP_DBG_API(func) ((bsp_debug_api_t *)(g_bspapi->dbg))->func
 
@@ -62,7 +57,7 @@ typedef struct bsp_debug_api_s {
 #define serial_tickle           BSP_DBG_API(tickle)
 #define dprintf                 BSP_DBG_API(dprintf)
 
-#else
+#else /*BSP_INDIR_API*/
 int serial_init (void);
 void serial_putc (char c);
 char serial_getc (void);
@@ -73,7 +68,10 @@ void debug_rm_rx_handler (serial_rx_clbk_t);
 void serial_tickle (void);
 void dprintf (const char *fmt, ...) PRINTF;
 
-#endif
+#endif /*BSP_INDIR_API*/
+
+void dvprintf (const char *fmt, va_list argptr);
+void hexdump (const uint8_t *data, int len, int rowlength);
 
 #else /*DEBUG_SERIAL*/
 
@@ -84,12 +82,8 @@ static inline void serial_send_buf (const void *data, size_t cnt){}
 static inline void serial_flush (void){}
 
 static inline void dprintf (const char *fmt, ...){}
-static inline void dvprintf (const char *fmt, va_list argptr) {}
 void hexdump (const uint8_t *data, int len, int rowlength) {}
 
 #endif /*DEBUG_SERIAL*/
-
-void dvprintf (const char *fmt, va_list argptr);
-void hexdump (const uint8_t *data, int len, int rowlength);
 
 #endif /*_SERIAL_DEBUG_H_*/

@@ -1,5 +1,10 @@
 #include <stdint.h>
+#include <gfx.h>
 #include <misc_utils.h>
+#include <debug.h>
+#include <gui.h>
+#include <heap.h>
+#include <bsp_sys.h>
 
 #define BOOT_MAX_NAME 24
 #define BOOT_MAX_PATH 128

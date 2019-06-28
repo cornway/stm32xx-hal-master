@@ -5,6 +5,8 @@
 #include "misc_utils.h"
 #include <bsp_sys.h>
 
+#if defined(BSP_DRIVER)
+
 #ifndef USE_STM32F769I_DISCO
 #error "Not supported"
 #endif
@@ -383,3 +385,4 @@ void NVIC_dump (void)
     dprintf("%s : DUMP END\n", __func__);
 }
 
+#endif /*BSP_DRIVER*/

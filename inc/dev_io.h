@@ -6,31 +6,14 @@
 #include <arch.h>
 #include <bsp_api.h>
 
+#define DSEEK_SET 0
+#define DSEEK_CUR 1
+#define DSEEK_END 2
+
 typedef enum {
     FTYPE_FILE,
     FTYPE_DIR,
 } ftype_t;
-
-typedef enum {
-    DVAR_FUNC,
-    DVAR_INT32,
-    DVAR_FLOAT,
-    DVAR_STR,
-} dvar_obj_t;
-
-typedef int (*dvar_func_t) (void *, void *);
-
-typedef struct {
-    void *ptr;
-    uint16_t ptrsize;
-    uint16_t size;
-    dvar_obj_t type;
-    uint32_t flags;
-} dvar_t;
-
-#define DSEEK_SET 0
-#define DSEEK_CUR 1
-#define DSEEK_END 2
 
 typedef struct {
     ftype_t type;
@@ -66,13 +49,6 @@ typedef struct bsp_io_api_s {
     int (*readdir) (int , fobj_t *);
     uint32_t (*time) (void);
     int (*dirlist) (const char *, flist_t *);
-
-    int (*var_reg) (dvar_t *, const char *);
-    int (*var_int32) (int32_t *, const char *);
-    int (*var_float) (float *, const char *);
-    int (*var_str) (char *, int, const char *);
-
-    int (*var_rm) (const char *);
 } bsp_io_api_t;
 
 #define BSP_IO_API(func) ((bsp_io_api_t *)(g_bspapi->io))->func
@@ -103,10 +79,6 @@ typedef struct bsp_io_api_s {
 #define d_readdir       BSP_IO_API(readdir)
 #define d_time          BSP_IO_API(time)
 #define d_dirlist       BSP_IO_API(dirlist)
-#define d_dvar_reg      BSP_IO_API(var_reg)
-#define d_dvar_int32    BSP_IO_API(var_int32)
-#define d_dvar_float    BSP_IO_API(var_float)
-#define d_dvar_str      BSP_IO_API(var_str)
 
 #else
 
@@ -130,15 +102,6 @@ int d_closedir (int dir);
 int d_readdir (int dir, fobj_t *fobj);
 uint32_t d_time (void);
 int d_dirlist (const char *path, flist_t *flist);
-
-int d_dvar_reg (dvar_t *var, const char *name);
-int d_dvar_int32 (int32_t *var, const char *name);
-int d_dvar_float (float *var, const char *name);
-int d_dvar_str (char *str, int len, const char *name);
-
-int d_dvar_rm (const char *name);
-
-void term_parse (const char *buf, int size);
 
 #endif
 

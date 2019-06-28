@@ -1,6 +1,8 @@
 #include <string.h>
+#include <stdarg.h>
+#include "int/bsp_mod_int.h"
+#include <bsp_cmd.h>
 #include <bsp_api.h>
-#include <debug.h>
 #include <audio_main.h>
 #include <input_main.h>
 #include <misc_utils.h>
@@ -9,7 +11,7 @@
 #include <heap.h>
 #include <bsp_sys.h>
 #include <gui.h>
-#include "../int/bsp_mod_int.h"
+#include <debug.h>
 
 bspapi_t *g_bspapi;
 
@@ -24,7 +26,19 @@ typedef struct {
     struct bsp_debug_api_s  dbg;
     struct bsp_input_api_s  in;
     struct bsp_gui_api_s    gui;
+    struct bsp_cmd_api_s    cmd;
 } bsp_api_int_t;
+
+#if defined(BSP_DRIVER)
+
+typedef struct {
+    bsp_user_api_t api;
+    d_bool attached;
+} bsp_user_int_api_t;
+
+static bsp_user_int_api_t user_api = {0};
+
+#endif /*BSP_DRIVER*/
 
 #if !BSP_INDIR_API
 
@@ -80,6 +94,8 @@ bspapi_t *bsp_api_attach (void)
     API_SETUP(api, dbg);
     API_SETUP(api, in);
     API_SETUP(api, gui);
+    API_SETUP(api, cmd);
+
     api->size = sizeof(*api);
     g_bspapi = &api->api;
 
@@ -106,10 +122,14 @@ bspapi_t *bsp_api_attach (void)
     BSP_IO_API(readdir)     = d_readdir;
     BSP_IO_API(time)        = d_time;
     BSP_IO_API(dirlist)     = d_dirlist;
-    BSP_IO_API(var_reg)     = d_dvar_reg;
-    BSP_IO_API(var_int32)   = d_dvar_int32;
-    BSP_IO_API(var_float)   = d_dvar_float;
-    BSP_IO_API(var_str)     = d_dvar_str;
+
+    BSP_CMD_API(var_reg)    = cmd_register_var;
+    BSP_CMD_API(var_int32)  = cmd_register_i32;
+    BSP_CMD_API(var_float)  = cmd_register_float;
+    BSP_CMD_API(var_str)    = cmd_register_str;
+    BSP_CMD_API(var_func)   = cmd_register_func;
+    BSP_CMD_API(exec)       = cmd_execute;
+    BSP_CMD_API(tickle)     = cmd_tickle;
 
     BSP_VID_API(dev.init)   = vid_init;
     BSP_VID_API(dev.deinit) = vid_deinit;
@@ -174,6 +194,10 @@ bspapi_t *bsp_api_attach (void)
     BSP_SYS_API(prof_init)  = profiler_init;
     BSP_SYS_API(prof_deinit)  = profiler_deinit;
 
+    BSP_SYS_API(user_alloc) = sys_user_alloc;
+    BSP_SYS_API(user_free)  = sys_user_free;
+    BSP_SYS_API(user_api_attach) = sys_user_attach;
+
     BSP_DBG_API(dev.init)   = serial_init;
     BSP_DBG_API(dev.deinit) = dev_deinit_stub;
     BSP_DBG_API(dev.conf)   = dev_conf_stub;
@@ -233,22 +257,41 @@ bspapi_t *bsp_api_attach (void)
 
 #endif /*BSP_INDIR_API*/
 
-void dev_tickle (void)
+void bsp_tickle (void)
 {
     audio_update();
     input_tickle();
+#if defined(BOOT)
     serial_tickle();
+#endif
     profiler_reset();
+    cmd_tickle();
 }
 
-void dvprintf (const char *fmt, va_list argptr)
+#if defined(BSP_DRIVER)
+
+void *sys_user_alloc (int size)
 {
-    char            string[1024];
-
-    vsnprintf (string, sizeof(string), fmt, argptr);
-
-    dprintf("%s", string);
+    if (!user_api.attached) {
+        return NULL;
+    }
+    return user_api.api.heap.malloc(size);
 }
 
+void sys_user_free (void *p)
+{
+    if (!user_api.attached) {
+        return;
+    }
+    user_api.api.heap.free(p);
+}
 
+int sys_user_attach (bsp_user_api_t *api)
+{
+    assert(EXEC_REGION_APP());
+    memcpy(&user_api.api, api, sizeof(user_api.api));
+    user_api.attached = d_true;
+    return 0;
+}
 
+#endif /*BSP_DRIVER*/

@@ -1,4 +1,7 @@
-#include <boot_int.h>
+#include <gfx.h>
+#include <gui.h>
+
+#if defined(BSP_DRIVER)
 
 typedef enum {
     WINNONE,
@@ -132,4 +135,6 @@ int win_close_allert (gui_t *gui, pane_t *pane)
     gui_release_pane(gui, pane);
     return 0;
 }
+
+#endif /*BSP_DRIVER*/
 

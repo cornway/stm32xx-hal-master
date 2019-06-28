@@ -2,8 +2,8 @@
 #if defined(BSP_DRIVER)
 
 #include <stdlib.h>
+#include "int/input_int.h"
 #include <input_main.h>
-#include <input_int.h>
 #include <debug.h>
 #include "stm32f769i_discovery_ts.h"
 

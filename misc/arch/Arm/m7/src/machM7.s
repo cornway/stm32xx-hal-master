@@ -47,7 +47,11 @@ $label.BRL          CPSIE   I
                 
                     MEND
 
+                    PRESERVE8
+                    THUMB
+
                     AREA    |.text|, CODE, READONLY
+
                     ALIGN
 upcall              PROC
                     SWI     0x02
@@ -148,10 +152,9 @@ __arch_get_shared   PROC
                     ENDP
                         
 __arch_asmgoto      PROC
-                    MOV PC, R0
+                    BX R0
                     B   .
                     ENDP
-
                     END
                        
                 

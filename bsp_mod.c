@@ -1,13 +1,12 @@
 
 #include <string.h>
-#include <boot_int.h>
+#include "boot/int/boot_int.h"
+#include "int/bsp_mod_int.h"
 #include <bsp_sys.h>
-#include "./int/bsp_mod_int.h"
+
+#if defined(BOOT)
 
 #define MOD_MAX_NAME 24
-
-#define EXEC_REGION_APP() (g_exec_region == EXEC_APPLICATION)
-#define EXEC_REGION_MODULE() (g_exec_region == EXEC_MODULE)
 
 typedef struct bspmod_s {
     struct bspmod_s *next;
@@ -186,3 +185,4 @@ const void *bspmod_get_api (const char *name, int *apisize)
     return mod->api;
 }
 
+#endif /*BOOT*/

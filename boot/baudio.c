@@ -1,7 +1,7 @@
 
+#include "int/boot_int.h"
 #include <misc_utils.h>
 #include <audio_main.h>
-#include <boot_int.h>
 #include <heap.h>
 
 #define BSFX_POOLMAX 16

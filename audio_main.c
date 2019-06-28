@@ -3,13 +3,13 @@
 
 #include "string.h"
 #include "stm32f769i_discovery_audio.h"
+#include "int/audio_int.h"
+#include "int/term_int.h"
 #include "audio_main.h"
-#include "audio_int.h"
 #include "wm8994.h"
 #include "nvic.h"
 #include "debug.h"
 #include <dev_conf.h>
-#include "./int/term_int.h"
 
 #if AUDIO_MODULE_PRESENT
 

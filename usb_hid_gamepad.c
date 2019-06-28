@@ -3,8 +3,10 @@
 #include "usbh_core.h"
 #include "usbh_hid.h"
 #include "input_main.h"
-#include "input_int.h"
+#include "int/input_int.h"
 #include "nvic.h"
+
+#if defined(BSP_DRIVER)
 
 #define LR_GPOS         0
 #define LR_MASK         (0xffUL << LR_GPOS)
@@ -187,4 +189,4 @@ USBH_StatusTypeDef USBH_HID_GamepadInit(USBH_HandleTypeDef *phost)
     return USBH_OK;
 }
 
-
+#endif /*BSP_DRIVER*/

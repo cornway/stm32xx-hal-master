@@ -1,11 +1,12 @@
-
 #include <stm32f769i_discovery_lcd.h>
-#include <boot_int.h>
+#include <gui.h>
 #include <misc_utils.h>
-#include <boot.h>
 #include <lcd_main.h>
 #include <dev_io.h>
 #include <heap.h>
+#include <bsp_cmd.h>
+
+#if defined(BOOT)
 
 static int g_gui_debug_lvl = DBG_WARN;
 
@@ -132,7 +133,7 @@ void gui_init (gui_t *gui, int x, int y, int w, int h)
     gui->dim.w = w;
     gui->dim.h = h;
 
-    d_dvar_int32(&g_gui_debug_lvl, "guidbglvl");
+    cmd_register_i32(&g_gui_debug_lvl, "guidbglvl");
 }
 
 void gui_destroy (gui_t *gui)
@@ -535,3 +536,4 @@ void gui_release_pane (gui_t *gui, pane_t *pane)
     pane->repaint = 0;
 }
 
+#endif /*BOOT*/

@@ -1,17 +1,17 @@
-#if defined(BSP_DRIVER)
-
 #include "stdint.h"
 #include "string.h"
 #include "stdarg.h"
 #include "debug.h"
 #include "main.h"
 #include "dev_conf.h"
-#include "stm32f7xx_it.h"
 #include "nvic.h"
 #include "heap.h"
 #include "misc_utils.h"
-#include <tim_int.h>
+#include "int/tim_int.h"
 #include <dev_io.h>
+#include "stm32f7xx_it.h"
+
+#if defined(BSP_DRIVER)
 
 #if DEBUG_SERIAL
 
@@ -600,16 +600,13 @@ static inline int __insert_tsf (const char *fmt, char *buf, int max)
     return snprintf(buf, max, "[%10d.%03d] ", sec, msec % MSEC);
 }
 
-void dprintf (const char *fmt, ...)
+void dvprintf (const char *fmt, va_list argptr)
 {
-    va_list         argptr;
     char            string[1024];
     int size, max = sizeof(string);
 
-    va_start (argptr, fmt);
     size = __insert_tsf(fmt, string, max);
     size += vsnprintf (string + size, max - size, fmt, argptr);
-    va_end (argptr);
 
     assert(size < arrlen(string));
     serial_send_buf(string, size);
@@ -618,31 +615,26 @@ void dprintf (const char *fmt, ...)
 
 #else /*SERIAL_TSF*/
 
-void dprintf (const char *fmt, ...)
+void dvprintf (const char *fmt, va_list argptr)
 {
-    va_list         argptr;
     /*TODO : use local buf*/
     static char            string[1024];
     int size;
 
-    va_start (argptr, fmt);
     size = vsnprintf (string, sizeof(string), fmt, argptr);
-    va_end (argptr);
-
-    serial_send_buf(string, size);
-}
-
-void dvprintf (const char *fmt, va_list argptr)
-{
-    char            string[1024];
-    int size;
-
-    size = vsnprintf (string, sizeof(string), fmt, argptr);
-
     serial_send_buf(string, size);
 }
 
 #endif /*SERIAL_TSF*/
+
+void dprintf (const char *fmt, ...)
+{
+    va_list         argptr;
+
+    va_start (argptr, fmt);
+    dvprintf(fmt, argptr);
+    va_end (argptr);
+}
 
 #if DEBUG_SERIAL_USE_DMA
 
@@ -773,7 +765,6 @@ void serial_tickle (void)
 {
     irqmask_t irq = dma_rx_irq_mask;
     char buf[DMA_RX_FIFO_SIZE + 1];
-    char *pbuf = buf;
     int cnt;
 
     if (!rxstream.crlf) {
@@ -781,10 +772,10 @@ void serial_tickle (void)
     }
 
     irq_save(&irq);
-    dma_fifo_flush(&rxstream, pbuf, &cnt);
+    dma_fifo_flush(&rxstream, buf, &cnt);
     irq_restore(irq);
 
-    term_parse(pbuf, cnt);
+    term_proc_text(buf, cnt);
 }
 
 static void dma_rx_xfer_hanlder (struct __DMA_HandleTypeDef * hdma)

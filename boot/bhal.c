@@ -1,11 +1,13 @@
 #include <debug.h>
-#include <boot_int.h>
+#include "int/boot_int.h"
+#include "../int/bsp_mod_int.h"
 #include <misc_utils.h>
 #include <stdint.h>
 #include <main.h>
 #include <bsp_sys.h>
-#include "../int/bsp_mod_int.h"
 #include <stm32f769i_discovery_sdram.h>
+
+#if defined(BOOT)
 
 /* Base address of the Flash sectors */
 #if defined(DUAL_BANK)
@@ -105,7 +107,7 @@ static void bhal_prog_end (void)
     HAL_FLASH_Lock();
 }
 
-static int bhal_prog_erase (cplthook_t cplth, arch_word_t *_addr, void *_bin, uint32_t size)
+static int bhal_prog_erase (bhal_cplth_t cplth, arch_word_t *_addr, void *_bin, uint32_t size)
 {
     arch_word_t addr = (arch_word_t)_addr;
     FLASH_EraseInitTypeDef EraseInitStruct = {0};
@@ -225,7 +227,7 @@ const prog_func_t func_write =
 };
 
 static int bhal_prog_handle_func 
-    (const cplthook_t cplth, const prog_func_t *func,
+    (const bhal_cplth_t cplth, const prog_func_t *func,
     arch_word_t *addr, void *_bin, arch_word_t size)
 {
     arch_word_t *tmpaddr = addr, *bin = (arch_word_t *)_bin;
@@ -336,7 +338,7 @@ d_bool bhal_prog_exist (arch_word_t *progaddr, void *progdata, size_t progsize)
     return d_true;
 }
 
-int __bhal_write_ROM (cplthook_t cplth, arch_word_t *progaddr,
+int __bhal_write_ROM (bhal_cplth_t cplth, arch_word_t *progaddr,
                             void *progdata, size_t progsize)
 {
     int err = 0;
@@ -352,16 +354,16 @@ int __bhal_write_ROM (cplthook_t cplth, arch_word_t *progaddr,
     return err;
 }
 
-int __bhal_write_RAM (cplthook_t cplth, arch_word_t *progaddr,
+int __bhal_write_RAM (bhal_cplth_t cplth, arch_word_t *progaddr,
                             void *progdata, size_t progsize)
 {
     return bhal_prog_handle_func(cplth, &func_write, progaddr, progdata, progsize);
 }
 
-int bhal_load_program (cplthook_t cplth, arch_word_t *progaddr,
+int bhal_load_program (bhal_cplth_t cplth, arch_word_t *progaddr,
                             void *progdata, size_t progsize)
 {
-    int (*bhal_op) (cplthook_t, arch_word_t *, void *, size_t) = NULL;
+    int (*bhal_op) (bhal_cplth_t, arch_word_t *, void *, size_t) = NULL;
     exec_mem_type_t exec_mem_type = bsp_get_exec_mem_type((arch_word_t)progaddr);
 
     switch (exec_mem_type) {
@@ -497,3 +499,5 @@ static uint32_t GetSector(uint32_t Address)
 #endif /* DUAL_BANK */  
   return sector;
 }
+
+#endif /*BOOT*/

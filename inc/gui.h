@@ -1,4 +1,6 @@
 #include <stdint.h>
+#include <misc_utils.h>
+#include <debug.h>
 
 typedef uint32_t rgba_t;
 

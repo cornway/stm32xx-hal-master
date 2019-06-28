@@ -3,6 +3,7 @@
 #include <stdarg.h>
 #include "main.h"
 #include <stm32f769i_discovery.h>
+#include <bsp_cmd.h>
 #include "lcd_main.h"
 #include "audio_main.h"
 #include "input_main.h"
@@ -14,7 +15,8 @@
 #include <heap.h>
 #include <bsp_sys.h>
 
-extern bspapi_t *bsp_api_attach (void);
+#if !defined(MODULE)
+
 extern void VID_PreConfig (void);
 
 static void SystemClock_Config(void);
@@ -83,10 +85,17 @@ void serial_led_off (void)
     BSP_LED_Off(LED1);
 }
 
-static int con_echo (const char *buf, int len)
+static int con_echo (int argc, char **argv)
 {
-    dprintf("@: %s\n", buf);
-    return 0; /*let it be processed by others*/
+    int i;
+    dprintf("@> ");
+
+    for (i = 0; i < argc; i++) {
+        dprintf("%s ", argv[i]);
+    }
+    dprintf("\n");
+
+    return argc; /*let it be processed by others*/
 }
 
 static void SystemClock_Config(void)
@@ -215,7 +224,7 @@ int dev_init (void)
     profiler_init();
     vid_init();
     SystemDump();
-    d_dvar_int32(&g_dev_debug_level, "dbglvl");
+    cmd_register_i32(&g_dev_debug_level, "dbglvl");
     return 0;
 }
 
@@ -240,9 +249,23 @@ int dev_main (void)
     audio_conf("samplerate=22050, volume=100");
 
     VID_PreConfig();
+#if defined(APPLICATION)
+    {
+        static const bsp_user_api_t user_api =
+        {
+            .heap =
+            {
+                .malloc = heap_malloc,
+                .free = heap_free
+            },
+        };
+        sys_user_attach(&user_api);
+    }
+#endif /*APPLICATION*/
     mainloop(0, NULL);
 
     return 0;
 }
 
+#endif /*MODULE*/
 

@@ -1,5 +1,6 @@
+#include "int/boot_int.h"
+#include "../int/term_int.h"
 #include <gfx.h>
-#include <boot_int.h>
 #include <dev_io.h>
 #include <debug.h>
 #include <nvic.h>
@@ -8,8 +9,8 @@
 #include <string.h>
 #include <heap.h>
 #include <bsp_sys.h>
-#include "../int/term_int.h"
 
+#if defined(BOOT)
 
 #define BOOT_SYS_DIR_PATH "/sys"
 #define BOOT_SYS_LOG_NAME "log.txt"
@@ -198,23 +199,33 @@ void *bsp_cache_bin_file (const bsp_heap_api_t *heapapi, const char *path, int *
     return cache;
 }
 
-int boot_execute_boot (arch_word_t *progaddr, const char *path, const char *argv)
+int bsp_install_exec (arch_word_t *progaddr, const char *path,
+                          int argc, const char *argv)
 {
     void *bindata;
     int binsize = 0, err = 0;
     bsp_heap_api_t heap = {.malloc = heap_alloc_shared, .free = NULL};
 
-    dprintf("Booting : \'%s\'\n", path);
+    dprintf("Installing : \'%s\'\n", path);
 
     bindata = bsp_cache_bin_file(&heap, path, &binsize);
     if (!bindata) {
-        return 0;
+        return -1;
     }
 
     if (!boot_program_bypas && !bhal_prog_exist(progaddr, bindata, binsize / sizeof(arch_word_t))) {
         err = bhal_load_program(NULL, progaddr, bindata, binsize / sizeof(arch_word_t));
     }
     if (err < 0) {
+        return -1;
+    }
+    return 0;
+}
+
+int bsp_start_exec (arch_word_t *progaddr, const char *path,
+                          int argc, const char *argv)
+{
+    if (bsp_install_exec(progaddr, path, argc, argv) < 0) {
         return 0;
     }
     dprintf("Starting app... \n");
@@ -224,7 +235,7 @@ int boot_execute_boot (arch_word_t *progaddr, const char *path, const char *argv
     return 0;
 }
 
-static int boot_handle_selected (pane_t *pane, component_t *com, void *user)
+static int b_handle_selected (pane_t *pane, component_t *com, void *user)
 {
     bsp_bin_t *bindesc = *((bsp_bin_t **)com->user);
 
@@ -235,13 +246,13 @@ static int boot_handle_selected (pane_t *pane, component_t *com, void *user)
 
     pane->parent->destroy = 1;
     g_app_program_addr = bindesc->progaddr;
-    exec_cmd_push("boot", bindesc->path, NULL, NULL);
+    cmd_push("boot", bindesc->path, NULL, NULL);
     boot_destr_exec_list();
     com->user = NULL;
     return 1;
 }
 
-static int boot_show_list (pane_t *pane, component_t *com, void *user)
+static int b_draw_exec_list (pane_t *pane, component_t *com, void *user)
 {
     bsp_bin_t *bin = boot_bin_head;
     uint8_t maxbin = 8;
@@ -355,22 +366,11 @@ i_event_t *__post_key (i_event_t  *evts, i_event_t *event)
     return NULL;
 }
 
-static int user_execute_boot (void *p1, void *p2)
-{
-    char *path = (char *)p1;
-    int len = (int)p2;
-
-    boot_execute_boot((arch_word_t *)g_app_program_addr, path, NULL);
-
-    return len;
-}
-
 int boot_main (int argc, const char **argv)
 {
     screen_t s;
     prop_t prop;
     component_t *com;
-    dvar_t dvar;
 
     input_soft_init(__post_key, gamepad_to_kbd_map);
     vid_wh(&s);
@@ -404,8 +404,8 @@ int boot_main (int argc, const char **argv)
     com = gui_get_comp("browser", NULL);
     gui_set_prop(com, &prop);
     gui_set_comp(pane, com, 120, 80, gui.dim.w - 120, gui.dim.h - 80);
-    com->draw = boot_show_list;
-    com->act = boot_handle_selected;
+    com->draw = b_draw_exec_list;
+    com->act = b_handle_selected;
     com->user = &boot_bin_selected;
     com_browser = com;
 
@@ -416,22 +416,18 @@ int boot_main (int argc, const char **argv)
 
     boot_read_path("");
 
-    dvar.type = DVAR_FUNC;
-    dvar.ptr = user_execute_boot;
-    dvar.ptrsize = sizeof(&user_execute_boot);
-    d_dvar_reg(&dvar, "boot");
-
-    d_dvar_int32(&boot_program_bypas, "skipflash");
+    cmd_register_i32(&boot_program_bypas, "skipflash");
 
     while (!gui.destroy) {
 
         gui_draw(&gui);
-        dev_tickle();
+        bsp_tickle();
         input_proc_keys(NULL);
         if (gui.destroy) {
             gui_destroy(&gui);
         }
-        exec_iterate_cmd(exec_cmd_execute);
     }
     return 0;
 }
+
+#endif /*BOOT*/

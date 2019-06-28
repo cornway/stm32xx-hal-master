@@ -1,7 +1,7 @@
 #include "string.h"
 #include "stdio.h"
 #include "audio_main.h"
-#include "audio_int.h"
+#include "int/audio_int.h"
 #include "dev_io.h"
 
 #if defined(BSP_DRIVER)

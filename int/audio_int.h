@@ -3,6 +3,7 @@
 
 #include "dev_conf.h"
 #include "misc_utils.h"
+#include <audio_main.h>
 
 #ifndef AUDIO_RATE_DEFAULT
 #define AUDIO_RATE_DEFAULT 22050U
@@ -29,9 +30,6 @@
 
 /*TODO use define instead of 0*/
 #define AUDIO_PLAY_SCHEME 0
-
-extern void cd_tickle (void);
-extern int cd_init (void);
 
 #define AUDIO_TIMEOUT_MAX 2000 /*2 s*/
 #define MAX_2BAND_VOL ((MAX_VOL) | (MAX_VOL << 8))

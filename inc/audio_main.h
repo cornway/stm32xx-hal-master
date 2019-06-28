@@ -160,6 +160,7 @@ int audio_wave_size (int num);
 int audio_cache_wave (int num, uint8_t *dest, int size);
 void audio_wave_close (int num);
 
+int cd_init (void);
 cd_track_t *cd_play_name (cd_track_t *track, const char *path);
 int cd_pause (cd_track_t *track);
 int cd_resume (cd_track_t *track);
@@ -167,6 +168,7 @@ int cd_stop (cd_track_t *track);
 int cd_volume (cd_track_t *track, uint8_t vol);
 uint8_t cd_getvol (cd_track_t *track);
 int cd_playing (void);
+void cd_tickle (void);
 #endif
 
 

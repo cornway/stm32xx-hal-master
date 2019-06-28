@@ -2,10 +2,18 @@
 #define __BSP_SYS_H__
 
 #include <bsp_api.h>
+#include <heap.h>
+
+typedef struct {
+    bsp_heap_api_t heap;
+} bsp_user_api_t;
 
 typedef struct bsp_sytem_api_s {
     bspdev_t dev;
     int (*hal_init) (void);
+    void *(*user_alloc) (int);
+    void (*user_free) (void *);
+    int  (*user_api_attach) (bsp_user_api_t *);
     void (*fatal) (char *, ...);
     void (*prof_enter) (const char *, int);
     void (*prof_exit) (const char *, int);
@@ -25,12 +33,16 @@ typedef struct bsp_sytem_api_s {
 #define sys_info          BSP_SYS_API(dev.info)
 #define sys_priv          BSP_SYS_API(dev.priv)
 
+#define sys_user_alloc   BSP_SYS_API(user_alloc)
+#define sys_user_free    BSP_SYS_API(user_free)
+#define sys_user_attach  BSP_SYS_API(user_api_attach)
+
 #define fatal_error         BSP_SYS_API(fatal)
 #define _profiler_enter     BSP_SYS_API(prof_enter)
 #define _profiler_exit      BSP_SYS_API(prof_exit)
 #define profiler_reset      BSP_SYS_API(prof_reset)
 #define profiler_init       BSP_SYS_API(prof_init)
-#define profiler_deinit       BSP_SYS_API(prof_deinit)
+#define profiler_deinit     BSP_SYS_API(prof_deinit)
 
 #else /*BSP_INDIR_API*/
 
@@ -41,6 +53,10 @@ void profiler_reset (void);
 void profiler_init (void);
 void profiler_deinit (void);
 
+void *sys_user_alloc (int size);
+void sys_user_free (void *p);
+int  sys_user_attach (bsp_user_api_t *api);
+
 int dev_hal_init (void);
 int dev_init (void);
 void dev_deinit (void);
@@ -48,7 +64,7 @@ void dev_deinit (void);
 
 #endif /*BSP_INDIR_API*/
 
-void dev_tickle (void);
+void bsp_tickle (void);
 
 #define profiler_enter() _profiler_enter(__func__, __LINE__)
 #define profiler_exit() _profiler_exit(__func__, __LINE__)
@@ -71,5 +87,9 @@ typedef enum {
 exec_mem_type_t bsp_get_exec_mem_type (arch_word_t addr);
 
 extern exec_region_t g_exec_region;
+
+#define EXEC_REGION_APP() (g_exec_region == EXEC_APPLICATION)
+#define EXEC_REGION_MODULE() (g_exec_region == EXEC_MODULE)
+#define EXEC_REGION_DRIVER() (g_exec_region == EXEC_DRIVER)
 
 #endif /*__BSP_SYS_H__*/

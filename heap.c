@@ -22,8 +22,6 @@
 
 #endif /*USE_STM32F769I_DISCO*/
 
-#if defined(DATA_IN_ExtSDRAM) || defined(APPLICATION)
-
 #define MALLOC_MAGIC       0x75738910
 
 typedef struct {
@@ -33,8 +31,6 @@ typedef struct {
 } mchunk_t;
 
 static int heap_size_total = -1;
-static uint8_t *heap_user_mem_ptr = NULL;
-static arch_word_t heap_user_size = 0;
 
 #if !defined(BOOT)
 
@@ -46,6 +42,11 @@ __heap_check_margin (int size)
         fatal_error("__heap_check_margin : exceeds by %d bytes\n", -size);
     }
 }
+
+#else
+
+static uint8_t *heap_user_mem_ptr = NULL;
+static arch_word_t heap_user_size = 0;
 
 #endif
 
@@ -153,19 +154,19 @@ void heap_deinit (void)
 
 #ifdef BOOT
 
-void *heap_alloc_shared (int *size)
+void *heap_alloc_shared (int _size)
 {
     mchunk_t *p = NULL;
-    int _size = *size + sizeof(mchunk_t);
-    if (heap_user_size < *size) {
+    int size = _size + sizeof(mchunk_t);
+    if (heap_user_size < size) {
         return NULL;
     }
     p = (mchunk_t *)heap_user_mem_ptr;
-    heap_user_mem_ptr += _size;
-    heap_user_size -= _size;
+    heap_user_mem_ptr += size;
+    heap_user_size -= size;
     p->freeable = 0;
     p->magic = MALLOC_MAGIC;
-    p->size = _size;
+    p->size = size;
     return p + 1;
 }
 
@@ -218,9 +219,3 @@ void heap_free (void *p)
 }
 
 #endif /*BOOT*/
-
-#else /*DATA_IN_ExtSDRAM*/
-
-#error "Not supported"
-
-#endif

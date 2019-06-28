@@ -25,7 +25,7 @@ typedef struct bsp_mod_api_s {
 #define bspmod_insert            BSP_MOD_API(insert)
 #define bspmod_remove            BSP_MOD_API(remove)
 #define bspmod_probe             BSP_MOD_API(probe)
-#define bspmod_register_api     BSP_MOD_API(register_api)
+#define bspmod_register_api      BSP_MOD_API(register_api)
 #define bspmod_get_api           BSP_MOD_API(get_api)
 
 #else /*BSP_INDIR_API*/
