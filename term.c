@@ -13,6 +13,45 @@
 static serial_rx_clbk_t serial_rx_clbk[DEBUG_SERIAL_MAX_CLBK] = {NULL};
 static serial_rx_clbk_t *last_rx_clbk = &serial_rx_clbk[0];
 
+int str_parse_tok (const char *str, const char *tok, uint32_t *val)
+{
+    int len = strlen(tok), ret = 0;
+    tok = strstr(str, tok);
+    if (!tok) {
+        return ret;
+    }
+    str = tok + len;
+    if (*str != '=') {
+        ret = -1;
+        goto done;
+    }
+    str++;
+    if (!sscanf(str, "%u", val)) {
+        ret = -1;
+    }
+    ret = 1;
+done:
+    if (ret < 0) {
+        dprintf("invalid value : \'%s\'\n", tok);
+    }
+    return ret;
+}
+
+int str_tokenize (char **tok, int tokcnt, char *str)
+{
+    char *p = str;
+    int toktotal = tokcnt;
+    *tok = p;
+    p = strtok(str, " ");
+    while (p && tokcnt > 0) {
+        p = strtok(NULL, " ");
+        tok++;
+        tokcnt--;
+        *tok = p;
+    }
+    return toktotal - tokcnt;
+}
+
 void debug_add_rx_handler (serial_rx_clbk_t clbk)
 {
     if (last_rx_clbk == &serial_rx_clbk[DEBUG_SERIAL_MAX_CLBK]) {
@@ -37,44 +76,7 @@ void debug_rm_rx_handler (serial_rx_clbk_t clbk)
     }
 }
 
-int str_parse_tok (const char *str, const char *tok, uint32_t *val)
-{
-    int len = strlen(tok), ret = 0;
-    tok = strstr(str, tok);
-    if (!tok) {
-        return ret;
-    }
-    str = str + len;
-    if (*str != '=') {
-        ret = -1;
-        goto done;
-    }
-    str++;
-    if (!sscanf(str, "%u", &val)) {
-        ret = -1;
-    }
-    ret = 1;
-done:
-    if (ret < 0) {
-        dprintf("invalid value : \'%s\'\n", tok);
-    }
-    return ret;
-}
-
-int str_tokenize (char **tok, int tokcnt, char *str)
-{
-    char *p = str;
-    int toktotal = tokcnt;
-    while (p && tokcnt > 0) {
-        p = strtok(p, " ");
-        *tok = p;
-        tok++;
-        tokcnt--;
-    }
-    return toktotal - tokcnt;
-}
-
-void term_proc_text (char *buf, int size)
+void bsp_in_handle_cmd (char *buf, int size)
 {
     serial_rx_clbk_t *clbk = &serial_rx_clbk[0];
     char *argv_buf[MAX_TOKENS] = {NULL};

@@ -205,7 +205,7 @@ bspapi_t *bsp_api_attach (void)
     BSP_DBG_API(dev.priv)   = dev_priv_stub;
     BSP_DBG_API(putc)       = serial_putc;
     BSP_DBG_API(getc)       = serial_getc;
-    BSP_DBG_API(send)       = serial_send_buf;
+    BSP_DBG_API(send)       = bsp_serial_send;
     BSP_DBG_API(flush)      = serial_flush;
     BSP_DBG_API(reg_clbk)   = debug_add_rx_handler;
     BSP_DBG_API(unreg_clbk) = debug_rm_rx_handler;

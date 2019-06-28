@@ -45,6 +45,10 @@ static int __cmd_fs_mkdir (int argc, char **argv);
 static int cmd_install_exec (int argc, char **argv);
 static int __cmd_fs_mkdir (int argc, char **argv);
 static int cmd_start_exec (int argc, char **argv);
+static int cmd_mod_insert (int argc, char **argv);
+static int cmd_mod_rm (int argc, char **argv);
+static int cmd_mod_probe (int argc, char **argv);
+
 
 static int cmd_var_exist (PACKED const char *name, dvar_int_t **_prev, dvar_int_t **_dvar)
 {
@@ -186,18 +190,21 @@ const cmd_func_map_t cmd_func_tbl[] =
     {"print",       __cmd_print_env},
     {"register",    __cmd_register_var},
     {"unreg",       __cmd_unregister_var},
-    {"devio",       __cmd_exec_priv},
+    {"bin",         __cmd_exec_priv},
     {"list",        __cmd_fs_print_dir},
 };
 
 cmd_func_map_t cmd_priv_func_tbl[] =
 {
     {"export",  _cmd_export_all}, /*Must be first*/
-    {"test",    __cmd_test_fs},
+    {"testfs",    __cmd_test_fs},
     {"reset",   cmd_brd_reset},
     {"mkdir",   __cmd_fs_mkdir},
     {"load",    cmd_install_exec},
     {"boot",    cmd_start_exec},
+    {"insmod",  cmd_mod_insert},
+    {"rmmod",   cmd_mod_rm},
+    {"modprobe",cmd_mod_probe},
 };
 
 int cmd_init (void)
@@ -274,34 +281,29 @@ static int __cmd_unregister_var (int argc, char **argv)
 static int _cmd_rx_handler (int argc, char **argv)
 {
     dvar_int_t *v = dvar_head;
-    int tmp;
 
-    while (v && argc > 0) {
+    if (argc < 1) {
+        return -1;
+    }
 
+    while (v) {
         if (strncmp(argv[0], v->name, v->namelen) == 0) {
-            /*TODO : Add command/line terminator, e.g. - ';' or '&&'..*/
-            tmp = __cmd_handle_input(v, argc, argv);
-            argv = &argv[argc - tmp];
-            argc = tmp;
+            argc = __cmd_handle_input(v, --argc, ++argv);
             return argc;
         }
         v = v->next;
     }
-    return 0;
+    return argc + 1;
 }
 
 static int __cmd_handle_input (dvar_int_t *v, int argc, char **argv)
 {
-    if (argc < 1) {
-        return -1;
-    }
-    argc--;
     switch (v->dvar.type) {
         case DVAR_INT32:
         {
             int32_t val;
 
-            if (!sscanf(argv[0], "%i", &val)) {
+            if (argc <= 0 || !sscanf(argv[0], "%i", &val)) {
                 dprintf("%s = %i\n", v->name, readLong(v->dvar.ptr));
                 return argc;
             }
@@ -313,8 +315,8 @@ static int __cmd_handle_input (dvar_int_t *v, int argc, char **argv)
         {
             float val;
 
-            if (!sscanf(argv[0], "%f", &val)) {
-                dprintf("%s = %f\n", v->name, readLong(v->dvar.ptr));
+            if (argc <= 0 || !sscanf(argv[0], "%f", &val)) {
+                dprintf("%s = %f\n", v->name, (float)readLong(v->dvar.ptr));
                 return argc;
             }
             writeLong(v->dvar.ptr, val);
@@ -324,6 +326,10 @@ static int __cmd_handle_input (dvar_int_t *v, int argc, char **argv)
         break;
         case DVAR_STR:
         {
+            if (argc <= 0) {
+                dprintf("%s = %s\n", v->name, v->dvar.ptr);
+                return argc;
+            }
             snprintf(v->dvar.ptr, v->dvar.ptrsize, "%s", argv[0]);
             return argc;
         }
@@ -340,7 +346,7 @@ static int __cmd_handle_input (dvar_int_t *v, int argc, char **argv)
     }
     if (v->dvar.flags & FLAG_EXPORT) {
         /*Exported function completes all*/
-        return argc;
+        return 0;
     }
     return argc;
 }
@@ -349,15 +355,15 @@ static int __cmd_handle_input (dvar_int_t *v, int argc, char **argv)
 static int __cmd_print_env (int argc, char **argv)
 {
     dvar_int_t *v = dvar_head;
-    const char *border = "========================================\n";
+    const char *border = "========================================";
     const char *type_text[] = {"function", "integer", "float", "string"};
     int i = 0;
 
-    dprintf("%s", border);
+    dprintf("%s\n", border);
 
     while (v) {
-        dprintf("%3i : \'%s\'  \'%s\'  <0x%08x>  <0x%04x>\n",
-                i, v->name, type_text[v->dvar.type], (unsigned)v->dvar.ptr, v->dvar.ptrsize);
+        dprintf("%3i : \'%3.16s\'  \'%3.16s\'  <0x%08x>\n",
+                i++, v->name, type_text[v->dvar.type], (unsigned)v->dvar.ptr);
         v = v->next;
     }
 
@@ -542,7 +548,7 @@ void cmd_execute (const char *cmd, int len)
 {
     char buf[256];
     len = snprintf(buf, sizeof(buf), "%s", cmd);
-    term_proc_text(buf, len);
+    bsp_in_handle_cmd(buf, len);
 }
 
 int cmd_install_exec (int argc, char **argv)
@@ -578,5 +584,63 @@ int cmd_start_exec (int argc, char **argv)
 
     return argc - 2;
 }
+
+static int cmd_mod_insert (int argc, char **argv)
+{
+    arch_word_t progaddr;
+    const bsp_heap_api_t heap =
+    {
+        heap_alloc_shared,
+        NULL,
+    };
+
+    if (argc < 2) {
+        dprintf("usage : /path/to/file <load address 0x0xxx..>");
+        return -1;
+    }
+    if (!sscanf(argv[1], "%x", &progaddr)) {
+        return -1;
+    }
+
+    bspmod_insert(&heap, argv[0], argv[1]);
+
+    return argc - 2;
+}
+
+static int cmd_mod_probe (int argc, char **argv)
+{
+    arch_word_t progaddr;
+
+    if (argc < 1) {
+        dprintf("usage : /path/to/file <load address 0x0xxx..>");
+        return -1;
+    }
+
+    bspmod_probe(argv[0]);
+
+    return argc - 1;
+}
+
+static int cmd_mod_rm (int argc, char **argv)
+{
+    arch_word_t progaddr;
+    const bsp_heap_api_t heap =
+    {
+        heap_alloc_shared,
+        NULL,
+    };
+
+    if (argc < 1) {
+        dprintf("usage : <mod name>");
+        return -1;
+    }
+
+    bspmod_remove(argv[0]);
+
+    return argc - 1;
+}
+
+
+
 
 #endif /*BSP_DRIVER*/

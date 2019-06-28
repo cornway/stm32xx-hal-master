@@ -8,7 +8,7 @@ typedef struct bsp_mod_api_s {
     bspdev_t dev;
     void *(*insert) (const bsp_heap_api_t *, const char *, const char *);
     int (*remove) (const char *);
-    int (*probe) (const void *);
+    int (*probe) (const char *);
     int (*register_api) (const char *, const void *, int);
     const void *(*get_api) (const char *, int *);
 } bsp_mod_api_t;
@@ -32,7 +32,7 @@ typedef struct bsp_mod_api_s {
 
 void *bspmod_insert (const bsp_heap_api_t *, const char *, const char *);
 int bspmod_remove (const char *);
-int bspmod_probe (const void *mod);
+int bspmod_probe (const char *name);
 int bspmod_register_api (const char *, const void *, int);
 const void *bspmod_get_api (const char *name, int *apisize);
 

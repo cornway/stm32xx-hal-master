@@ -351,7 +351,9 @@ int d_opendir (const char *path)
     }
     res = f_opendir(getdir(h), path);
     if (res != FR_OK) {
-        dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
+        if (res != FR_NO_PATH) {
+            dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
+        }
         freedir(h);
         return -1;
     }

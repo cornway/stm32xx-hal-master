@@ -19,7 +19,7 @@ typedef struct bsp_debug_api_s {
     bspdev_t dev;
     void (*putc) (char);
     char (*getc) (void);
-    void (*send) (const void *, unsigned int);
+    int (*send) (const void *, size_t);
     void (*flush) (void);
     void (*reg_clbk) (serial_rx_clbk_t);
     void (*unreg_clbk) (serial_rx_clbk_t);
@@ -50,7 +50,7 @@ typedef struct bsp_debug_api_s {
 #define serial_priv            BSP_DBG_API(dev.priv)
 #define serial_putc             BSP_DBG_API(putc)
 #define serial_getc             BSP_DBG_API(getc)
-#define serial_send_buf         BSP_DBG_API(send)
+#define bsp_serial_send         BSP_DBG_API(send)
 #define serial_flush            BSP_DBG_API(flush)
 #define debug_add_rx_handler   BSP_DBG_API(reg_clbk)
 #define debug_rm_rx_handler    BSP_DBG_API(unreg_clbk)
@@ -61,7 +61,7 @@ typedef struct bsp_debug_api_s {
 int serial_init (void);
 void serial_putc (char c);
 char serial_getc (void);
-void serial_send_buf (const void *data, size_t cnt);
+int bsp_serial_send (const void *data, size_t cnt);
 void serial_flush (void);
 void debug_add_rx_handler (serial_rx_clbk_t);
 void debug_rm_rx_handler (serial_rx_clbk_t);
@@ -82,6 +82,7 @@ static inline void serial_send_buf (const void *data, size_t cnt){}
 static inline void serial_flush (void){}
 
 static inline void dprintf (const char *fmt, ...){}
+static inline void dvprintf (const char *fmt, va_list argptr) {}
 void hexdump (const uint8_t *data, int len, int rowlength) {}
 
 #endif /*DEBUG_SERIAL*/

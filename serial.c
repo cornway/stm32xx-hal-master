@@ -93,7 +93,7 @@ struct uart_desc_s {
 #define STREAM_BUFCNT_MS (STREAM_BUFCNT - 1)
 
 typedef struct {
-    char data[STREAM_BUFSIZE];
+    char data[STREAM_BUFSIZE + 1];
     int  bufposition;
     uint32_t timestamp;
 } streambuf_t;
@@ -436,17 +436,58 @@ static HAL_StatusTypeDef serial_submit_to_hw (uart_desc_t *uart_desc, const void
     return status;
 }
 
+#if SERIAL_TSF
+
+#define MSEC 1000
+
+static int prev_putc = -1;
+
+static void inline __proc_tsf (const char *str, int size)
+{
+    if (!str || !size) {
+        return;
+    }
+    str = str + size - 1;
+    while (*str) {
+        prev_putc = *str;
+        if (*str == '\n') {
+            break;
+        }
+        str--;
+    }
+}
+
+static inline int __insert_tsf (const char *fmt, char *buf, int max)
+{
+    uint32_t msec, sec;
+
+    if (prev_putc < 0 ||
+        prev_putc != '\n') {
+        return 0;
+    }
+    msec = HAL_GetTick();
+    sec = msec / MSEC;
+    return snprintf(buf, max, "[%10d.%03d] ", sec, msec % MSEC);
+}
+
+#endif /*SERIAL_TSF*/
+
 #if DEBUG_SERIAL_BUFERIZED
 
-static void dbgstream_send (uart_desc_t *uart_desc, streambuf_t *stbuf)
+static void _dbgstream_submit (uart_desc_t *uart_desc, const void *data, size_t cnt)
 {
     HAL_StatusTypeDef status;
 
-    status = serial_submit_to_hw(uart_desc, stbuf->data, stbuf->bufposition);
+    status = serial_submit_to_hw(uart_desc, data, cnt);
 
     if (status != HAL_OK) {
         serial_fatal();
     }
+}
+
+static void __dbgstream_send (uart_desc_t *uart_desc, streambuf_t *stbuf)
+{
+    _dbgstream_submit(uart_desc, stbuf->data, stbuf->bufposition);
     stbuf->bufposition = 0;
     stbuf->timestamp = 0;
 }
@@ -461,29 +502,37 @@ static void dbgstream_apend_data (streambuf_t *stbuf, const void *data, size_t s
     stbuf->bufposition += size;
 }
 
-static inline int dbgstream_bufferize (uart_desc_t *uart_desc, const void *data, size_t size)
+static inline int
+dbgstream_submit (uart_desc_t *uart_desc, const void *data, size_t size, d_bool flush)
+
 {
     streambuf_t *active_stream = &streambuf[uart_desc->active_stream & STREAM_BUFCNT_MS];
 
-    if (size >= STREAM_BUFSIZE) {
-        return 0;
+    if (size > STREAM_BUFSIZE) {
+        size = STREAM_BUFSIZE;
     }
 
-    if (size >= (STREAM_BUFSIZE - active_stream->bufposition)) {
-        dbgstream_send(uart_desc, active_stream);
+#if SERIAL_TSF
+    __proc_tsf((const char *)data, size);
+#endif
+
+    if (flush || size >= (STREAM_BUFSIZE - active_stream->bufposition)) {
+        __dbgstream_send(uart_desc, active_stream);
         active_stream = &streambuf[(++uart_desc->active_stream) & STREAM_BUFCNT_MS];
     }
-
     if (size >= (STREAM_BUFSIZE - active_stream->bufposition)) {
         serial_fatal();
     }
-    dbgstream_apend_data(active_stream, data, size);
+    if (size) {
+        dbgstream_apend_data(active_stream, data, size);
+    }
     return size;
 }
 
 #else /*DEBUG_SERIAL_BUFERIZED*/
 
-static inline int dbgstream_bufferize (uart_desc_t *uart_desc, const void *data, size_t size)
+static inline int
+dbgstream_submit (uart_desc_t *uart_desc, const void *data, size_t size, d_bool flush)
 {
     UNUSED(uart_desc);
     UNUSED(data);
@@ -492,73 +541,33 @@ static inline int dbgstream_bufferize (uart_desc_t *uart_desc, const void *data,
 
 #endif /*DEBUG_SERIAL_BUFERIZED*/
 
-static HAL_StatusTypeDef _serial_send (const void *data, size_t cnt)
+int bsp_serial_send (const void *data, size_t cnt)
 {
     irqmask_t irq_flags = serial_timer.irqmask;
-    HAL_StatusTypeDef status = HAL_OK;
     uart_desc_t *uart_desc = debug_port();
+    int ret = 0;
 
     irq_save(&irq_flags);
 
-    if (dbgstream_bufferize(uart_desc, data, cnt) <= 0) {
-        status = serial_submit_to_hw(uart_desc, data, cnt);
+    ret = dbgstream_submit(uart_desc, data, cnt, d_false);
+    if (ret <= 0) {
+        ret = dbgstream_submit(uart_desc, data, cnt, d_true);
     }
 
     irq_restore(irq_flags);
 
-    return status;
+    return ret;
 }
-
-#if SERIAL_TSF
-static int16_t prev_putc = 0xff;
-
-static inline d_bool __newline_char (char c)
-{
-    if ('\n' == c) {
-
-        return d_true;
-    }
-    return d_false;
-}
-#endif
 
 void serial_putc (char c)
 {
-    HAL_StatusTypeDef status = HAL_OK;
-    uint8_t buf[1] = {c};
-
-#if SERIAL_TSF
-    if (prev_putc < 0 ||
-        __newline_char((char)prev_putc)) {
-
-        dprintf("%c", c);
-    } else {
-        status = _serial_send(buf, sizeof(buf));
-    }
-    prev_putc = c;
-#else
-    status = _serial_send(buf, sizeof(buf));
-#endif
-    if (status != HAL_OK){
-        serial_fatal();
-    }
+    dprintf("%c", c);
 }
 
 char serial_getc (void)
 {
     /*TODO : Use Rx from USART */
     return 0;
-}
-
-void serial_send_buf (const void *data, size_t cnt)
-{
-    HAL_StatusTypeDef status;
-
-    status = _serial_send(data, cnt);
-
-    if (status != HAL_OK){
-        serial_fatal();
-    }
 }
 
 void serial_flush (void)
@@ -570,62 +579,17 @@ void serial_flush (void)
     irq_restore(irq_flags);
 }
 
-#if SERIAL_TSF
-
-#define MSEC 1000
-
-static void inline __set_newline (const char *str)
-{
-    prev_putc = 0;
-    while (*str) {
-        if (__newline_char(*str)) {
-            prev_putc = *str;
-            break;
-        }
-        str++;
-    }
-}
-
-static inline int __insert_tsf (const char *fmt, char *buf, int max)
-{
-    uint32_t msec, sec;
-
-    if (prev_putc < 0 ||
-        !__newline_char(prev_putc)) {
-
-        return 0;
-    }
-    msec = HAL_GetTick();
-    sec = msec / MSEC;
-    return snprintf(buf, max, "[%10d.%03d] ", sec, msec % MSEC);
-}
-
-void dvprintf (const char *fmt, va_list argptr)
-{
-    char            string[1024];
-    int size, max = sizeof(string);
-
-    size = __insert_tsf(fmt, string, max);
-    size += vsnprintf (string + size, max - size, fmt, argptr);
-
-    assert(size < arrlen(string));
-    serial_send_buf(string, size);
-    __set_newline(fmt);
-}
-
-#else /*SERIAL_TSF*/
-
 void dvprintf (const char *fmt, va_list argptr)
 {
     /*TODO : use local buf*/
     static char            string[1024];
-    int size;
-
-    size = vsnprintf (string, sizeof(string), fmt, argptr);
-    serial_send_buf(string, size);
+    int size = 0;
+#if SERIAL_TSF
+    size = __insert_tsf(fmt, string, sizeof(string));
+#endif
+    size += vsnprintf(string + size, sizeof(string) - size, fmt, argptr);
+    bsp_serial_send(string, size);
 }
-
-#endif /*SERIAL_TSF*/
 
 void dprintf (const char *fmt, ...)
 {
@@ -683,8 +647,7 @@ static void _dma_rx_xfer_cplt (uint8_t full)
 
     if (rxstream.cnt >= DMA_RX_FIFO_SIZE) {
         if (!rxstream.crlf) {
-            /*Too long string, reset it*/
-            rxstream.cnt = 0;
+            rxstream.crlf = 0;
         }
         return;
         /*Full, exit*/
@@ -775,7 +738,7 @@ void serial_tickle (void)
     dma_fifo_flush(&rxstream, buf, &cnt);
     irq_restore(irq);
 
-    term_proc_text(buf, cnt);
+    bsp_in_handle_cmd(buf, cnt);
 }
 
 static void dma_rx_xfer_hanlder (struct __DMA_HandleTypeDef * hdma)
@@ -834,34 +797,27 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef *huart)
 static void serial_flush_handler (int force)
 {
     uart_desc_t *uart_desc = debug_port();
-    streambuf_t *stbuf = &streambuf[0], *stbuflast = &streambuf[STREAM_BUFCNT - 1];
+    streambuf_t *active_stream = &streambuf[uart_desc->active_stream & STREAM_BUFCNT_MS];
     uint32_t time;
 
     if (!uart_desc->uart_tx_ready) {
         return;
     }
 
-    time = HAL_GetTick();
+    if (0 != active_stream->bufposition) {
 
-    while (1) {
-        if (0 != stbuf->bufposition) {
+        time = HAL_GetTick();
 
-            if ((stbuf->timestamp && (time - stbuf->timestamp) > TX_FLUSH_TIMEOUT) ||
-                force) {
+        if ((active_stream->timestamp &&
+            (time - active_stream->timestamp) > TX_FLUSH_TIMEOUT) ||
+            force) {
 
-                dbgstream_send(uart_desc, stbuf);
-                if (force) {
-                    dma_tx_waitflush(uart_desc);
-                }
-                if (stbuf->bufposition == 0) {
-                    break;
-                }
+            active_stream->data[active_stream->bufposition++] = '\n';
+            dbgstream_submit(uart_desc, NULL, 0, d_true);
+            if (force) {
+                dma_tx_waitflush(uart_desc);
             }
         }
-        if (stbuf == stbuflast) {
-            break;
-        }
-        stbuf++;
     }
 }
 

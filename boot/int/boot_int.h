@@ -1,10 +1,7 @@
 #include <stdint.h>
-#include <gfx.h>
-#include <misc_utils.h>
-#include <debug.h>
-#include <gui.h>
 #include <heap.h>
 #include <bsp_sys.h>
+#include <misc_utils.h>
 
 #define BOOT_MAX_NAME 24
 #define BOOT_MAX_PATH 128
@@ -38,7 +35,7 @@ int bsp_start_exec (arch_word_t *progaddr, const char *path,
 void *bsp_cache_bin_file (const bsp_heap_api_t *heapapi, const char *path, int *binsize);
 bsp_bin_t *bsp_setup_bin_desc (bsp_bin_t *bin, const char *path,
                            const char *originname, bsp_exec_file_type_t type);
-void bsp_setup_bin_param (bsp_bin_t *bin);
+int bsp_setup_bin_param (bsp_bin_t *bin);
 int bhal_load_program (bhal_cplth_t cplth, arch_word_t *progaddr,
                             void *progdata, size_t progsize);
 bsp_exec_file_type_t bsp_bin_file_compat (const char *in);

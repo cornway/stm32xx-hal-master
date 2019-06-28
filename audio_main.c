@@ -203,19 +203,19 @@ static void AUDIO_ParseCfgString (a_intcfg_t *cfg, const char *str)
 
     dprintf("%s()\n", __func__);
     tok = "samplerate";
-    if (str_parse_tok(str, tok, &cfg->samplerate) < 0) {
+    if (str_parse_tok(str, tok, &cfg->samplerate) <= 0) {
         cfg->samplerate = AUDIO_RATE_DEFAULT;
     }
     tok = "volume";
-    if (str_parse_tok(str, tok, &cfg->volume) < 0) {
+    if (str_parse_tok(str, tok, &cfg->volume) <= 0) {
         cfg->volume = AUDIO_VOLUME_DEFAULT;
     }
     tok = "samplebits";
-    if (str_parse_tok(str, tok, &cfg->samplebits) < 0) {
+    if (str_parse_tok(str, tok, &cfg->samplebits) <= 0) {
         cfg->samplebits = AUDIO_SAMPLEBITS_DEFAULT;
     }
     tok = "cnannels";
-    if (str_parse_tok(str, tok, &cfg->channels) < 0) {
+    if (str_parse_tok(str, tok, &cfg->channels) <= 0) {
         cfg->channels = AUDIO_CHANNELS_NUM_DEFAULT;
     }
     a_check_cfg(cfg);

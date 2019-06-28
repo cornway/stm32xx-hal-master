@@ -87,8 +87,6 @@ void *bspmod_insert (const bsp_heap_api_t *heap, const char *path, const char *n
     void *rawptr;
     int err = -1;
 
-    assert(EXEC_REGION_APP());
-
     mod = bspmod_search_mod(name);
     if (mod) {
         return NULL;
@@ -134,8 +132,6 @@ int bspmod_remove (const char *name)
 {
     bspmod_t *mod;
 
-    assert(EXEC_REGION_APP());
-
     mod = bspmod_search_mod(name);
     if (!mod) {
         return -1;
@@ -145,12 +141,14 @@ int bspmod_remove (const char *name)
     return 0;
 }
 
-int bspmod_probe (const void *_mod)
+int bspmod_probe (const char *name)
 {
-    bspmod_t *mod = (bspmod_t *)_mod;
+    bspmod_t *mod;
 
-    assert(EXEC_REGION_APP());
-
+    mod = bspmod_search_mod(name);
+    if (!mod) {
+        return -1;
+    }
     return bhal_execute_module(mod->bin.entrypoint);
 }
 

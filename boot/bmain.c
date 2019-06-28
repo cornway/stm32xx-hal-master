@@ -1,14 +1,16 @@
+#include <string.h>
 #include "int/boot_int.h"
 #include "../int/term_int.h"
 #include <gfx.h>
+#include <gui.h>
 #include <dev_io.h>
 #include <debug.h>
 #include <nvic.h>
 #include <input_main.h>
 #include <lcd_main.h>
-#include <string.h>
 #include <heap.h>
 #include <bsp_sys.h>
+#include <bsp_cmd.h>
 
 #if defined(BOOT)
 
@@ -79,7 +81,7 @@ static void boot_destr_exec_list (void)
 }
 
 
-void
+int
 bsp_setup_bin_param (bsp_bin_t *bin)
 {
     int f, size;
@@ -87,11 +89,13 @@ bsp_setup_bin_param (bsp_bin_t *bin)
 
     size = d_open(bin->path, &f, "r");
     if (f < 0) {
+        return -1;
     }
     d_read(f, &bin->spinitial, sizeof(entry));
     d_read(f, &bin->entrypoint, sizeof(entry));
     d_close(f);
     bin->size = size;
+    return 0;
 }
 
 #define _GET_PAD(x, a) ((a) - ((x) % (a)))
@@ -107,7 +111,9 @@ bsp_setup_bin_desc (bsp_bin_t *bin, const char *path,
     snprintf(bin->name, sizeof(bin->name), "%s", originname);
     snprintf(bin->path, sizeof(bin->path), "%s", path);
     bin->filetype = type;
-    bsp_setup_bin_param(bin);
+    if (bsp_setup_bin_param(bin) < 0) {
+        return NULL;
+    }
     bin->progaddr = _ROUND_DOWN(bin->entrypoint, BOOT_MIN_SECTOR);
     return bin;
 }
@@ -144,15 +150,15 @@ void boot_read_path (const char *path)
 
             bindir = d_opendir(buf);
             if (bindir < 0) {
-                dprintf("%s() : Cannot open : \'%s\'\n", __func__, buf);
                 continue;
             }
+            strcpy(origin_name, fobj.name);
             while (d_readdir(bindir, &binobj) >= 0) {
                 if (binobj.type == FTYPE_FILE) {
                     bsp_exec_file_type_t type = bsp_bin_file_compat(binobj.name);
 
                     if (type != BIN_MAX) {
-                        snprintf(buf, sizeof(buf), "%s/%s", buf, fobj.name);
+                        snprintf(buf, sizeof(buf), "%s/%s", buf, binobj.name);
                         if (boot_alloc_bin_desc(buf, origin_name, type)) {
                             filesfound++;
                         }

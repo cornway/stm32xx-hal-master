@@ -129,7 +129,7 @@ void heap_init (void)
     arch_get_stack(&sp_mem, &sp_size);
     arch_get_heap(&heap_mem, &heap_size);
 
-#if defined(APPLICATION) || defined(BSP_DRIVER)
+#if defined(APPLICATION)
     mpu_lock(sp_mem, MPU_CACHELINE, "xwr");
     mpu_lock(heap_mem - MPU_CACHELINE, MPU_CACHELINE, "xwr");
     /*According to code below, heap must be as last partition in memory pool*/

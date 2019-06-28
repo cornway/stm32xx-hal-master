@@ -59,7 +59,7 @@ void fatal_error (char *message, ...)
     va_end (argptr);
 
     serial_flush();
-    bug();
+    for(;;) {}
 }
 
 /* Private function prototypes -----------------------------------------------*/
@@ -218,6 +218,7 @@ int dev_init (void)
     BSP_LED_Init(LED2);
 
     debug_add_rx_handler(con_echo);
+    cmd_init();
 
     audio_init();
     input_bsp_init();
