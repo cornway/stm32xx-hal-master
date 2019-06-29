@@ -14,6 +14,9 @@
 #endif
 
 typedef int (*serial_rx_clbk_t) (int, char **);
+typedef int (*inout_clbk_t) (const char *, int, char);
+
+extern inout_clbk_t inout_clbk;
 
 typedef struct bsp_debug_api_s {
     bspdev_t dev;
@@ -21,8 +24,8 @@ typedef struct bsp_debug_api_s {
     char (*getc) (void);
     int (*send) (const void *, size_t);
     void (*flush) (void);
-    void (*reg_clbk) (serial_rx_clbk_t);
-    void (*unreg_clbk) (serial_rx_clbk_t);
+    void (*reg_clbk) (int (*) (int , const char **));
+    void (*unreg_clbk) (int (*) (int , const char **));
     void (*tickle) (void);
     void (*dprintf) (const char *, ...);
 } bsp_debug_api_t;
@@ -63,10 +66,12 @@ void serial_putc (char c);
 char serial_getc (void);
 int bsp_serial_send (const void *data, size_t cnt);
 void serial_flush (void);
-void debug_add_rx_handler (serial_rx_clbk_t);
-void debug_rm_rx_handler (serial_rx_clbk_t);
+void debug_add_rx_handler (int (*) (int , const char **));
+void debug_rm_rx_handler (int (*) (int , const  char **));
 void serial_tickle (void);
 void dprintf (const char *fmt, ...) PRINTF;
+
+extern int32_t g_serial_rx_eof;
 
 #endif /*BSP_INDIR_API*/
 

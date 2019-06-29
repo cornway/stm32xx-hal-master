@@ -8,19 +8,17 @@
 
 #if defined(BOOT)
 
-static int g_gui_debug_lvl = DBG_WARN;
-
 #define gui_error(fmt, args ...) \
-    if (g_gui_debug_lvl >= DBG_ERR) {dprintf("%s() [fatal] : "fmt, __func__, args);}
+    if (gui->dbglvl >= DBG_ERR) {dprintf("%s() [fatal] : "fmt, __func__, args);}
 
 #define gui_warn(args ...) \
-    if (g_gui_debug_lvl >= DBG_WARN) {dprintf(args);}
+    if (gui->dbglvl >= DBG_WARN) {dprintf(args);}
 
 #define gui_info(fmt, args ...) \
-    if (g_gui_debug_lvl >= DBG_INFO) {dprintf("%s() : "fmt, __func__, args);}
+    if (gui->dbglvl >= DBG_INFO) {dprintf("%s() : "fmt, __func__, args);}
 
 
-#define G_TEXT_MAX 128
+#define G_TEXT_MAX 256
 
 typedef struct {
     gui_t gui;
@@ -121,8 +119,11 @@ static component_t *gui_iterate_all (gui_t *gui, void *user, int (*h) (component
     return NULL;
 }
 
-void gui_init (gui_t *gui, int x, int y, int w, int h)
+void gui_init (gui_t *gui, const char *name, uint8_t framerate,
+                int x, int y, int w, int h)
 {
+    char temp[24];
+
     memset(gui, 0, sizeof(*gui));
 
     g_gui_ctxt.fonth = BSP_LCD_GetFont()->Height;
@@ -132,8 +133,14 @@ void gui_init (gui_t *gui, int x, int y, int w, int h)
     gui->dim.y = y;
     gui->dim.w = w;
     gui->dim.h = h;
+    gui->framerate = framerate;
+    gui->dbglvl = DBG_WARN;
 
-    cmd_register_i32(&g_gui_debug_lvl, "guidbglvl");
+    snprintf(temp, sizeof(temp), "%s_%s", name, "fps");
+    cmd_register_i32(&gui->framerate, temp);
+    
+    snprintf(temp, sizeof(temp), "%s_%s", name, "dbglvl");
+    cmd_register_i32(&gui->dbglvl, temp);
 }
 
 void gui_destroy (gui_t *gui)
@@ -283,32 +290,41 @@ void gui_text (component_t *com, const char *text, int x, int y)
 
 static uint32_t __gui_printxy
                     (component_t *com, char *buf, int bufsize,
-                     int x, int y, const char *fmt, va_list argptr)
+                    const char *fmt, va_list argptr)
 {
-    return vsnprintf (buf, bufsize, fmt, argptr);
+    int n;
+    n = vsnprintf (buf, bufsize, fmt, argptr);
+    com->repaint = 1;
+    if (com->parent->parent->selected == com->parent) {
+        com->parent->repaint = 1;
+    }
+    return n;
 }
 
 void gui_printxy (component_t *com, int x, int y, const char *fmt, ...)
 {
     va_list         argptr;
+    uint16_t        offset = com->text_offset;
 
     va_start (argptr, fmt);
-    __gui_printxy(com, com->name_text + com->text_offset, com->text_size, x, y, fmt, argptr);
+    com->text_index = __gui_printxy(com, com->name_text + offset, com->text_size, fmt, argptr);
     va_end (argptr);
 }
 
-void gui_apendxy (component_t *com, int x, int y, const char *fmt, ...)
+int gui_apendxy (component_t *com, int x, int y, const char *fmt, ...)
 {
     va_list         argptr;
-    int offset = com->text_offset + com->text_offset;
+    uint16_t        offset = com->text_offset + com->text_index - 1;
 
-    if (com->text_offset >= com->text_size - 1) {
-        return;
+    if (com->text_index >= com->text_size - 1) {
+        return -1;
     }
 
     va_start (argptr, fmt);
-    com->text_offset += __gui_printxy(com, com->name_text + offset, com->text_size - offset, x, y, fmt, argptr);
+    com->text_index += __gui_printxy(com, com->name_text + offset,
+                            com->text_size - com->text_index, fmt, argptr);
     va_end (argptr);
+    return com->text_size - com->text_index;
 }
 
 
@@ -319,6 +335,9 @@ static void gui_comp_draw (pane_t *pane, component_t *com)
         BSP_LCD_FillRect(com->dim.x, com->dim.y, com->dim.w, com->dim.h);
     } else if (!com->userdraw) {
         int x, y, w, h;
+        int len = 0, tmp;
+        int line = 0, linecnt = BSP_LCD_DisplayMaxLineCount();
+        uint8_t *text;
 
         if (com->draw) {
             com->draw(pane, com, NULL);
@@ -329,16 +348,21 @@ static void gui_comp_draw (pane_t *pane, component_t *com)
 
         BSP_LCD_SetTextColor(com->fcolor);
 
-        x = com->dim.x + g_gui_ctxt.fontw / 2;
-        y = com->dim.y + g_gui_ctxt.fonth / 2;
-        w = com->dim.w;
-        h = com->dim.h;
-
         if (com->showname) {
-            BSP_LCD_DisplayStringAt(x, y, w, h, (uint8_t *)com->name_text, LEFT_MODE);
+            BSP_LCD_DisplayStringAt(com->dim.x, com->dim.y + LINE(line++),
+                                       com->dim.w, com->dim.h, (uint8_t *)com->name_text, LEFT_MODE);
         }
+        linecnt--;
         y += g_gui_ctxt.fonth;
-        BSP_LCD_DisplayStringAt(x, y, w, h, (uint8_t *)com->name_text + com->text_offset, LEFT_MODE);
+        len = com->text_index;
+        text = (uint8_t *)com->name_text + com->text_offset;
+        while (len > 0 && linecnt > 0) {
+            tmp = BSP_LCD_DisplayStringAt(com->dim.x, com->dim.y + LINE(line++),
+                                       com->dim.w, com->dim.h, (uint8_t *)text, LEFT_MODE);
+            len = len - tmp;
+            text += tmp;
+            linecnt--;
+        }
     } else if (com->draw) {
         com->draw(pane, com, NULL);
     }
@@ -358,10 +382,32 @@ static void gui_pane_draw (gui_t *gui, pane_t *pane)
     }
 }
 
+static d_bool __gui_check_framerate (gui_t *gui)
+{
+    d_bool repaint = d_true;
+
+    if (gui->framerate > 0) {
+        uint32_t delay = 1000 / gui->framerate;
+
+        if (gui->repainttsf == 0) {
+            gui->repainttsf = d_time() + delay;
+        } else if (d_time() > gui->repainttsf) {
+            gui->repainttsf = d_time() + delay;
+        } else {
+            repaint = d_false;
+        }
+    }
+    return repaint;
+}
+
 void gui_draw (gui_t *gui)
 {
     pane_t *pane = gui->head;
     pane_t *selected = gui->selected;
+
+    if (!__gui_check_framerate(gui)) {
+        return;
+    }
 
     while (pane) {
         if (pane != selected && pane->repaint) {

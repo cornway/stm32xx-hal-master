@@ -60,6 +60,7 @@ typedef struct component_s {
 
     void *ctxt;
     void *user;
+    uint16_t textx, texty;
 
     comp_handler_t act, release;
     comp_handler_t draw;
@@ -101,6 +102,9 @@ typedef struct gui_s {
     void *user;
     void (*alloc_sfx) (int *, gui_sfx_std_type_t);
     void (*start_sfx) (int);
+    uint32_t repainttsf;
+    int32_t framerate;
+    int32_t dbglvl;
     uint8_t destroy;
 } gui_t;
 
@@ -133,7 +137,8 @@ void dim_tolocal (dim_t *d, const dim_t *s);
 void dim_get_origin (point_t *d, const dim_t *s);
 void dim_set_origin (dim_t *d, const point_t *s);
 
-void gui_init (gui_t *gui, int x, int y, int w, int h);
+void gui_init (gui_t *gui, const char *name, uint8_t framerate,
+                int x, int y, int w, int h);
 void gui_destroy (gui_t *gui);
 pane_t *gui_get_pane (const char *name);
 void gui_set_pane (gui_t *gui, pane_t *pane);
@@ -145,7 +150,7 @@ void gui_set_prop (component_t *c, prop_t *prop);
 
 void gui_text (component_t *com, const char *text, int x, int y);
 void gui_printxy (component_t *com, int x, int y, const char *fmt, ...) PRINTF_ATTR(4, 5);
-void gui_apendxy (component_t *com, int x, int y, const char *fmt, ...) PRINTF_ATTR(4, 5);
+int gui_apendxy (component_t *com, int x, int y, const char *fmt, ...) PRINTF_ATTR(4, 5);
 
 #define gui_print(com, args...) gui_printxy(com, 0, 0, args)
 

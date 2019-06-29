@@ -98,7 +98,7 @@ typedef struct {
     uint32_t timestamp;
 } streambuf_t;
 
-static streambuf_t streambuf[STREAM_BUFCNT] DTCM;
+static streambuf_t streambuf[STREAM_BUFCNT];
 
 #endif /*DEBUG_SERIAL_BUFERIZED*/
 
@@ -110,21 +110,24 @@ static streambuf_t streambuf[STREAM_BUFCNT] DTCM;
   i see only one way to do this in more sophisticated way - flush rx buffer within timer.
   TODO : extend rx buffer size to gain more perf.
 */
-#define DMA_RX_SIZE 1
+#define DMA_RX_SIZE (1 << 1)
 #define DMA_RX_FIFO_SIZE (1 << 8)
 
 typedef struct {
-    uint16_t cnt;
-    uint16_t crlf;
-    char buf[DMA_RX_SIZE * 2];
+    uint16_t fifoidx;
+    uint16_t fifordidx;
+    uint16_t eof;
+    char dmabuf[DMA_RX_SIZE];
     char fifo[DMA_RX_FIFO_SIZE];
 } rxstream_t;
 
 static timer_desc_t serial_timer;
 
-static rxstream_t rxstream DTCM;
+static rxstream_t rxstream;
 
 #endif /*DEBUG_SERIAL_USE_RX*/
+
+int32_t g_serial_rx_eof = '\n';
 
 static void serial_flush_handler (int force);
 
@@ -255,7 +258,7 @@ static void uart1_dma_init (uart_desc_t *uart_desc)
 
     uart_desc->irq_rxdma = DMA2_Stream2_IRQn;
 
-    if(HAL_UART_Receive_DMA(huart, (uint8_t *)rxstream.buf, sizeof(rxstream.buf)) != HAL_OK)
+    if(HAL_UART_Receive_DMA(huart, (uint8_t *)rxstream.dmabuf, sizeof(rxstream.dmabuf)) != HAL_OK)
     {
         serial_fatal();
     }
@@ -467,7 +470,7 @@ static inline int __insert_tsf (const char *fmt, char *buf, int max)
     }
     msec = HAL_GetTick();
     sec = msec / MSEC;
-    return snprintf(buf, max, "[%10d.%03d] ", sec, msec % MSEC);
+    return snprintf(buf, max, "[%4d.%03d] ", sec, msec % MSEC);
 }
 
 #endif /*SERIAL_TSF*/
@@ -546,6 +549,10 @@ int bsp_serial_send (const void *data, size_t cnt)
     irqmask_t irq_flags = serial_timer.irqmask;
     uart_desc_t *uart_desc = debug_port();
     int ret = 0;
+
+    if (inout_clbk) {
+        inout_clbk(data, cnt, '>');
+    }
 
     irq_save(&irq_flags);
 
@@ -631,62 +638,56 @@ static uart_desc_t *uart_find_desc (USART_TypeDef *source)
     return NULL;
 }
 
-static int _is_crlf (char c)
+static uint8_t __check_rx_crlf (char c)
 {
-    if (c == '\n' || c == '\r') {
-        return 1;
+    if (!g_serial_rx_eof) {
+        return 0;
+    }
+    if (c == '\r') {
+        return 0x1;
+    }
+    if (c == '\n') {
+        return 0x3;
     }
     return 0;
 }
 
 static void _dma_rx_xfer_cplt (uint8_t full)
 {
-    uint16_t wridx;
-    int cnt = DMA_RX_SIZE, total;
-    char *src, *dst;
+    int dmacplt = sizeof(rxstream.dmabuf) / 2;
+    int cnt = dmacplt;
+    char *src;
 
-    if (rxstream.cnt >= DMA_RX_FIFO_SIZE) {
-        if (!rxstream.crlf) {
-            rxstream.crlf = 0;
-        }
-        return;
-        /*Full, exit*/
-    }
-    src = &rxstream.buf[full * DMA_RX_SIZE];
-    wridx = rxstream.cnt;
-    if (wridx + DMA_RX_SIZE + 1 > DMA_RX_FIFO_SIZE) {
-        cnt = DMA_RX_FIFO_SIZE - wridx - 1;
-    }
-    total = rxstream.cnt + cnt;
-    dst = rxstream.fifo + wridx;
+    src = &rxstream.dmabuf[full * dmacplt];
+
     while (cnt) {
-        *dst = *src;
-        if (_is_crlf(*dst)) {
-            rxstream.crlf = cnt;
-            *dst = 0;
-            break;
-        }
-        src++; dst++; cnt--;
+        rxstream.fifo[rxstream.fifoidx++ & (DMA_RX_FIFO_SIZE - 1)] = *src;
+        rxstream.eof |= __check_rx_crlf(*src);
+        src++; cnt--;
     }
-    rxstream.cnt = total - cnt;
+    if (!g_serial_rx_eof) {
+        rxstream.eof = 3; /*\r & \n met*/
+    }
 }
 
 static void dma_fifo_flush (rxstream_t *rx, char *dest, int *pcnt)
 {
-    uint16_t cnt = rx->cnt;
-    char *d = dest, *s = rx->fifo;
+    int16_t cnt = (int16_t)(rx->fifoidx - rx->fifordidx);
 
-    while (cnt) {
-        *d = *s;
-        d++; s++; cnt--;
+    if (cnt < 0) {
+        cnt = -cnt;
     }
-    *d = 0;
+    *pcnt = cnt;
+    while (cnt > 0) {
+        *dest = rx->fifo[rx->fifordidx++ & (DMA_RX_FIFO_SIZE - 1)];
+        cnt--;
+        dest++;
+    }
+    *dest = 0;
     /*TODO : Move next line after crlf to the begining,
       to handle multiple lines.
     */
-    *pcnt = rx->cnt;
-    rx->crlf = 0;
-    rx->cnt = 0;
+    rx->eof = 0;
 }
 
 static void uart_handle_irq (USART_TypeDef *source)
@@ -730,7 +731,7 @@ void serial_tickle (void)
     char buf[DMA_RX_FIFO_SIZE + 1];
     int cnt;
 
-    if (!rxstream.crlf) {
+    if (rxstream.eof != 0x3) {
         return;
     }
 
@@ -738,6 +739,9 @@ void serial_tickle (void)
     dma_fifo_flush(&rxstream, buf, &cnt);
     irq_restore(irq);
 
+    if (inout_clbk) {
+        inout_clbk(buf, cnt, '<');
+    }
     bsp_in_handle_cmd(buf, cnt);
 }
 

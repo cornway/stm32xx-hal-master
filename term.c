@@ -1,17 +1,22 @@
 #if defined(BSP_DRIVER)
 
 #include <string.h>
+#include "int/term_int.h"
+#include "int/bsp_cmd_int.h"
+#include <bsp_cmd.h>
 #include <misc_utils.h>
 #include <debug.h>
-#include "int/term_int.h"
+
 
 #define TERM_MAX_CMD_BUF 256
 
 #define DEBUG_SERIAL_MAX_CLBK 4
 #define MAX_TOKENS 16
 
-static serial_rx_clbk_t serial_rx_clbk[DEBUG_SERIAL_MAX_CLBK] = {NULL};
-static serial_rx_clbk_t *last_rx_clbk = &serial_rx_clbk[0];
+static cmd_func_t serial_rx_clbk[DEBUG_SERIAL_MAX_CLBK] = {NULL};
+static cmd_func_t *last_rx_clbk = &serial_rx_clbk[0];
+
+inout_clbk_t inout_clbk = NULL;
 
 int str_parse_tok (const char *str, const char *tok, uint32_t *val)
 {
@@ -52,7 +57,7 @@ int str_tokenize (char **tok, int tokcnt, char *str)
     return toktotal - tokcnt;
 }
 
-void debug_add_rx_handler (serial_rx_clbk_t clbk)
+void debug_add_rx_handler (cmd_func_t clbk)
 {
     if (last_rx_clbk == &serial_rx_clbk[DEBUG_SERIAL_MAX_CLBK]) {
         return;
@@ -60,9 +65,9 @@ void debug_add_rx_handler (serial_rx_clbk_t clbk)
     *last_rx_clbk++ = clbk;
 }
 
-void debug_rm_rx_handler (serial_rx_clbk_t clbk)
+void debug_rm_rx_handler (cmd_func_t clbk)
 {
-    serial_rx_clbk_t *first = &serial_rx_clbk[0];
+    cmd_func_t *first = &serial_rx_clbk[0];
     if (!last_rx_clbk) {
         return;
     }
@@ -76,41 +81,73 @@ void debug_rm_rx_handler (serial_rx_clbk_t clbk)
     }
 }
 
+static void __bsp_in_handle_cmd 
+                (cmd_func_t *_begin, cmd_func_t *end,
+                int argc, const char **argv);
+
+cmd_func_t stdin_redir = NULL;
+
+cmd_func_t bsp_stdin_push (cmd_func_t func)
+{
+    cmd_func_t tmp = stdin_redir;
+    stdin_redir = func;
+    return tmp;
+}
+
+cmd_func_t bsp_stdin_pop (cmd_func_t func)
+{
+    cmd_func_t tmp = stdin_redir;
+    stdin_redir = func;
+    return tmp;
+}
+
 void bsp_in_handle_cmd (char *buf, int size)
 {
-    serial_rx_clbk_t *clbk = &serial_rx_clbk[0];
     char *argv_buf[MAX_TOKENS] = {NULL};
-    char **argv = &argv_buf[0];
-    int attemption = 0;
-    int argc = MAX_TOKENS, prev_argc = 0;
+    const char **argv = (const char **)&argv_buf[0];
+    int argc = MAX_TOKENS, offset = 0;
 
-    if (*clbk == NULL) {
+    if (stdin_redir) {
+        offset = size;
+        size = stdin_redir(size, (const char **)&buf);
+        offset = offset - size;
+    }
+    if (!size) {
         return;
     }
-    argc = str_tokenize(argv, argc, buf);
-    prev_argc = argc;
-    
+    argc = str_tokenize(&argv_buf[0], argc, buf + offset);
+    __bsp_in_handle_cmd(&serial_rx_clbk[0], last_rx_clbk, argc, argv);
+}
+
+static void __bsp_in_handle_cmd 
+                (cmd_func_t *_begin, cmd_func_t *end,
+                int argc, const char **argv)
+{
+    cmd_func_t *begin = _begin;
+    int attemption = 0;
+    int prev_argc = argc;
+
     while (d_true) {
 
-        while (argc > 0 && clbk != last_rx_clbk) {
+        do {
             argv = &argv[prev_argc - argc];
-            argc = (*clbk)(argc, argv);
+            argc = (*begin)(argc, argv);
             if (argc <= 0) {
                 return;
             }
-            clbk++;
+            begin++;
             attemption++;
-        }
+        } while (argc > 0 && begin < end);
         if (argc <= 0) {
             break;
         }
         if (prev_argc == argc) {
-            dprintf("unknown text \'%s\'\n", buf);
+            dprintf("unknown text\n");
             dprintf("att : %i\n", attemption);
-            return;
+            break;
         }
         prev_argc = argc;
-        clbk = &serial_rx_clbk[0];
+        begin = _begin;
     }
 }
 

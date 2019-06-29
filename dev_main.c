@@ -85,7 +85,7 @@ void serial_led_off (void)
     BSP_LED_Off(LED1);
 }
 
-static int con_echo (int argc, char **argv)
+static int con_echo (int argc, const char **argv)
 {
     int i;
     dprintf("@> ");
@@ -172,7 +172,7 @@ static void CPU_CACHE_Enable(void)
 
 static void SystemDump (void)
 {
-    NVIC_dump();
+    //NVIC_dump();
 }
 
 void dev_deinit (void)
@@ -210,6 +210,8 @@ int dev_hal_init (void)
     return 0;
 }
 
+extern void boot_gui_preinit (void);
+
 int dev_init (void)
 {
     dev_io_init();
@@ -226,6 +228,7 @@ int dev_init (void)
     vid_init();
     SystemDump();
     cmd_register_i32(&g_dev_debug_level, "dbglvl");
+    cmd_register_i32(&g_serial_rx_eof, "set_rxeof");
     return 0;
 }
 
@@ -250,6 +253,7 @@ int dev_main (void)
     audio_conf("samplerate=22050, volume=100");
 
     VID_PreConfig();
+    boot_gui_preinit();
 #if defined(APPLICATION)
     {
         static const bsp_user_api_t user_api =

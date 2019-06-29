@@ -30,6 +30,8 @@ typedef struct bsp_cmd_api_s {
 
 #else /*BSP_INDIR_API*/
 
+int cmd_init (void);
+void cmd_deinit (void);
 int cmd_register_var (cmdvar_t *var, const char *name);
 int cmd_register_i32 (int32_t *var, const char *name);
 int cmd_register_float (float *var, const char *name);
@@ -37,7 +39,6 @@ int cmd_register_str (char *str, int len, const char *name);
 int cmd_register_func (cmd_func_t func, const char *name);
 int cmd_unregister (const char *name);
 void bsp_in_handle_cmd (char *buf, int size);
-void cmd_deinit (void);
 void cmd_execute (const char *cmd, int len);
 void cmd_push (const char *cmd, const char *text, void *user1, void *user2);
 void cmd_exec_queue (cmd_handler_t hdlr);

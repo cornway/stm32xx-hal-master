@@ -3,7 +3,7 @@
 
 #include <bsp_api.h>
 
-typedef int (*cmd_func_t) (int argc, char **argv);
+typedef int (*cmd_func_t) (int argc, const char **argv);
 typedef void (*cmd_handler_t) (const char *cmd, int cmdlen);
 
 typedef enum {
@@ -26,6 +26,9 @@ typedef struct {
     int len;
     void *user1, *user2;
 } cmdexec_t;
+
+cmd_func_t bsp_stdin_pop (cmd_func_t func);
+cmd_func_t bsp_stdin_push (cmd_func_t func);
 
 #endif /*__BSP_CMD_INT_H__*/
 

@@ -23,8 +23,9 @@ extern uint32_t g_app_program_addr;
 
 static int boot_program_bypas = 0;
 
-component_t *com_browser;
-component_t *com_title;
+component_t *com_browser = NULL;
+component_t *com_console = NULL;
+component_t *com_title = NULL;
 gui_t gui;
 pane_t *pane, *alert_pane;
 
@@ -210,7 +211,7 @@ int bsp_install_exec (arch_word_t *progaddr, const char *path,
 {
     void *bindata;
     int binsize = 0, err = 0;
-    bsp_heap_api_t heap = {.malloc = heap_alloc_shared, .free = NULL};
+    bsp_heap_api_t heap = {.malloc = heap_alloc_shared, .free = heap_free};
 
     dprintf("Installing : \'%s\'\n", path);
 
@@ -372,7 +373,18 @@ i_event_t *__post_key (i_event_t  *evts, i_event_t *event)
     return NULL;
 }
 
-int boot_main (int argc, const char **argv)
+static int gui_stdio_hook (const char *str, int len, char dir)
+{
+    if (com_console && dir == '>') {
+        if (gui_apendxy(com_console, 0, 0, "%s", str) < 0) {
+            gui_draw(&gui);
+            gui_printxy(com_console, 0, 0, "%s", str);
+        }
+    }
+
+}
+
+void boot_gui_preinit (void)
 {
     screen_t s;
     prop_t prop;
@@ -391,37 +403,43 @@ int boot_main (int argc, const char **argv)
 
     dprintf("Bootloader enter\n");
 
-    gui_init(&gui, 0, 0, s.width, s.height);
+    gui_init(&gui, "gui", 20, 0, 0, s.width, s.height);
     pane = gui_get_pane("pane");
     gui_set_pane(&gui, pane);
-
-    com = gui_get_comp("pad0", "");
-    gui_set_prop(com, &prop);
-    gui_set_comp(pane, com, 0, 0, 120, gui.dim.h);
 
     prop.ispad = d_false;
     prop.bcolor = COLOR_GREY;
     com = gui_get_comp("title", NULL);
     gui_set_prop(com, &prop);
-    gui_set_comp(pane, com, 120, 0, gui.dim.w - 120, 80);
+    gui_set_comp(pane, com, 0, 0, 240, gui.dim.h / 2);
     com_title = com;
 
     prop.bcolor = COLOR_GREEN;
     com = gui_get_comp("browser", NULL);
     gui_set_prop(com, &prop);
-    gui_set_comp(pane, com, 120, 80, gui.dim.w - 120, gui.dim.h - 80);
+    gui_set_comp(pane, com, 0, gui.dim.h / 2, 240, gui.dim.h / 2);
     com->draw = b_draw_exec_list;
     com->act = b_handle_selected;
     com->user = &boot_bin_selected;
     com_browser = com;
+
+    prop.bcolor = COLOR_BLACK;
+    com = gui_get_comp("console", NULL);
+    gui_set_prop(com, &prop);
+    gui_set_comp(pane, com, 240, 0, gui.dim.w - 240, gui.dim.h);
+    com_console = com;
 
     alert_pane = win_new_allert(&gui, 200, 160,
         _alert_close_hdlr, _alert_accept_hdlr, _alert_decline_hdlr);
 
     gui_select_pane(&gui, pane);
 
-    boot_read_path("");
+    inout_clbk = gui_stdio_hook;
+}
 
+int boot_main (int argc, const char **argv)
+{
+    boot_read_path("");
     cmd_register_i32(&boot_program_bypas, "skipflash");
 
     while (!gui.destroy) {

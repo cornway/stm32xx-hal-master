@@ -1,6 +1,7 @@
 #include <string.h>
 #include <ctype.h>
 #include "boot/int/boot_int.h"
+#include "int/bsp_mod_int.h"
 #include <bsp_cmd.h>
 #include <debug.h>
 #include <heap.h>
@@ -30,25 +31,29 @@ typedef struct {
 static dvar_int_t *dvar_head = NULL;
 
 static int _cmd_register_var (cmdvar_t *var, const char *name);
-static int _cmd_rx_handler (int argc, char **argv);
-static int __cmd_handle_input (dvar_int_t *v, int argc, char **argv);
-static int __cmd_print_env (int argc, char **argv);
-static int __cmd_register_var (int argc, char **argv);
-static int __cmd_unregister_var (int argc, char **argv);
-static int __cmd_exec_priv (int argc, char **argv);
+static int _cmd_rx_handler (int argc, const char **argv);
+static int __cmd_handle_input (dvar_int_t *v, int argc, const char **argv);
+static int __cmd_print_env (int argc, const char **argv);
+static int __cmd_register_var (int argc, const char **argv);
+static int __cmd_unregister_var (int argc, const char **argv);
+static int __cmd_exec_priv (int argc, const char **argv);
 static int __cmd_is_readonly (const char *name);
-static int __cmd_fs_print_dir (int argc, char **argv);
-static int _cmd_export_all (int argc, char **argv);
-static int __cmd_test_fs (int argc, char **argv);
-static int cmd_brd_reset (int argc, char **argv);
-static int __cmd_fs_mkdir (int argc, char **argv);
-static int cmd_install_exec (int argc, char **argv);
-static int __cmd_fs_mkdir (int argc, char **argv);
-static int cmd_start_exec (int argc, char **argv);
-static int cmd_mod_insert (int argc, char **argv);
-static int cmd_mod_rm (int argc, char **argv);
-static int cmd_mod_probe (int argc, char **argv);
-
+static int __cmd_fs_print_dir (int argc, const char **argv);
+static int _cmd_export_all (int argc, const char **argv);
+static int __cmd_test_fs (int argc, const char **argv);
+static int cmd_brd_reset (int argc, const char **argv);
+static int __cmd_fs_mkdir (int argc, const char **argv);
+static int cmd_install_exec (int argc, const char **argv);
+static int __cmd_fs_mkdir (int argc, const char **argv);
+static int cmd_start_exec (int argc, const char **argv);
+static int cmd_mod_insert (int argc, const char **argv);
+static int cmd_mod_rm (int argc, const char **argv);
+static int cmd_mod_probe (int argc, const char **argv);
+int cmd_stdin_handle (int argc, const char **argv);
+static int cmd_stdin_handle (int argc, const char **argv);
+static int cmd_serial_config (int argc, const char **argv);
+static int __cmd_set_stdin_char (int num);
+int cmd_cat (int argc, const char **argv);
 
 static int cmd_var_exist (PACKED const char *name, dvar_int_t **_prev, dvar_int_t **_dvar)
 {
@@ -190,7 +195,7 @@ const cmd_func_map_t cmd_func_tbl[] =
     {"print",       __cmd_print_env},
     {"register",    __cmd_register_var},
     {"unreg",       __cmd_unregister_var},
-    {"bin",         __cmd_exec_priv},
+    {"inout",         __cmd_exec_priv},
     {"list",        __cmd_fs_print_dir},
 };
 
@@ -205,7 +210,24 @@ cmd_func_map_t cmd_priv_func_tbl[] =
     {"insmod",  cmd_mod_insert},
     {"rmmod",   cmd_mod_rm},
     {"modprobe",cmd_mod_probe},
+    {"stdin",   cmd_stdin_handle},
+    {"serial",  cmd_serial_config},
+    {"cat",     cmd_cat},
 };
+
+typedef enum {
+    STDIN_CHAR,
+    STDIN_PATH,
+    STDIN_NULL,
+} BSP_STDIN;
+
+static int stdin_eof_recv = 0;
+int g_stdin_eof_timeout_var = 0;
+int g_stdin_eof_timeout = 20000;
+static int stdin_to_path_bytes_limit = -1;
+static int stdin_to_path_bytes_cnt = 0;
+BSP_STDIN bsp_stdin_type = STDIN_CHAR;
+
 
 int cmd_init (void)
 {
@@ -216,6 +238,7 @@ int cmd_init (void)
     for (i = 0; i < arrlen(cmd_func_tbl); i++) {
         _cmd_register_func(cmd_func_tbl[i].func, cmd_func_tbl[i].name);
     }
+    cmd_register_i32(&g_stdin_eof_timeout, "stdinwait");
     return 0;
 }
 
@@ -228,6 +251,189 @@ void cmd_deinit (void)
 void cmd_tickle (void)
 {
     cmd_exec_queue(cmd_execute);
+    if (g_stdin_eof_timeout_var && g_stdin_eof_timeout_var < d_time()) {
+        dprintf("wait for stdin : timeout\n");
+        dprintf("flushing..\n");
+        __cmd_set_stdin_char(0);
+    }
+}
+
+int cmd_cat (int argc, const char **argv)
+{
+    int f;
+    int limit = -1;
+    int offset = 0;
+    char str[256], *pstr;
+
+    if (argc < 1) {
+        return -1;
+    }
+    d_open(argv[0], &f, "r");
+    if (f < 0) {
+        return -1;
+    }
+    if (argc > 2) {
+        if (!sscanf(argv[1], "%i", &limit)) {
+            limit = -1;
+        }
+    }
+    if (offset) {
+        d_seek(f, offset, DSEEK_SET);
+    }
+    pstr = str;
+    while (!d_eof(f)) {
+        pstr = d_gets(f, pstr, sizeof(str));
+        if (!pstr) {
+            break;
+        }
+        dprintf("%s\n", str);
+    }
+    dprintf("\n");
+    return 0;
+}
+
+static int cmd_serial_config (int argc, const char **argv)
+{
+    return argc;
+}
+
+static cmd_func_t saved_stdin_hdlr = NULL;
+static int stdin_file = -1;
+
+char *cmd_get_eof (const char *data, int len)
+{
+    char *p;
+
+    p = strstr(data, "\n\n\n\n\n\n\n\n");
+    return p;
+}
+
+static int cmd_stdin_path_close (void);
+
+int cmd_stdin_to_path_write (int argc, const char **argv)
+{
+    int len = argc;
+    void *data = (void *)*argv;
+    char *eof;
+
+    if (stdin_eof_recv) {
+        return len;
+    }
+
+    g_stdin_eof_timeout_var = d_time() + g_stdin_eof_timeout;
+    eof = cmd_get_eof(data, len);
+    if (eof) {
+        len = eof - (char *)data;
+    }
+    len = min(len, stdin_to_path_bytes_limit);
+    len = d_write(stdin_file, data, len);
+    stdin_to_path_bytes_cnt += len;
+    stdin_to_path_bytes_limit -= len;
+    assert(stdin_to_path_bytes_limit >= 0);
+
+    if (!stdin_to_path_bytes_limit) {
+        dprintf("done, received : %u bytes\n", stdin_to_path_bytes_cnt);
+        __cmd_set_stdin_char(0);
+    }
+    if (eof) {
+        stdin_eof_recv = 1;
+        g_stdin_eof_timeout_var = d_time() + g_stdin_eof_timeout;
+    }
+    return 0;
+}
+
+static int __cmd_set_stdin_char (int num)
+{
+    if (bsp_stdin_type == STDIN_CHAR) {
+        return -1;
+    }
+    switch (num) {
+        default :
+            dprintf("stdin > %i\n", num);
+            cmd_stdin_path_close();
+            bsp_stdin_pop(saved_stdin_hdlr);
+            g_serial_rx_eof = '\n';
+            bsp_stdin_type = STDIN_CHAR;
+        break;
+    }
+    return 0;
+}
+
+static int __cmd_set_stdin_file (const char *path, const char *attr)
+{
+    int f;
+    if (bsp_stdin_type == STDIN_PATH) {
+        return -1;
+    }
+    d_open(path, &f, attr);
+    if (f >= 0) {
+        dprintf("stdin > \'%s\'\n", path);
+        g_serial_rx_eof = 0;
+        saved_stdin_hdlr = bsp_stdin_push(cmd_stdin_to_path_write);
+        g_stdin_eof_timeout_var = d_time() + g_stdin_eof_timeout;
+        stdin_to_path_bytes_cnt = 0;
+        bsp_stdin_type = STDIN_PATH;
+    }
+    return f;
+}
+
+static int cmd_stdin_path_close (void)
+{
+    dprintf("closing path\n");
+    d_close(stdin_file);
+    stdin_file = -1;
+    stdin_eof_recv = 0;
+    g_stdin_eof_timeout_var = 0;
+    return 0;
+}
+
+static int __cmd_stdin_redirect (int argc, const char **argv)
+{
+    int num = -1, tmp = 2;
+    char *attr = "+w";
+
+    if (argc > 1) {
+        tmp++;
+        attr = (char *)argv[1];
+    }
+    if (argc > 2) {
+        tmp++;
+        if (!sscanf(argv[2], "%i", &stdin_to_path_bytes_limit)) {
+            dprintf("%s() : cannot set limit\n", __func__);
+            stdin_to_path_bytes_limit = -1;
+        }
+    }
+    dprintf("dst=[%s] att=[%s] bytes=<%u>\n",
+            argv[0], attr, stdin_to_path_bytes_limit);
+    if (sscanf(argv[0], "%i", &num)) {
+        __cmd_set_stdin_char(num);
+    } else {
+        stdin_file = __cmd_set_stdin_file(argv[0], attr);
+        if (stdin_file < 0) {
+            return 0;
+        }
+    }
+    return argc - tmp;
+}
+
+static int cmd_stdin_handle (int argc, const char **argv)
+{
+    dprintf("%s() :\n", __func__);
+
+    if (argc < 2) {
+        return -1;
+    }
+
+    switch (argv[0][0]) {
+        case '>':
+            argc = __cmd_stdin_redirect(argc--, &argv[1]);
+        break;
+        default :
+            dprintf("%s() : unknown\n", __func__);
+            argc = 0;
+        break;
+    }
+    return argc;
 }
 
 static int __cmd_is_readonly (const char *name)
@@ -262,13 +468,13 @@ static int _cmd_unregister_var (void *p1, void *p2)
     return strlen((char *)p1);
 }
 
-static int __cmd_register_var (int argc, char **argv)
+static int __cmd_register_var (int argc, const char **argv)
 {
     dprintf("%s() : Not yet\n", __func__);
     return 0;
 }
 
-static int __cmd_unregister_var (int argc, char **argv)
+static int __cmd_unregister_var (int argc, const char **argv)
 {
     if (argc < 1) {
         return -1;
@@ -278,7 +484,7 @@ static int __cmd_unregister_var (int argc, char **argv)
     return argc - 1;
 }
 
-static int _cmd_rx_handler (int argc, char **argv)
+static int _cmd_rx_handler (int argc, const char **argv)
 {
     dvar_int_t *v = dvar_head;
 
@@ -293,10 +499,10 @@ static int _cmd_rx_handler (int argc, char **argv)
         }
         v = v->next;
     }
-    return argc + 1;
+    return argc;
 }
 
-static int __cmd_handle_input (dvar_int_t *v, int argc, char **argv)
+static int __cmd_handle_input (dvar_int_t *v, int argc, const char **argv)
 {
     switch (v->dvar.type) {
         case DVAR_INT32:
@@ -304,40 +510,43 @@ static int __cmd_handle_input (dvar_int_t *v, int argc, char **argv)
             int32_t val;
 
             if (argc <= 0 || !sscanf(argv[0], "%i", &val)) {
-                dprintf("%s = %i\n", v->name, readLong(v->dvar.ptr));
-                return argc;
+                dprintf("%s = %lu\n", v->name, readLong(v->dvar.ptr));
+                argc = 0;
+                break;
             }
             writeLong(v->dvar.ptr, val);
             dprintf("%s = %i\n", v->name, val);
-            return argc;
+            argc = 0;
         }
+        break;
         case DVAR_FLOAT:
         {
             float val;
 
             if (argc <= 0 || !sscanf(argv[0], "%f", &val)) {
                 dprintf("%s = %f\n", v->name, (float)readLong(v->dvar.ptr));
-                return argc;
+                argc = 0;
+                break;
             }
             writeLong(v->dvar.ptr, val);
             dprintf("%s = %f\n", v->name, val);
-            return argc;
+            argc = 0;
         }
         break;
         case DVAR_STR:
         {
             if (argc <= 0) {
-                dprintf("%s = %s\n", v->name, v->dvar.ptr);
+                dprintf("%s = %s\n", v->name, (char *)v->dvar.ptr);
                 return argc;
             }
             snprintf(v->dvar.ptr, v->dvar.ptrsize, "%s", argv[0]);
-            return argc;
+            argc = 0;
         }
         break;
         case DVAR_FUNC:
         {
             cmd_func_t func = (cmd_func_t)v->dvar.ptr;
-            return func(argc, &argv[0]);
+            argc = func(argc, &argv[0]);
         }
         break;
         default:
@@ -352,22 +561,18 @@ static int __cmd_handle_input (dvar_int_t *v, int argc, char **argv)
 }
 
 
-static int __cmd_print_env (int argc, char **argv)
+static int __cmd_print_env (int argc, const char **argv)
 {
     dvar_int_t *v = dvar_head;
-    const char *border = "========================================";
-    const char *type_text[] = {"function", "integer", "float", "string"};
     int i = 0;
 
-    dprintf("%s\n", border);
-
+    dprintf("print env :\n");
     while (v) {
-        dprintf("%3i : \'%3.16s\'  \'%3.16s\'  <0x%08x>\n",
-                i++, v->name, type_text[v->dvar.type], (unsigned)v->dvar.ptr);
+        dprintf("\'%3.16s\' \'%3.16s\'\n",
+                v->name, v->dvar.type == DVAR_FUNC ? "func" : "var");
         v = v->next;
     }
-
-    dprintf("%s", border);
+    dprintf("\n");
 
     return 0;
 }
@@ -424,14 +629,14 @@ void cmd_exec_queue (cmd_handler_t hdlr)
      }
 }
 
-static int __cmd_test_fs (int argc, char **argv)
+static int __cmd_test_fs (int argc, const char **argv)
 {
     const char *fname = "test.txt";
     char buf[128], *namep = (char *)fname;
     int f, errors = 0;
 
     if (argc > 1) {
-        namep = argv[0];
+        namep = (char *)argv[0];
     }
     dprintf("file name : %s\n", namep);
 
@@ -467,7 +672,7 @@ failopen:
     return 0;
 }
 
-static int __cmd_fs_mkdir (int argc, char **argv)
+static int __cmd_fs_mkdir (int argc, const char **argv)
 {
     if (argc < 1) {
         return -1;
@@ -478,7 +683,7 @@ static int __cmd_fs_mkdir (int argc, char **argv)
     return --argc;
 }
 
-static int cmd_brd_reset (int argc, char **argv)
+static int cmd_brd_reset (int argc, const char **argv)
 {
 extern void SystemSoftReset (void);
     dprintf("Resetting...\n");
@@ -490,9 +695,9 @@ extern void SystemSoftReset (void);
 
 static int __dir_list (char *pathbuf, int recursion, const char *path);
 
-static int __cmd_fs_print_dir (int argc, char **argv)
+static int __cmd_fs_print_dir (int argc, const char **argv)
 {
-    char *ppath;
+    const char *ppath;
     char pathbuf[CMD_MAX_PATH];
 
     if (argc > 1) {
@@ -526,18 +731,18 @@ static int __dir_list (char *pathbuf, int recursion, const char *path)
     return 0;
 }
 
-static int _cmd_export_all (int argc, char **argv)
+static int _cmd_export_all (int argc, const char **argv)
 {
     return __cmd_export_all(cmd_priv_func_tbl + 1, arrlen(cmd_priv_func_tbl) - 1);
 }
 
-static int __cmd_exec_priv (int argc, char **argv)
+static int __cmd_exec_priv (int argc, const char **argv)
 {
     int  i;
 
     for (i = 0; i < arrlen(cmd_priv_func_tbl) && argc > 0; i++) {
         if (strcmp(argv[0], cmd_priv_func_tbl[i].name) == 0) {
-            cmd_priv_func_tbl[i].func(--argc, &argv[1]);
+            argc = cmd_priv_func_tbl[i].func(--argc, &argv[1]);
             break;
         }
     }
@@ -551,7 +756,7 @@ void cmd_execute (const char *cmd, int len)
     bsp_in_handle_cmd(buf, len);
 }
 
-int cmd_install_exec (int argc, char **argv)
+int cmd_install_exec (int argc, const char **argv)
 {
     arch_word_t progaddr;
 
@@ -568,7 +773,7 @@ int cmd_install_exec (int argc, char **argv)
     return argc - 2;
 }
 
-int cmd_start_exec (int argc, char **argv)
+int cmd_start_exec (int argc, const char **argv)
 {
     arch_word_t progaddr;
 
@@ -585,13 +790,13 @@ int cmd_start_exec (int argc, char **argv)
     return argc - 2;
 }
 
-static int cmd_mod_insert (int argc, char **argv)
+static int cmd_mod_insert (int argc, const char **argv)
 {
     arch_word_t progaddr;
     const bsp_heap_api_t heap =
     {
         heap_alloc_shared,
-        NULL,
+        heap_free,
     };
 
     if (argc < 2) {
@@ -607,10 +812,8 @@ static int cmd_mod_insert (int argc, char **argv)
     return argc - 2;
 }
 
-static int cmd_mod_probe (int argc, char **argv)
+static int cmd_mod_probe (int argc, const char **argv)
 {
-    arch_word_t progaddr;
-
     if (argc < 1) {
         dprintf("usage : /path/to/file <load address 0x0xxx..>");
         return -1;
@@ -621,15 +824,8 @@ static int cmd_mod_probe (int argc, char **argv)
     return argc - 1;
 }
 
-static int cmd_mod_rm (int argc, char **argv)
+static int cmd_mod_rm (int argc, const char **argv)
 {
-    arch_word_t progaddr;
-    const bsp_heap_api_t heap =
-    {
-        heap_alloc_shared,
-        NULL,
-    };
-
     if (argc < 1) {
         dprintf("usage : <mod name>");
         return -1;

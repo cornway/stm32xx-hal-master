@@ -76,12 +76,13 @@ __heap_free (void *_p)
         return;
     }
     p = p - 1;
-    if (!p->freeable) {
-        fatal_error("__heap_free : chunk cannot be freed\n");
-    }
     if (p->magic != MALLOC_MAGIC) {
         fatal_error("__heap_free : magic fail, expected= 0x%08x, token= 0x%08x\n",
                     MALLOC_MAGIC, p->magic);
+    }
+    if (!p->freeable) {
+        dprintf("%s() : static memory : <0x%p>\n", __func__, _p);
+        return;
     }
     heap_size_total += p->size;
     free(p);
