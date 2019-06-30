@@ -812,10 +812,10 @@ static void serial_flush_handler (int force)
 
         time = HAL_GetTick();
 
-        if ((active_stream->timestamp &&
-            (time - active_stream->timestamp) > TX_FLUSH_TIMEOUT) ||
+        if ((time - active_stream->timestamp) > TX_FLUSH_TIMEOUT ||
             force) {
 
+            active_stream->timestamp = time;
             active_stream->data[active_stream->bufposition++] = '\n';
             dbgstream_submit(uart_desc, NULL, 0, d_true);
             if (force) {
