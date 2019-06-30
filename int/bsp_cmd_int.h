@@ -27,8 +27,8 @@ typedef struct {
     void *user1, *user2;
 } cmdexec_t;
 
-cmd_func_t bsp_stdin_pop (cmd_func_t func);
-cmd_func_t bsp_stdin_push (cmd_func_t func);
+cmd_func_t bsp_stdin_unstash (cmd_func_t func);
+cmd_func_t bsp_stdin_stash (cmd_func_t func);
 
 #endif /*__BSP_CMD_INT_H__*/
 

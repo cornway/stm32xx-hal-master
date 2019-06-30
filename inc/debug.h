@@ -55,8 +55,8 @@ typedef struct bsp_debug_api_s {
 #define serial_getc             BSP_DBG_API(getc)
 #define bsp_serial_send         BSP_DBG_API(send)
 #define serial_flush            BSP_DBG_API(flush)
-#define debug_add_rx_handler   BSP_DBG_API(reg_clbk)
-#define debug_rm_rx_handler    BSP_DBG_API(unreg_clbk)
+#define bsp_stdin_register_if   BSP_DBG_API(reg_clbk)
+#define bsp_stdin_unreg_if    BSP_DBG_API(unreg_clbk)
 #define serial_tickle           BSP_DBG_API(tickle)
 #define dprintf                 BSP_DBG_API(dprintf)
 
@@ -66,8 +66,8 @@ void serial_putc (char c);
 char serial_getc (void);
 int bsp_serial_send (const void *data, size_t cnt);
 void serial_flush (void);
-void debug_add_rx_handler (int (*) (int , const char **));
-void debug_rm_rx_handler (int (*) (int , const  char **));
+void bsp_stdin_register_if (int (*) (int , const char **));
+void bsp_stdin_unreg_if (int (*) (int , const  char **));
 void serial_tickle (void);
 void dprintf (const char *fmt, ...) PRINTF;
 

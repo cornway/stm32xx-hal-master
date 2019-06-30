@@ -38,10 +38,10 @@ int cmd_register_float (float *var, const char *name);
 int cmd_register_str (char *str, int len, const char *name);
 int cmd_register_func (cmd_func_t func, const char *name);
 int cmd_unregister (const char *name);
-void bsp_in_handle_cmd (char *buf, int size);
-int cmd_execute (const char *cmd, int len);
-void cmd_push (const char *cmd, const char *text, void *user1, void *user2);
-void cmd_exec_queue (cmd_handler_t hdlr);
+void bsp_stdin_forward (char *buf, int size);
+int cmd_txt_exec (const char *cmd, int len);
+void cmd_exec_dsr (const char *cmd, const char *text, void *user1, void *user2);
+void cmd_exec_pending (cmd_handler_t hdlr);
 void cmd_tickle (void);
 
 #endif /*BSP_INDIR_API*/

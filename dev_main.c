@@ -185,7 +185,7 @@ extern void Sys_LeakCheck (void);
 
     irqmask_t irq = NVIC_IRQ_MASK;
     dprintf("%s() :\n", __func__);
-    debug_rm_rx_handler(con_echo);
+    bsp_stdin_unreg_if(con_echo);
 
     screen_release();
     vid_deinit();
@@ -222,7 +222,7 @@ int dev_init (void)
     BSP_LED_Init(LED1);
     BSP_LED_Init(LED2);
 
-    debug_add_rx_handler(con_echo);
+    bsp_stdin_register_if(con_echo);
     cmd_init();
 
     audio_init();

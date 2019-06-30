@@ -252,7 +252,7 @@ static int b_handle_selected (pane_t *pane, component_t *com, void *user)
 
     pane->parent->destroy = 1;
     g_app_program_addr = bindesc->progaddr;
-    cmd_push("boot", bindesc->path, NULL, NULL);
+    cmd_exec_dsr("boot", bindesc->path, NULL, NULL);
     boot_destr_exec_list();
     com->user = NULL;
     return 1;

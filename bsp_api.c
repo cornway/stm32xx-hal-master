@@ -128,7 +128,7 @@ bspapi_t *bsp_api_attach (void)
     BSP_CMD_API(var_float)  = cmd_register_float;
     BSP_CMD_API(var_str)    = cmd_register_str;
     BSP_CMD_API(var_func)   = cmd_register_func;
-    BSP_CMD_API(exec)       = cmd_execute;
+    BSP_CMD_API(exec)       = cmd_txt_exec;
     BSP_CMD_API(tickle)     = cmd_tickle;
 
     BSP_VID_API(dev.init)   = vid_init;
@@ -207,8 +207,8 @@ bspapi_t *bsp_api_attach (void)
     BSP_DBG_API(getc)       = serial_getc;
     BSP_DBG_API(send)       = bsp_serial_send;
     BSP_DBG_API(flush)      = serial_flush;
-    BSP_DBG_API(reg_clbk)   = debug_add_rx_handler;
-    BSP_DBG_API(unreg_clbk) = debug_rm_rx_handler;
+    BSP_DBG_API(reg_clbk)   = bsp_stdin_register_if;
+    BSP_DBG_API(unreg_clbk) = bsp_stdin_unreg_if;
     BSP_DBG_API(tickle)     = serial_tickle;
     BSP_DBG_API(dprintf)    = dprintf;
 

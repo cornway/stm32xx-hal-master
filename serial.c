@@ -742,7 +742,7 @@ void serial_tickle (void)
     if (inout_clbk) {
         inout_clbk(buf, cnt, '<');
     }
-    bsp_in_handle_cmd(buf, cnt);
+    bsp_stdin_forward(buf, cnt);
 }
 
 static void dma_rx_xfer_hanlder (struct __DMA_HandleTypeDef * hdma)

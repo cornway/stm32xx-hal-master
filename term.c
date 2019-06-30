@@ -22,7 +22,7 @@ inout_clbk_t inout_clbk = NULL;
 static inline char str_char_printable (char c)
 {
     if (c < 0x20 || c >= 0x7f) {
-        return ' ';
+        return 0;
     }
     return c;
 }
@@ -75,7 +75,7 @@ int str_tokenize (char **tok, int tokcnt, char *str)
     return toktotal - tokcnt;
 }
 
-void debug_add_rx_handler (cmd_func_t clbk)
+void bsp_stdin_register_if (cmd_func_t clbk)
 {
     if (last_rx_clbk == &serial_rx_clbk[DEBUG_SERIAL_MAX_CLBK]) {
         return;
@@ -83,7 +83,7 @@ void debug_add_rx_handler (cmd_func_t clbk)
     *last_rx_clbk++ = clbk;
 }
 
-void debug_rm_rx_handler (cmd_func_t clbk)
+void bsp_stdin_unreg_if (cmd_func_t clbk)
 {
     cmd_func_t *first = &serial_rx_clbk[0];
     if (!last_rx_clbk) {
@@ -99,27 +99,27 @@ void debug_rm_rx_handler (cmd_func_t clbk)
     }
 }
 
-static void __bsp_in_handle_cmd 
+static void __bsp_stdin_iter_fwd 
                 (cmd_func_t *_begin, cmd_func_t *end,
                 int argc, const char **argv);
 
 cmd_func_t stdin_redir = NULL;
 
-cmd_func_t bsp_stdin_push (cmd_func_t func)
+cmd_func_t bsp_stdin_stash (cmd_func_t func)
 {
     cmd_func_t tmp = stdin_redir;
     stdin_redir = func;
     return tmp;
 }
 
-cmd_func_t bsp_stdin_pop (cmd_func_t func)
+cmd_func_t bsp_stdin_unstash (cmd_func_t func)
 {
     cmd_func_t tmp = stdin_redir;
     stdin_redir = func;
     return tmp;
 }
 
-void bsp_in_handle_cmd (char *buf, int size)
+void bsp_stdin_forward (char *buf, int size)
 {
     char *argv_buf[MAX_TOKENS] = {NULL};
     const char **argv = (const char **)&argv_buf[0];
@@ -134,15 +134,14 @@ void bsp_in_handle_cmd (char *buf, int size)
         return;
     }
     argc = str_tokenize(&argv_buf[0], argc, buf + offset);
-    __bsp_in_handle_cmd(&serial_rx_clbk[0], last_rx_clbk, argc, argv);
+    __bsp_stdin_iter_fwd(&serial_rx_clbk[0], last_rx_clbk, argc, argv);
 }
 
-static void __bsp_in_handle_cmd 
+static void __bsp_stdin_iter_fwd 
                 (cmd_func_t *_begin, cmd_func_t *end,
                 int argc, const char **argv)
 {
     cmd_func_t *begin = _begin;
-    int attemption = 0;
     int prev_argc = argc;
 
     while (d_true) {
@@ -154,14 +153,12 @@ static void __bsp_in_handle_cmd
                 return;
             }
             begin++;
-            attemption++;
         } while (argc > 0 && begin < end);
         if (argc <= 0) {
             break;
         }
         if (prev_argc == argc) {
-            dprintf("unknown text\n");
-            dprintf("att : %i\n", attemption);
+            dprintf("garbage\n");
             break;
         }
         prev_argc = argc;
