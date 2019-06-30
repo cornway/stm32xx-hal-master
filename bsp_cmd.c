@@ -471,7 +471,6 @@ static void __cmd_filebuf_flush (void)
         return;
     }
     len = d_write(stdin_file, &__cmd_tofile_buf[0], __cmd_tofile_full);
-    dprintf("flushed : %u bytes\n", len);
     __cmd_tofile_full = 0;
 }
 
@@ -482,12 +481,10 @@ static int __cmd_filebuf_write (void *data, int len)
         len = __cmd_tofile_full;
         len = d_write(stdin_file, &__cmd_tofile_buf[0], len);
         __cmd_tofile_full = 0;
-        len = 0;
-    } else {
-        len = min(len, stdin_to_path_bytes_limit);
-        memcpy(&__cmd_tofile_buf[__cmd_tofile_full], data, len);
-        __cmd_tofile_full += len;
     }
+    len = min(len, stdin_to_path_bytes_limit);
+    memcpy(&__cmd_tofile_buf[__cmd_tofile_full], data, len);
+    __cmd_tofile_full += len;
     return len;
 }
 
@@ -524,6 +521,12 @@ static int __cmd_set_stdin_file (int argc, const char **argv)
     if (argc > 2) {
         payload = argv[2];
     }
+
+    dprintf("stdin: path=[%s] att=[%s] ", argv[0], argv[1]);
+    if (stdin_to_path_bytes_limit > 0) {
+        dprintf("rx bytes=[%u]", stdin_to_path_bytes_limit);
+    }
+    dprintf("\n");
 
     d_open(argv[0], &f, argv[1]);
     stdin_file = f;
@@ -596,6 +599,7 @@ static int cmd_stdin_to_path_write (int argc, const char **argv)
 
 static void __cmd_stdin_force_flush (void)
 {
+    dprintf("stdin: flushed\n");
     __cmd_filebuf_flush();
 }
 
@@ -649,12 +653,6 @@ static int __cmd_stdin_redirect (int argc, const char **argv)
     }
 
     stdin_to_path_bytes_limit = bytes_limit;
-
-    dprintf("stdin: dst=[%s] att=[%s] ", argv[0], attr);
-    if (stdin_to_path_bytes_limit > 0) {
-        dprintf("rx bytes=[%u]", stdin_to_path_bytes_limit);
-    }
-    dprintf("\n");
 
     if (kv_fflush.valid) {
         dprintf("stdin : force flush\n");
@@ -712,6 +710,7 @@ void cmd_tickle (void)
         dprintf("flushing..\n");
         cmd_exec_dsr("bsp", "stdin > 0 -g", NULL, NULL);
     } else if (__cmd_tofile_usage_tsf && __cmd_tofile_usage_tsf < d_time()) {
+        dprintf("stdin: flushed\n");
         __cmd_filebuf_flush();
     }
 }
