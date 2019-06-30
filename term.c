@@ -18,6 +18,23 @@ static cmd_func_t *last_rx_clbk = &serial_rx_clbk[0];
 
 inout_clbk_t inout_clbk = NULL;
 
+
+static inline char str_char_printable (char c)
+{
+    if (c < 0x20 || c >= 0x7f) {
+        return ' ';
+    }
+    return c;
+}
+
+void str_filter_printable (char *str)
+{
+    while (*str) {
+        *str = str_char_printable(*str);
+        str++;
+    }
+}
+
 int str_parse_tok (const char *str, const char *tok, uint32_t *val)
 {
     int len = strlen(tok), ret = 0;

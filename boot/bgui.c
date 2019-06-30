@@ -20,13 +20,6 @@
 
 #define G_TEXT_MAX 256
 
-typedef struct {
-    gui_t gui;
-    uint8_t fonth, fontw;
-} gui_ctxt_t;
-
-gui_ctxt_t g_gui_ctxt;
-
 d_bool dim_check (const dim_t *d, const point_t *p)
 {
     int x0 = p->x - d->x;
@@ -120,27 +113,30 @@ static component_t *gui_iterate_all (gui_t *gui, void *user, int (*h) (component
 }
 
 void gui_init (gui_t *gui, const char *name, uint8_t framerate,
-                int x, int y, int w, int h)
+                dim_t *dim, gui_bsp_api_t *bspapi)
 {
     char temp[24];
 
     memset(gui, 0, sizeof(*gui));
 
-    g_gui_ctxt.fonth = BSP_LCD_GetFont()->Height;
-    g_gui_ctxt.fontw = BSP_LCD_GetFont()->Width;
+    gui->fonth = BSP_LCD_GetFont()->Height;
+    gui->fontw = BSP_LCD_GetFont()->Width;
 
-    gui->dim.x = x;
-    gui->dim.y = y;
-    gui->dim.w = w;
-    gui->dim.h = h;
+    gui->dim.x = dim->x;
+    gui->dim.y = dim->y;
+    gui->dim.w = dim->w;
+    gui->dim.h = dim->h;
     gui->framerate = framerate;
     gui->dbglvl = DBG_WARN;
+    snprintf(gui->name, sizeof(gui->name), "%s", name);
 
     snprintf(temp, sizeof(temp), "%s_%s", name, "fps");
     cmd_register_i32(&gui->framerate, temp);
     
     snprintf(temp, sizeof(temp), "%s_%s", name, "dbglvl");
     cmd_register_i32(&gui->dbglvl, temp);
+
+    memcpy(&gui->bspapi, bspapi, sizeof(gui->bspapi));
 }
 
 void gui_destroy (gui_t *gui)
@@ -159,15 +155,21 @@ void gui_destroy (gui_t *gui)
     }
 }
 
-pane_t *gui_get_pane (const char *name)
+pane_t *gui_get_pane (gui_t *gui, const char *name, int extra)
 {
     int namelen = strlen(name);
     int allocsize;
-    pane_t *pane;
+    pane_t *pane = NULL;
 
     allocsize = sizeof(*pane) + namelen + 1;
+    if (extra > 0) {
+        allocsize += extra;
+    }
     allocsize = ROUND_UP(allocsize, 4);
-    pane = heap_malloc(allocsize);
+    if (gui_bsp_alloc(gui)) {
+        pane = gui_bsp_alloc(gui)(allocsize);
+    }
+    assert(pane);
     memset(pane, 0, allocsize);
     snprintf(pane->name, namelen + 1, "%s", name);
     return pane;
@@ -214,7 +216,7 @@ static void __gui_set_comp_def_sfx (component_t *com)
     sfx->sfx_other = -1;
 }
 
-component_t *gui_get_comp (const char *name, const char *text)
+component_t *gui_get_comp (gui_t *gui, const char *name, const char *text)
 {
     int namelen = strlen(name);
     int textlen = text ? strlen(text) : G_TEXT_MAX;
@@ -223,7 +225,10 @@ component_t *gui_get_comp (const char *name, const char *text)
 
     allocsize = sizeof(*com) + namelen + 1 + textlen + 1;
     allocsize = ROUND_UP(allocsize, sizeof(uint32_t));
-    com = heap_malloc(allocsize);
+    if (gui_bsp_alloc(gui)) {
+        com = gui_bsp_alloc(gui)(allocsize);
+    }
+    assert(com);
     memset(com, 0, allocsize);
     assert(name);
     snprintf(com->name_text, namelen + 1, "%s", name);
@@ -256,8 +261,8 @@ void gui_set_comp (pane_t *pane, component_t *c, int x, int y, int w, int h)
     c->parent = pane;
     dim_place(&c->dim, &pane->dim);
 
-    if (pane->parent->alloc_sfx) {
-        pane->parent->alloc_sfx(&c->sfx.sfx_other, GUISFX_OTHER);
+    if (gui_bsp_sfxalloc(pane->parent)) {
+        c->sfx.sfx_other = gui_bsp_sfxalloc(pane->parent)("guiother");
     }
 }
 
@@ -267,6 +272,7 @@ void gui_set_prop (component_t *c, prop_t *prop)
     c->bcolor = prop->bcolor;
     c->ispad = prop->ispad;
     c->userdraw = prop->user_draw;
+    c->sfx = prop->sfx;
 }
 
 void gui_com_clear (component_t *com)
@@ -294,10 +300,6 @@ static uint32_t __gui_printxy
 {
     int n;
     n = vsnprintf (buf, bufsize, fmt, argptr);
-    com->repaint = 1;
-    if (com->parent->parent->selected == com->parent) {
-        com->parent->repaint = 1;
-    }
     return n;
 }
 
@@ -327,14 +329,21 @@ int gui_apendxy (component_t *com, int x, int y, const char *fmt, ...)
     return com->text_size - com->text_index;
 }
 
+int gui_string_direct (component_t *com, int line, rgba_t textcolor, const char *str)
+{
+    BSP_LCD_SetTextColor(textcolor);
+    return BSP_LCD_DisplayStringAt(com->dim.x, com->dim.y + LINE(line),
+                                       com->dim.w, com->dim.h, (uint8_t *)str, LEFT_MODE);
+}
 
 static void gui_comp_draw (pane_t *pane, component_t *com)
 {
+    gui_t *gui = pane->parent;
+
     if (com->ispad) {
         BSP_LCD_SetTextColor(com->bcolor);
         BSP_LCD_FillRect(com->dim.x, com->dim.y, com->dim.w, com->dim.h);
     } else if (!com->userdraw) {
-        int x, y, w, h;
         int len = 0, tmp;
         int line = 0, linecnt = BSP_LCD_DisplayMaxLineCount();
         uint8_t *text;
@@ -353,7 +362,6 @@ static void gui_comp_draw (pane_t *pane, component_t *com)
                                        com->dim.w, com->dim.h, (uint8_t *)com->name_text, LEFT_MODE);
         }
         linecnt--;
-        y += g_gui_ctxt.fonth;
         len = com->text_index;
         text = (uint8_t *)com->name_text + com->text_offset;
         while (len > 0 && linecnt > 0) {
@@ -504,8 +512,8 @@ void gui_resp (gui_t *gui, component_t *com, gevt_t *evt)
                         }
                         break;
                     } else {
-                        if (gui->start_sfx) {
-                            gui->start_sfx(com->sfx.sfx_other);
+                        if (gui_bsp_sfxplay(gui)) {
+                            gui_bsp_sfxplay(gui)(com->sfx.sfx_other);
                         }
                     }
                 }
@@ -529,22 +537,51 @@ static component_t *gui_get_for_name (gui_t *gui, const char *name)
     return com;
 }
 
-static int __wake (component_t *com, void *user)
+static int __force_wakeup (component_t *com, void *user)
 {
     com->repaint = 1;
-    com->parent->repaint = 1;
+    if (com->parent->parent->selected == com->parent) {
+        com->parent->repaint = 1;
+    }
     return 0;
 }
 
-void gui_wake (gui_t *gui, const char *name)
+static int __wakeup (gui_t *gui, component_t *com)
+{
+    com->repaint = 1;
+    if (com->parent == gui->selected) {
+        com->parent->repaint = 1;
+    }
+    return 0;
+}
+
+void gui_wakeup (gui_t *gui, const char *name)
 {
     if (name == NULL) {
-        gui_iterate_all(gui, NULL, __wake);
+        gui_iterate_all(gui, NULL, __force_wakeup);
     } else {
         component_t *com = gui_get_for_name(gui, name);
         if (com) {
-            __wake(com, NULL);
+            __wakeup(gui, com);
         }
+    }
+}
+
+void gui_wakeup_com (gui_t *gui, component_t *com)
+{
+    __wakeup(gui, com);
+}
+
+void gui_wakeup_pane (pane_t *pane)
+{
+    component_t *com = pane->head;
+
+    while (com) {
+        com->repaint = 1;
+        com = com->next;
+    }
+    if (pane->parent->selected == pane) {
+        pane->repaint = 1;
     }
 }
 

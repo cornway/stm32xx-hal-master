@@ -564,7 +564,6 @@ static int __cmd_handle_input (dvar_int_t *v, int argc, const char **argv)
 static int __cmd_print_env (int argc, const char **argv)
 {
     dvar_int_t *v = dvar_head;
-    int i = 0;
 
     dprintf("print env :\n");
     while (v) {
@@ -749,11 +748,13 @@ static int __cmd_exec_priv (int argc, const char **argv)
     return argc;
 }
 
-void cmd_execute (const char *cmd, int len)
+int cmd_execute (const char *cmd, int len)
 {
     char buf[256];
     len = snprintf(buf, sizeof(buf), "%s", cmd);
     bsp_in_handle_cmd(buf, len);
+    /*TODO : cmd errno ?*/
+    return 0;
 }
 
 int cmd_install_exec (int argc, const char **argv)

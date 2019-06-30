@@ -28,9 +28,12 @@ component_t *com_console = NULL;
 component_t *com_title = NULL;
 gui_t gui;
 pane_t *pane, *alert_pane;
+pane_t *pane_console;
 
 bsp_bin_t *boot_bin_head = NULL;
 bsp_bin_t *boot_bin_selected = NULL;
+
+static void boot_gui_bsp_init (gui_t *gui);
 
 bsp_exec_file_type_t
 bsp_bin_file_compat (const char *in)
@@ -99,10 +102,6 @@ bsp_setup_bin_param (bsp_bin_t *bin)
     return 0;
 }
 
-#define _GET_PAD(x, a) ((a) - ((x) % (a)))
-#define _ROUND_UP(x, a) ((x) + _GET_PAD(a, x))
-#define _ROUND_DOWN(x, a) ((x) - ((x) % (a)))
-
 bsp_bin_t *
 bsp_setup_bin_desc (bsp_bin_t *bin, const char *path,
                            const char *originname, bsp_exec_file_type_t type)
@@ -115,7 +114,7 @@ bsp_setup_bin_desc (bsp_bin_t *bin, const char *path,
     if (bsp_setup_bin_param(bin) < 0) {
         return NULL;
     }
-    bin->progaddr = _ROUND_DOWN(bin->entrypoint, BOOT_MIN_SECTOR);
+    bin->progaddr = ROUND_DOWN(bin->entrypoint, BOOT_MIN_SECTOR);
     return bin;
 }
 
@@ -276,7 +275,7 @@ static int b_draw_exec_list (pane_t *pane, component_t *com, void *user)
     return 0;
 }
 
-static void gamepad_handle (gevt_t *evt)
+static void boot_handle_input (gevt_t *evt)
 {
 
     switch (evt->sym) {
@@ -290,149 +289,50 @@ static void gamepad_handle (gevt_t *evt)
     
 }
 
-static int _alert_close_hdlr (pane_t *pane, component_t *com, void *user)
-{
-    win_close_allert(pane->parent, pane);
-    return 0;
-}
-
-static int _alert_accept_hdlr (pane_t *pane, component_t *com, void *user)
-{
-    win_close_allert(pane->parent, pane);
-    return 0;
-}
-
-static int _alert_decline_hdlr (pane_t *pane, component_t *com, void *user)
-{
-    win_close_allert(pane->parent, pane);
-    return 0;
-}
-
-static const char *gui_sfx_type_to_name[GUISFX_MAX] =
-{
-    [GUISFX_OPEN] = "dsbarexp",
-    NULL,
-    NULL,
-    NULL,
-};
-
-static void __gui_alloc_sfx (int *num, gui_sfx_std_type_t type)
-{
-    *num = -1;
-    switch (type) {
-
-        default:
-            if (gui_sfx_type_to_name[type]) {
-                *num = bsp_open_wave_sfx(gui_sfx_type_to_name[type]);
-            }
-        break;
-    }
-}
-
-static void __gui_start_sfx (int num)
-{
-    if (num < 0) {
-        return;
-    }
-    bsp_play_wave_sfx(num, 127);
-}
-
-const kbdmap_t gamepad_to_kbd_map[JOY_STD_MAX] =
-{  
-    [JOY_UPARROW]       = {'u', 0},
-    [JOY_DOWNARROW]     = {'d', 0},
-    [JOY_LEFTARROW]     = {'l',0},
-    [JOY_RIGHTARROW]    = {'r', 0},
-    [JOY_K1]            = {'1', PAD_FREQ_LOW},
-    [JOY_K4]            = {'2',  0},
-    [JOY_K3]            = {'3', 0},
-    [JOY_K2]            = {'4',PAD_FREQ_LOW},
-    [JOY_K5]            = {'5',    0},
-    [JOY_K6]            = {'6',    0},
-    [JOY_K7]            = {'7',  0},
-    [JOY_K8]            = {'8', 0},
-    [JOY_K9]            = {'e', 0},
-    [JOY_K10]           = {'x', PAD_FREQ_LOW},
-};
-
-i_event_t *__post_key (i_event_t  *evts, i_event_t *event)
-{
-    gevt_t evt;
-
-    evt.p.x = event->x;
-    evt.p.y = event->y;
-    evt.e = event->state == keydown ? GUIACT : GUIRELEASE;
-    evt.sym = event->sym;
-
-    if (event->x == 0 && event->y == 0) {
-        gamepad_handle(&evt);
-        return NULL;
-    }
-
-    gui_resp(&gui, NULL, &evt);
-    return NULL;
-}
-
 static int gui_stdio_hook (const char *str, int len, char dir)
 {
-    if (com_console && dir == '>') {
-        if (gui_apendxy(com_console, 0, 0, "%s", str) < 0) {
-            gui_draw(&gui);
-            gui_printxy(com_console, 0, 0, "%s", str);
-        }
+    if (pane_console && dir == '>') {
+        win_con_append(pane_console, str, COLOR_WHITE);
     }
-
+    return 0;
 }
 
 void boot_gui_preinit (void)
 {
-    screen_t s;
+    
     prop_t prop;
     component_t *com;
 
-    input_soft_init(__post_key, gamepad_to_kbd_map);
-    vid_wh(&s);
-
-    gui.alloc_sfx = __gui_alloc_sfx;
-    gui.start_sfx = __gui_start_sfx;
+    boot_gui_bsp_init(&gui);
 
     prop.bcolor = COLOR_BLUE;
     prop.fcolor = COLOR_WHITE;
     prop.ispad = d_true;
     prop.user_draw = d_false;
 
-    dprintf("Bootloader enter\n");
-
-    gui_init(&gui, "gui", 20, 0, 0, s.width, s.height);
-    pane = gui_get_pane("pane");
+    pane = gui_get_pane(&gui, "pane", 0);
     gui_set_pane(&gui, pane);
 
     prop.ispad = d_false;
     prop.bcolor = COLOR_GREY;
-    com = gui_get_comp("title", NULL);
+    com = gui_get_comp(&gui, "title", NULL);
     gui_set_prop(com, &prop);
-    gui_set_comp(pane, com, 0, 0, 240, gui.dim.h / 2);
+    gui_set_comp(pane, com, 0, 0, gui.dim.w, 120);
     com_title = com;
 
     prop.bcolor = COLOR_GREEN;
-    com = gui_get_comp("browser", NULL);
+    com = gui_get_comp(&gui, "browser", NULL);
     gui_set_prop(com, &prop);
-    gui_set_comp(pane, com, 0, gui.dim.h / 2, 240, gui.dim.h / 2);
+    gui_set_comp(pane, com, 0, 120, gui.dim.w, gui.dim.h - 120);
     com->draw = b_draw_exec_list;
     com->act = b_handle_selected;
     com->user = &boot_bin_selected;
     com_browser = com;
 
     prop.bcolor = COLOR_BLACK;
-    com = gui_get_comp("console", NULL);
-    gui_set_prop(com, &prop);
-    gui_set_comp(pane, com, 240, 0, gui.dim.w - 240, gui.dim.h);
-    com_console = com;
+    pane_console = win_new_console(&gui, &prop, 0, 0, gui.dim.w, gui.dim.h);
 
-    alert_pane = win_new_allert(&gui, 200, 160,
-        _alert_close_hdlr, _alert_accept_hdlr, _alert_decline_hdlr);
-
-    gui_select_pane(&gui, pane);
+    gui_select_pane(&gui, pane_console);
 
     inout_clbk = gui_stdio_hook;
 }
@@ -441,6 +341,7 @@ int boot_main (int argc, const char **argv)
 {
     boot_read_path("");
     cmd_register_i32(&boot_program_bypas, "skipflash");
+    dprintf("Ready\n");
 
     while (!gui.destroy) {
 
@@ -452,6 +353,71 @@ int boot_main (int argc, const char **argv)
         }
     }
     return 0;
+}
+
+static i_event_t *__post_key (i_event_t  *evts, i_event_t *event)
+{
+    gevt_t evt;
+
+    evt.p.x = event->x;
+    evt.p.y = event->y;
+    evt.e = event->state == keydown ? GUIACT : GUIRELEASE;
+    evt.sym = event->sym;
+
+    if (event->x == 0 && event->y == 0) {
+        boot_handle_input(&evt);
+        return NULL;
+    }
+
+    gui_resp(&gui, NULL, &evt);
+    return NULL;
+}
+
+static void boot_gui_bsp_init (gui_t *gui)
+{
+    screen_t s;
+    dim_t dim = {0};
+
+    const kbdmap_t kbdmap[JOY_STD_MAX] =
+    {  
+        [JOY_UPARROW]       = {'u', 0},
+        [JOY_DOWNARROW]     = {'d', 0},
+        [JOY_LEFTARROW]     = {'l',0},
+        [JOY_RIGHTARROW]    = {'r', 0},
+        [JOY_K1]            = {'1', PAD_FREQ_LOW},
+        [JOY_K4]            = {'2',  0},
+        [JOY_K3]            = {'3', 0},
+        [JOY_K2]            = {'4',PAD_FREQ_LOW},
+        [JOY_K5]            = {'5',    0},
+        [JOY_K6]            = {'6',    0},
+        [JOY_K7]            = {'7',  0},
+        [JOY_K8]            = {'8', 0},
+        [JOY_K9]            = {'e', 0},
+        [JOY_K10]           = {'x', PAD_FREQ_LOW},
+    };
+
+    gui_bsp_api_t bspapi =
+    {
+        .mem =
+            {
+                .alloc = heap_alloc_shared,
+                .free = heap_free,
+            },
+        .sfx =
+            {
+                .alloc = NULL,
+                .release = NULL,
+                .play = NULL,
+                .stop = NULL,
+            },
+    };
+
+    vid_wh(&s);
+    dim.w = s.width;
+    dim.h = s.height;
+
+    gui_init(gui, "gui", 25, &dim, &bspapi);
+    input_soft_init(__post_key, kbdmap);
 }
 
 #endif /*BOOT*/

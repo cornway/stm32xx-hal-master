@@ -32,6 +32,16 @@ typedef struct {
 
 static int heap_size_total = -1;
 
+static inline int
+__heap_aligned (void *p)
+{
+    uint8_t pad = sizeof(arch_word_t) - 1;
+    if (((arch_word_t)p) & pad) {
+        return 0;
+    }
+    return 1;
+}
+
 #if !defined(BOOT)
 
 static inline void
@@ -159,10 +169,14 @@ void *heap_alloc_shared (int _size)
 {
     mchunk_t *p = NULL;
     int size = _size + sizeof(mchunk_t);
+
+    size = ROUND_UP(size, sizeof(arch_word_t));
     if (heap_user_size < size) {
         return NULL;
     }
     p = (mchunk_t *)heap_user_mem_ptr;
+    assert(__heap_aligned(p));
+
     heap_user_mem_ptr += size;
     heap_user_size -= size;
     p->freeable = 0;

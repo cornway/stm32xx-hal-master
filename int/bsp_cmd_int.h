@@ -4,7 +4,7 @@
 #include <bsp_api.h>
 
 typedef int (*cmd_func_t) (int argc, const char **argv);
-typedef void (*cmd_handler_t) (const char *cmd, int cmdlen);
+typedef int (*cmd_handler_t) (const char *cmd, int cmdlen);
 
 typedef enum {
     DVAR_FUNC,

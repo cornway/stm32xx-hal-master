@@ -25,7 +25,7 @@ typedef struct {
     struct bsp_sytem_api_s  sys;
     struct bsp_debug_api_s  dbg;
     struct bsp_input_api_s  in;
-    struct bsp_gui_api_s    gui;
+    struct app_gui_api_s    gui;
     struct bsp_cmd_api_s    cmd;
 } bsp_api_int_t;
 

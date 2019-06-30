@@ -88,10 +88,14 @@ void serial_led_off (void)
 static int con_echo (int argc, const char **argv)
 {
     int i;
+    char buf[128];
+
     dprintf("@> ");
 
     for (i = 0; i < argc; i++) {
-        dprintf("%s ", argv[i]);
+        snprintf(buf, sizeof(buf), "%s", argv[i]);
+        str_filter_printable(buf);
+        dprintf(" %s", buf);
     }
     dprintf("\n");
 

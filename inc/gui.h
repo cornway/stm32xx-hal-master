@@ -4,14 +4,7 @@
 
 typedef uint32_t rgba_t;
 
-typedef enum {
-    GUISFX_FIRST = 0,
-    GUISFX_OPEN = GUISFX_FIRST,
-    GUISFX_CLOSE,
-    GUISFX_CANTDOTHIS,
-    GUISFX_OTHER,
-    GUISFX_MAX,
-} gui_sfx_std_type_t;
+#define GUI_MAX_NAME 16
 
 typedef struct {
     int sfx_open, sfx_close;
@@ -43,24 +36,23 @@ typedef struct prop_s {
     gui_sfx_t sfx;
 } prop_t;
 
+#define GUI_COMMON(type, parenttype)  \
+struct {                                \
+    struct type *next;                  \
+    struct parenttype *parent;         \
+    rgba_t bcolor, fcolor;              \
+    void *ctxt, *user;                  \
+    dim_t dim;                          \
+    gui_sfx_t sfx;                      \
+    uint16_t focus: 1,                  \
+             type:  6,                  \
+             repaint: 1,                \
+             ispad:   1,                \
+             userdraw: 1;               \
+}
+
 typedef struct component_s {
-    struct component_s *next;
-    dim_t dim;
-    struct pane_s *parent;
-    uint32_t focus: 1,
-             type:  8,
-             repaint: 1,
-             userdraw: 1,
-             glow:     8,
-             ispad:      1,
-             showname:  1,
-             reserved: 11;
-
-    rgba_t bcolor, fcolor;
-
-    void *ctxt;
-    void *user;
-    uint16_t textx, texty;
+    GUI_COMMON(component_s, pane_s);
 
     comp_handler_t act, release;
     comp_handler_t draw;
@@ -68,31 +60,56 @@ typedef struct component_s {
     uint16_t text_offset;
     uint16_t text_size;
     uint16_t text_index;
-    gui_sfx_t sfx;
+
+    uint16_t glow:     8,
+             showname: 1,
+             reserved: 7;
+
     char name_text[1];
 } component_t;
 
+/*must be about fixed size*/
 typedef struct pane_s {
-    struct pane_s *next;
-    dim_t dim;
-    struct gui_s *parent;
-    uint32_t focus: 1,
-             type:  8,
-             repaint: 1,
-             iswin:    1,
-             reserved: 21;
-
-    rgba_t bcolor, fcolor;
-
-    void *ctxt;
-    void *user;
+    GUI_COMMON(pane_s, gui_s);
 
     component_t *onfocus;
     
     component_t *head, *tail;
     struct pane_s *prevselected;
-    char name[1];
+
+    char name[GUI_MAX_NAME];
 } pane_t;
+
+typedef struct gui_bsp_api_s {
+    struct mem_s {
+        void *(*alloc) (int);
+        void (*free) (void *);
+    } mem;
+    struct sfx_s {
+        int (*alloc) (const char *name);
+        void (*release) (int);
+        void (*play) (int);
+        void (*stop) (int);
+    } sfx;
+} gui_bsp_api_t;
+
+#define gui_bsp_alloc(gui) \
+    (gui)->bspapi.mem.alloc
+
+#define gui_bsp_free(gui) \
+    (gui)->bspapi.mem.free
+
+#define gui_bsp_sfxalloc(gui) \
+    (gui)->bspapi.sfx.alloc
+
+#define gui_bsp_sfxrelease(gui) \
+    (gui)->bspapi.sfx.release
+
+#define gui_bsp_sfxplay(gui) \
+    (gui)->bspapi.sfx.play
+
+#define gui_bsp_sfxstop(gui) \
+    (gui)->bspapi.sfx.stop
 
 typedef struct gui_s {
     void *dummy;
@@ -100,12 +117,14 @@ typedef struct gui_s {
     pane_t *head, *tail;
     pane_t *selected;
     void *user;
-    void (*alloc_sfx) (int *, gui_sfx_std_type_t);
-    void (*start_sfx) (int);
     uint32_t repainttsf;
     int32_t framerate;
     int32_t dbglvl;
+    uint8_t fonth, fontw;
     uint8_t destroy;
+    char name[GUI_MAX_NAME];
+
+    gui_bsp_api_t bspapi;
 } gui_t;
 
 typedef enum {
@@ -121,15 +140,17 @@ typedef struct gevt_s {
     char sym;
 } gevt_t;
 
-typedef struct bsp_gui_api_s {
+typedef struct app_gui_api_s {
     bspdev_t dev;
-} bsp_gui_api_t;
+} app_gui_api_t;
 
 #if BSP_INDIR_API
 
 #else /*BSP_INDIR_API*/
 
 #endif /*BSP_INDIR_API*/
+
+#define gui_print(com, args...) gui_printxy(com, 0, 0, args)
 
 d_bool dim_check (const dim_t *d, const point_t *p);
 void dim_place (dim_t *d, const dim_t *s);
@@ -138,26 +159,28 @@ void dim_get_origin (point_t *d, const dim_t *s);
 void dim_set_origin (dim_t *d, const point_t *s);
 
 void gui_init (gui_t *gui, const char *name, uint8_t framerate,
-                int x, int y, int w, int h);
+                dim_t *dim, gui_bsp_api_t *bspapi);
+
 void gui_destroy (gui_t *gui);
-pane_t *gui_get_pane (const char *name);
+pane_t *gui_get_pane (gui_t *gui, const char *name, int extra);
 void gui_set_pane (gui_t *gui, pane_t *pane);
 void gui_set_panexy (gui_t *gui, pane_t *pane, int x, int y, int w, int h);
 
-component_t *gui_get_comp (const char *name, const char *text);
+component_t *gui_get_comp (gui_t *gui, const char *name, const char *text);
 void gui_set_comp (pane_t *pane, component_t *c, int x, int y, int w, int h);
 void gui_set_prop (component_t *c, prop_t *prop);
 
 void gui_text (component_t *com, const char *text, int x, int y);
 void gui_printxy (component_t *com, int x, int y, const char *fmt, ...) PRINTF_ATTR(4, 5);
 int gui_apendxy (component_t *com, int x, int y, const char *fmt, ...) PRINTF_ATTR(4, 5);
-
-#define gui_print(com, args...) gui_printxy(com, 0, 0, args)
+int gui_string_direct (component_t *com, int line, rgba_t textcolor, const char *str);
 
 void gui_com_clear (component_t *com);
 void gui_draw (gui_t *gui);
 void gui_resp (gui_t *gui, component_t *com, gevt_t *evt);
-void gui_wake (gui_t *gui, const char *name);
+void gui_wakeup (gui_t *gui, const char *name);
+void gui_wakeup_com (gui_t *gui, component_t *com);
+void gui_wakeup_pane (pane_t *pane);
 pane_t *gui_search_pane (gui_t *gui, const char *name);
 component_t *gui_search_com (pane_t *pane, const char *name);
 void gui_select_pane (gui_t *gui, pane_t *pane);
@@ -178,4 +201,8 @@ pane_t *win_new_allert
 
 int win_alert (gui_t *gui, const char *text);
 int win_close_allert (gui_t *gui, pane_t *pane);
+
+pane_t *win_new_console (gui_t *gui, prop_t *prop, int x, int y, int w, int h);
+int win_con_append (pane_t *pane, const char *str, rgba_t textcolor);
+
 
