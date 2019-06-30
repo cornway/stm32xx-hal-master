@@ -94,7 +94,6 @@ static int con_echo (int argc, const char **argv)
 
     for (i = 0; i < argc; i++) {
         snprintf(buf, sizeof(buf), "%s", argv[i]);
-        str_filter_printable(buf);
         dprintf(" %s", buf);
     }
     dprintf("\n");

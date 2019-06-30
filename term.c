@@ -66,6 +66,7 @@ int str_tokenize (char **tok, int tokcnt, char *str)
     *tok = p;
     p = strtok(str, " ");
     while (p && tokcnt > 0) {
+        str_filter_printable(p);
         p = strtok(NULL, " ");
         tok++;
         tokcnt--;
@@ -171,12 +172,11 @@ static void __bsp_in_handle_cmd
 void hexdump (const uint8_t *data, int len, int rowlength)
 {
     int x, y, xn;
-    dprintf("%s :\n", __func__);
     for (y = 0; y <= len / rowlength; y++) {
         xn = len < rowlength ? len : rowlength;
-        dprintf("0x%8x:0x%8x    ", y, y + xn);
+        dprintf("[0x%04x:0x%04x] : ", y, y + xn);
         for (x = 0; x < xn; x++) {
-            dprintf("0x%02x, ", data[x + y * rowlength]);
+            dprintf("0x%02x ", data[x + y * rowlength]);
         }
         dprintf("\n");
     }

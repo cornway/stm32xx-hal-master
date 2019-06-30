@@ -13,6 +13,7 @@
 #define CMD_MAX_NAME (16)
 #define CMD_MAX_PATH (128)
 #define CMD_MAX_BUF (256)
+#define CMD_MAX_ARG (16)
 
 #define FLAG_EXPORT (1 << 0)
 
@@ -28,6 +29,21 @@ typedef struct {
     cmd_func_t func;
 } cmd_func_map_t;
 
+typedef struct cmd_keyval_s {
+    const char *key;
+    void *val;
+    const char fmt[3];
+    uint8_t valid;
+    void (*handle) (struct cmd_keyval_s *, const char *);
+} cmd_keyval_t;
+
+/**_S - means 'short', for '-x' cases*/
+#define CMD_KVI32_S(c, v) \
+    {c, v, "%i", 0, NULL}
+
+#define CMD_KVSTR_S(c, v) \
+    {c, v, "%s", 0, NULL}
+
 static dvar_int_t *dvar_head = NULL;
 
 static int _cmd_register_var (cmdvar_t *var, const char *name);
@@ -40,7 +56,7 @@ static int __cmd_exec_priv (int argc, const char **argv);
 static int __cmd_is_readonly (const char *name);
 static int __cmd_fs_print_dir (int argc, const char **argv);
 static int _cmd_export_all (int argc, const char **argv);
-static int __cmd_test_fs (int argc, const char **argv);
+static int __cmd_fs_touch (int argc, const char **argv);
 static int cmd_brd_reset (int argc, const char **argv);
 static int __cmd_fs_mkdir (int argc, const char **argv);
 static int cmd_install_exec (int argc, const char **argv);
@@ -54,6 +70,8 @@ static int cmd_stdin_handle (int argc, const char **argv);
 static int cmd_serial_config (int argc, const char **argv);
 static int __cmd_set_stdin_char (int num);
 int cmd_cat (int argc, const char **argv);
+static int cmd_kvpair_process_keys (cmd_keyval_t **begin, cmd_keyval_t **end, int argc,
+                                        const char **argv_dst, const char **argv);
 
 static int cmd_var_exist (PACKED const char *name, dvar_int_t **_prev, dvar_int_t **_dvar)
 {
@@ -190,19 +208,193 @@ static void cmd_unregister_all (void)
     dvar_head = NULL;
 }
 
+static cmd_keyval_t *
+__cmd_collect_parm_short (cmd_keyval_t **begin, cmd_keyval_t **end,
+                            const char *str)
+{
+    cmd_keyval_t *kv;
+    const char *pstr = str;
+
+    while (begin <= end) {
+        if (begin[0]->key[0] == str[0]) {
+            kv = begin[0];
+            if (end[0]) {
+                begin[0] = end[0];
+                end[0] = NULL;
+            }
+            return kv;
+        }
+        begin++;
+    }
+    return NULL;
+}
+
+void cmd_keyval_parse_val (cmd_keyval_t *kv, const char *str)
+{
+    if (!sscanf(str, kv->fmt, kv->val)) {
+        dprintf("%s() : fail\n", __func__);
+    }
+}
+
+static int __cmd_kvpair_check (const char *str, int *iscombo)
+{
+    int dashes = 0;
+
+    *iscombo = 0;
+    while (*str == '-') {
+        dashes++; str++;
+    }
+    if (str[0] && str[1]) {
+        /*More than one key present : -xyz..*/
+        *iscombo = 1;
+    }
+    return dashes;
+}
+
+static const char **
+__cmd_kv_extend_combo (const char **argv_dst, const char *cmb)
+{
+    while (*cmb) {
+        if (isalpha(*cmb)) {
+            argv_dst[0] = cmb;
+            argv_dst++;
+        }
+        cmb++;
+    }
+    return argv_dst;
+}
+
+static int __cmd_kvpair_collect (int argc, const char **keys,
+                                    const char **params, const char **src,
+                                    uint8_t *flags) /*!! N(flags) == N(src)*/
+{
+    int dashes, iscombo;
+    int paramcnt = 0;
+
+    while (argc > 0) {
+
+        dashes = __cmd_kvpair_check(src[0], &iscombo);
+
+        if (dashes > 2) {
+
+            dprintf("%s() : fail \'%s\'\n", __func__, src[0]);
+        } else if (dashes == 2) {
+
+            assert(!iscombo);
+            /*TODO : support for "--abcd." sequences ?*/
+            dprintf("%s() : not yet\n", __func__);
+        } else if (dashes) {
+
+            const char *key = src[0] += dashes;
+
+            if (iscombo) {
+                keys = __cmd_kv_extend_combo(keys, key);
+            } else {
+                keys[0] = key;
+            }
+            flags[0] = 'k'; /*mark key*/
+            /*collect parameter : -x 'val'*/
+            if (argc > 1) {
+                if (__cmd_kvpair_check(src[1], &iscombo) == 0) {
+                    flags[1] = 'v'; /*mark next as value*/
+                    keys[1] = src[1];
+                    keys++; flags++;
+                    src++; argc--;
+                } else {
+                    /*Next key follows, nothing todo*/
+                }
+            }
+            keys++; flags++;
+        } else {
+            params[0] = src[0];
+            params++;
+            paramcnt++;
+        }
+        src++; argc--;
+    }
+    keys[0] = NULL;
+    return paramcnt;
+}
+static int
+__cmd_kvpair_proc_keys
+                (cmd_keyval_t **begin, cmd_keyval_t **end, 
+                const char **params, const char **keys, /*Null terminated*/
+                uint8_t *flags)
+{
+    int paramcnt = 0;
+    cmd_keyval_t *kv = NULL;
+
+    for (; begin[0] && keys[0]; ) {
+
+        kv = __cmd_collect_parm_short(begin, end, keys[0]);
+        if (!kv) {
+            assert(*flags == 'k');
+            dprintf("unknown param : \'%s\'", keys[0]);
+            return -1;
+        }
+        assert(!end[0]);
+        kv->valid = 1;
+        end--; keys++; flags++;
+
+        if (*flags == 'v') {
+            if (!keys[0]) {
+                dprintf("%s() : oops!\n", __func__);
+                break;
+            }
+            if (!kv->val) {
+                /*Does not require parameter*/
+                params[0] = keys[0]; /*Push back to parameters*/
+                params++;
+                paramcnt++;
+            } else if (kv->handle) {
+                kv->handle(kv, keys[0]);
+            } else {
+                cmd_keyval_parse_val(kv, keys[0]);
+            }
+            flags++; keys++;
+        }
+    }
+    return paramcnt;
+}
+
+static int
+cmd_kvpair_process_keys (cmd_keyval_t **begin, cmd_keyval_t **end, int argc,
+                                        const char **params, const char **src)
+{
+    const char *keys[CMD_MAX_ARG];
+    uint8_t flags[CMD_MAX_ARG];
+    int moreparams = 0;
+
+    if (argc < 1) {
+        /*at least one arg required*/
+        return argc;
+    }
+
+    argc = __cmd_kvpair_collect(argc, keys, params, src, flags);
+
+    moreparams = __cmd_kvpair_proc_keys(begin, end, params, keys, flags);
+    if (moreparams < 0) {
+        return -1;
+    }
+
+    return argc + moreparams;
+}
+
+
 const cmd_func_map_t cmd_func_tbl[] =
 {
     {"print",       __cmd_print_env},
     {"register",    __cmd_register_var},
     {"unreg",       __cmd_unregister_var},
-    {"inout",         __cmd_exec_priv},
+    {"bsp",         __cmd_exec_priv},
     {"list",        __cmd_fs_print_dir},
+    {"cat",         cmd_cat},
 };
 
 cmd_func_map_t cmd_priv_func_tbl[] =
 {
     {"export",  _cmd_export_all}, /*Must be first*/
-    {"testfs",    __cmd_test_fs},
+    {"testfs",  __cmd_fs_touch},
     {"reset",   cmd_brd_reset},
     {"mkdir",   __cmd_fs_mkdir},
     {"load",    cmd_install_exec},
@@ -212,7 +404,7 @@ cmd_func_map_t cmd_priv_func_tbl[] =
     {"modprobe",cmd_mod_probe},
     {"stdin",   cmd_stdin_handle},
     {"serial",  cmd_serial_config},
-    {"cat",     cmd_cat},
+    
 };
 
 typedef enum {
@@ -260,34 +452,72 @@ void cmd_tickle (void)
 
 int cmd_cat (int argc, const char **argv)
 {
-    int f;
-    int limit = -1;
-    int offset = 0;
+    int f, fseek = 0;
+    int a = 0, b = 0, c = -1, h = 0;
     char str[256], *pstr;
+    const char *argvbuf[CMD_MAX_ARG];
+
+    cmd_keyval_t kvarr[] = 
+    {
+        CMD_KVI32_S("n", &c),
+        CMD_KVI32_S("a", &a),
+        CMD_KVI32_S("b", &b),
+        CMD_KVI32_S("h", &h),
+    };
+    cmd_keyval_t *kvlist[arrlen(kvarr)];
+
+    for (a = 0; a < arrlen(kvarr); a++) kvlist[a] = &kvarr[a];
+    a = 0;
+
+    argc = cmd_kvpair_process_keys(&kvlist[0], &kvlist[arrlen(kvlist) - 1],
+                        argc, argvbuf, argv);
 
     if (argc < 1) {
+        dprintf("%s() : unexpected arguments\n", __func__);
         return -1;
     }
     d_open(argv[0], &f, "r");
     if (f < 0) {
+        dprintf("path does not exist : %s\n", argv[0]);
         return -1;
     }
-    if (argc > 2) {
-        if (!sscanf(argv[1], "%i", &limit)) {
-            limit = -1;
-        }
+    if (c && a && b) {
+        fseek = c - a;
+    } else if (!a) {
+        b = 0;
+    } else {
+        fseek = a;
     }
-    if (offset) {
-        d_seek(f, offset, DSEEK_SET);
+    if (fseek) {
+        if (fseek < 0) {
+            fseek = d_size(f) + fseek;
+            assert(fseek > 0);
+        }
+        d_seek(f, fseek, DSEEK_SET);
     }
     pstr = str;
-    while (!d_eof(f)) {
-        pstr = d_gets(f, pstr, sizeof(str));
-        if (!pstr) {
-            break;
-        }
-        dprintf("%s\n", str);
+    if (h > 0 && h < 4) {
+        h = 4;
     }
+    dprintf("******************************\n");
+    while (!d_eof(f) && c--) {
+        if (h) {
+            int len = sizeof(str) / 2;
+
+            len = d_read(f, pstr, ROUND_DOWN(len, h));
+            if (!len) {
+                break;
+            }
+            hexdump(str, len, h);
+        } else {
+            pstr = d_gets(f, pstr, sizeof(str));
+            if (!pstr) {
+                break;
+            }
+            dprintf("%s\n", str);
+        }
+    }
+    d_close(f);
     dprintf("\n");
     return 0;
 }
@@ -373,6 +603,8 @@ static int __cmd_set_stdin_file (const char *path, const char *attr)
         g_stdin_eof_timeout_var = d_time() + g_stdin_eof_timeout;
         stdin_to_path_bytes_cnt = 0;
         bsp_stdin_type = STDIN_PATH;
+    } else {
+        dprintf("unable to create : \'%s\'\n", path);
     }
     return f;
 }
@@ -389,20 +621,33 @@ static int cmd_stdin_path_close (void)
 
 static int __cmd_stdin_redirect (int argc, const char **argv)
 {
-    int num = -1, tmp = 2;
-    char *attr = "+w";
+    int num = -1;
+    char attr[3] = "+w";
+    int bytes_limit;
+    char payload[256];
+    const char *argvbuf[CMD_MAX_ARG];
 
-    if (argc > 1) {
-        tmp++;
-        attr = (char *)argv[1];
+    cmd_keyval_t kvpload =
+        CMD_KVSTR_S("p", &payload[0]);
+    cmd_keyval_t kvarr[] = 
+    {
+        CMD_KVI32_S("n", &bytes_limit),
+        CMD_KVSTR_S("a", &attr[0]),
+    };
+    cmd_keyval_t *kvlist[] =
+        {&kvarr[0], &kvarr[1], &kvpload};
+
+    /*argv[0] must be a path*/
+    argc = cmd_kvpair_process_keys(&kvlist[0], &kvlist[arrlen(kvlist) - 1],
+                        argc - 1, argvbuf, &argv[1]);
+
+    if (argc < 0) {
+        dprintf("%s() : unexpected arguments\n", __func__);
+        return -1;
     }
-    if (argc > 2) {
-        tmp++;
-        if (!sscanf(argv[2], "%i", &stdin_to_path_bytes_limit)) {
-            dprintf("%s() : cannot set limit\n", __func__);
-            stdin_to_path_bytes_limit = -1;
-        }
-    }
+
+    stdin_to_path_bytes_limit = bytes_limit;
+
     dprintf("dst=[%s] att=[%s] bytes=<%u>\n",
             argv[0], attr, stdin_to_path_bytes_limit);
     if (sscanf(argv[0], "%i", &num)) {
@@ -412,8 +657,15 @@ static int __cmd_stdin_redirect (int argc, const char **argv)
         if (stdin_file < 0) {
             return 0;
         }
+        if (kvpload.valid) {
+            /*Local payload, that will be written to the file*/
+            if (stdin_to_path_bytes_limit > 0) {
+                stdin_to_path_bytes_limit = min(stdin_to_path_bytes_limit, strlen(payload));
+            }
+            cmd_push("", payload, NULL, NULL);
+        }
     }
-    return argc - tmp;
+    return argc;
 }
 
 static int cmd_stdin_handle (int argc, const char **argv)
@@ -628,47 +880,36 @@ void cmd_exec_queue (cmd_handler_t hdlr)
      }
 }
 
-static int __cmd_test_fs (int argc, const char **argv)
+static int __cmd_fs_touch (int argc, const char **argv)
 {
-    const char *fname = "test.txt";
-    char buf[128], *namep = (char *)fname;
-    int f, errors = 0;
+    const char *attr = "r";
+    const char *path;
+    int f;
+    int fcreate = 0;
 
+    if (argc < 1) {
+        dprintf("usage: touch <path> +w/w/r/+r");
+        return 0;
+    }
     if (argc > 1) {
-        namep = (char *)argv[0];
+        attr = argv[1];
+        argc--;
     }
-    dprintf("file name : %s\n", namep);
-
-    d_open(namep, &f, "+w");
+    if (attr[0] == '+') {
+        fcreate = 1;
+    }
+    argc--;
+    path = argv[0];
+    d_open(path, &f, attr);
     if (f < 0) {
-        goto failopen;
-    }
-    dprintf("file write :\n");
-    dprintf("%s()\n", __func__);
-
-    if (!d_printf(f, "%s()\n", __func__)) {
-        errors++;
-    }
-    d_close(f);
-
-    d_open(namep, &f, "r");
-    if (f < 0) {
-        goto failopen;
-    }
-    dprintf("file read :\n");
-    while (!d_eof(f)) {
-        if (!d_gets(f, buf, sizeof(buf))) {
-            errors++;
+        if (!fcreate) {
+            dprintf("touch: \'%s\' existing, use [+w] to overwrite :\n", path);
+            dprintf("[ touch <path> +w ]\n");
         }
-        dprintf("\'%s\'\n", buf);
+        return 0;
     }
     d_close(f);
-    d_unlink(namep);
-    dprintf("errors : %d\n", errors);
-    return 0;
-failopen:
-    dprintf("%s() : failed to open \'%s\'\n", __func__, namep);
-    return 0;
+    return argc;
 }
 
 static int __cmd_fs_mkdir (int argc, const char **argv)
@@ -685,37 +926,60 @@ static int __cmd_fs_mkdir (int argc, const char **argv)
 static int cmd_brd_reset (int argc, const char **argv)
 {
 extern void SystemSoftReset (void);
-    dprintf("Resetting...\n");
+    dprintf("board reset...\n");
     serial_flush();
     SystemSoftReset();
     assert(0);
     return -1;
 }
 
-static int __dir_list (char *pathbuf, int recursion, const char *path);
+#define MAX_RECURSION 16
+
+static int __dir_list (char *pathbuf, int recursion,
+                        int maxrecursion, const char *path);
+
 
 static int __cmd_fs_print_dir (int argc, const char **argv)
 {
     const char *ppath;
     char pathbuf[CMD_MAX_PATH];
+    const char *argvbuf[16];
+    uint32_t recursion = MAX_RECURSION;
 
-    if (argc > 1) {
-        ppath = argv[0];
+    cmd_keyval_t kva = CMD_KVI32_S("n", &recursion);
+    cmd_keyval_t *kvlist[] ={&kva};
+
+    assert(arrlen(argvbuf) > argc);
+
+    argc = cmd_kvpair_process_keys(&kvlist[0], &kvlist[arrlen(kvlist) - 1],
+                                argc, argvbuf, argv);
+
+    if (argc < 0) {
+        return -1;
+    }
+
+    if (argc >= 1) {
+        ppath = argvbuf[0];
     } else {
         ppath = "";
     }
-    return __dir_list(pathbuf, 0, ppath);
+    return __dir_list(pathbuf, 0, recursion, ppath);
 }
 
-static int __dir_list (char *pathbuf, int recursion, const char *path)
+static int __dir_list (char *pathbuf, int recursion,
+                        int maxrecursion, const char *path)
 {
     int h;
     fobj_t obj;
 
+    if (recursion >= maxrecursion) {
+        return 0;
+    }
+
     h = d_opendir(path);
     if (h < 0) {
         dprintf("cannot open path : %s\n", path);
-        return -1;
+        return 0;
     }
     while(d_readdir(h, &obj) >= 0) {
 
@@ -723,7 +987,9 @@ static int __dir_list (char *pathbuf, int recursion, const char *path)
             recursion * 2, "-", obj.name, obj.type == FTYPE_FILE ? "f" : "d");
         if (obj.type == FTYPE_DIR) {
             sprintf(pathbuf, "%s/%s", path, obj.name);
-            __dir_list(pathbuf, recursion + 1, pathbuf);
+            if (__dir_list(pathbuf, recursion + 1, maxrecursion, pathbuf) < 0) {
+                break;
+            }
         }
     }
     d_closedir(h);
