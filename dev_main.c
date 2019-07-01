@@ -250,6 +250,8 @@ static bsp_user_api_t user_api =
 
 int dev_main (void)
 {
+    char **argv;
+    int argc;
     g_bspapi = bsp_api_attach();
 #if defined(BSP_DRIVER)
     CPU_CACHE_Enable();
@@ -259,16 +261,16 @@ int dev_main (void)
     heap_init();
     dev_init();
 
-    audio_conf("samplerate=22050, volume=100");
-
     VID_PreConfig();
 #if defined(BOOT)
     boot_gui_preinit();
 #endif
 #if BSP_INDIR_API
+extern char **bsp_argc_argv_get (int *argc);
     sys_user_attach(&user_api);
+    argv = bsp_argc_argv_get(&argc);
 #endif /*BSP_INDIR_API*/
-    mainloop(0, NULL);
+    mainloop(argc, argv);
 
     return 0;
 }
