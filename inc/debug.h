@@ -16,7 +16,7 @@
 typedef int (*serial_rx_clbk_t) (int, char **);
 typedef int (*inout_clbk_t) (const char *, int, char);
 
-extern inout_clbk_t inout_clbk;
+extern inout_clbk_t inout_early_clbk;
 
 typedef struct bsp_debug_api_s {
     bspdev_t dev;

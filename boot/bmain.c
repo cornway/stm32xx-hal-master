@@ -32,6 +32,7 @@ bsp_bin_t *boot_bin_head = NULL;
 bsp_bin_t *boot_bin_selected = NULL;
 
 static void boot_gui_bsp_init (gui_t *gui);
+static int gui_stdout_hook (int argc, const char **argv);
 
 bsp_exec_file_type_t
 bsp_bin_file_compat (const char *in)
@@ -230,6 +231,8 @@ int bsp_start_exec (arch_word_t *progaddr)
 {
     dprintf("Starting app... \n");
 
+    bsp_stout_unreg_if(gui_stdout_hook);
+    gui_destroy(&gui);
     dev_deinit();
     bhal_execute_app(progaddr);
     return 0;
@@ -283,11 +286,11 @@ static void boot_handle_input (gevt_t *evt)
     
 }
 
-static int gui_stdio_hook (const char *str, int len, char dir)
+static int gui_stdout_hook (int argc, const char **argv)
 {
-    if (pane_console && dir == '>') {
-        win_con_append(pane_console, str, COLOR_WHITE);
-    }
+    assert(argc > 0);
+    gui_draw(&gui);
+    win_con_append(pane_console, argv[0], COLOR_WHITE);
     return 0;
 }
 
@@ -328,7 +331,7 @@ void boot_gui_preinit (void)
 
     gui_select_pane(&gui, pane_console);
 
-    inout_clbk = gui_stdio_hook;
+    bsp_stdout_register_if(gui_stdout_hook);
 }
 
 int boot_main (int argc, const char **argv)
@@ -340,11 +343,8 @@ int boot_main (int argc, const char **argv)
     while (!gui.destroy) {
 
         gui_draw(&gui);
-        bsp_tickle();
         input_proc_keys(NULL);
-        if (gui.destroy) {
-            gui_destroy(&gui);
-        }
+        bsp_tickle();
     }
     return 0;
 }

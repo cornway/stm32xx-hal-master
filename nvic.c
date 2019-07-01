@@ -36,6 +36,8 @@ static void NVIC_init_table (void)
     }
 
     initialized = SET;
+    irq_saved_mask = 0;
+    irq_active_mask = 0;
 }
 
 /*
@@ -178,6 +180,22 @@ void irq_restore (irqmask_t flags)
 void irq_bmap (irqmask_t *flags)
 {
     *flags = irq_active_mask;
+}
+
+void irq_destroy (void)
+{
+    int i;
+    IRQn_Type irq;
+
+    for (i = 0; i < irq_maptable_index;) {
+        irq = irq_maptable[i].irq;
+
+        NVIC_DisableIRQ(irq);
+        NVIC_ClearPendingIRQ(irq);
+        i++;
+    }
+
+    NVIC_init_table();
 }
 
 void HAL_NVIC_SetPriority(IRQn_Type IRQn, uint32_t PreemptPriority, uint32_t SubPriority)

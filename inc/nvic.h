@@ -12,5 +12,6 @@ void irq_save (irqmask_t *flags);
 void irq_restore (irqmask_t flags);
 void irq_bmap (irqmask_t *flags);
 void NVIC_dump (void);
+void irq_destroy (void);
 
 #endif /*__NVIC_H__*/
