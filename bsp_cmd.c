@@ -1039,7 +1039,7 @@ int cmd_txt_exec (const char *cmd, int len)
 {
     char buf[256];
     len = snprintf(buf, sizeof(buf), "%s", cmd);
-    bsp_stdin_forward(buf, len);
+    bsp_inout_forward(buf, len, '<');
     /*TODO : cmd errno ?*/
     return 0;
 }
@@ -1084,12 +1084,13 @@ int cmd_start_executable (int argc, const char **argv)
         return -1;
     }
 
-    if (doinstall && bsp_install_exec(progaddr, argv[0], argc, argv) < 0) {
+    argc = argc - 1 - doinstall;
+    if (doinstall && bsp_install_exec((arch_word_t *)progaddr, argv[0], 0, NULL) < 0) {
         return 0;
     }
     bsp_start_exec((arch_word_t *)progaddr);
 
-    return argc - 1 - doinstall;
+    return 0;
 }
 
 static int cmd_mod_insert (int argc, const char **argv)

@@ -180,23 +180,21 @@ static void SystemDump (void)
 
 void dev_deinit (void)
 {
-extern void screen_release (void);
-extern void Sys_LeakCheck (void);
-
     irqmask_t irq = NVIC_IRQ_MASK;
     dprintf("%s() :\n", __func__);
     bsp_stdin_unreg_if(con_echo);
 
-    screen_release();
-    vid_deinit();
+    cmd_deinit();
     dev_io_deinit();
     audio_deinit();
     profiler_deinit();
     input_bsp_deinit();
     vid_deinit();
+    heap_leak_check();
+    serial_deinit();
 
     irq_save(&irq);
-    assert(!irq);
+    irq_destroy();
     HAL_DeInit();
 }
 

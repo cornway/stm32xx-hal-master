@@ -29,8 +29,7 @@ typedef void (*bhal_cplth_t) (const char *, int);
 
 int bsp_install_exec (arch_word_t *progaddr, const char *path,
                           int argc, const char *argv);
-int bsp_start_exec (arch_word_t *progaddr, const char *path,
-                          int argc, const char *argv);
+int bsp_start_exec (arch_word_t *progaddr);
 
 void *bsp_cache_bin_file (const bsp_heap_api_t *heapapi, const char *path, int *binsize);
 bsp_bin_t *bsp_setup_bin_desc (bsp_bin_t *bin, const char *path,

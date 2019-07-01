@@ -550,9 +550,10 @@ int bsp_serial_send (const void *data, size_t cnt)
     uart_desc_t *uart_desc = debug_port();
     int ret = 0;
 
-    if (inout_clbk) {
-        inout_clbk(data, cnt, '>');
+    if (inout_early_clbk) {
+        inout_early_clbk(data, cnt, '>');
     }
+    bsp_inout_forward(data, cnt, '>');
 
     irq_save(&irq_flags);
 
@@ -739,10 +740,10 @@ void serial_tickle (void)
     dma_fifo_flush(&rxstream, buf, &cnt);
     irq_restore(irq);
 
-    if (inout_clbk) {
-        inout_clbk(buf, cnt, '<');
+    if (inout_early_clbk) {
+        inout_early_clbk(buf, cnt, '<');
     }
-    bsp_stdin_forward(buf, cnt);
+    bsp_inout_forward(buf, cnt, '<');
 }
 
 static void dma_rx_xfer_hanlder (struct __DMA_HandleTypeDef * hdma)

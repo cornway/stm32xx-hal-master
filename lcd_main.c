@@ -110,13 +110,7 @@ int vid_init (void)
     return 0;
 }
 
-void vid_deinit (void)
-{
-    dprintf("%s() :\n", __func__);
-    BSP_LCD_DeInitEx();
-}
-
-void screen_release (void)
+static void vid_release (void)
 {
     if (lcd_active_cfg && lcd_active_cfg->fb_mem) {
         memset(lcd_active_cfg->fb_mem, 0, lcd_active_cfg->fb_size);
@@ -125,6 +119,13 @@ void screen_release (void)
         memset(lcd_active_cfg, 0, sizeof(*lcd_active_cfg));
     }
     lcd_active_cfg = NULL;
+}
+
+void vid_deinit (void)
+{
+    dprintf("%s() :\n", __func__);
+    vid_release();
+    BSP_LCD_DeInitEx();
 }
 
 void vid_wh (screen_t *s)

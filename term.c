@@ -10,13 +10,16 @@
 
 #define TERM_MAX_CMD_BUF 256
 
-#define DEBUG_SERIAL_MAX_CLBK 4
+#define INOUT_MAX_FUNC 4
 #define MAX_TOKENS 16
 
-static cmd_func_t serial_rx_clbk[DEBUG_SERIAL_MAX_CLBK] = {NULL};
+static cmd_func_t serial_rx_clbk[INOUT_MAX_FUNC] = {NULL};
 static cmd_func_t *last_rx_clbk = &serial_rx_clbk[0];
 
-inout_clbk_t inout_clbk = NULL;
+static cmd_func_t serial_tx_clbk[INOUT_MAX_FUNC] = {NULL};
+static cmd_func_t *last_tx_clbk = &serial_tx_clbk[0];
+
+inout_clbk_t inout_early_clbk = NULL;
 
 
 static inline char str_char_printable (char c)
@@ -77,31 +80,56 @@ int str_tokenize (char **tok, int tokcnt, char *str)
 
 void bsp_stdin_register_if (cmd_func_t clbk)
 {
-    if (last_rx_clbk == &serial_rx_clbk[DEBUG_SERIAL_MAX_CLBK]) {
+    if (last_rx_clbk == &serial_rx_clbk[INOUT_MAX_FUNC]) {
         return;
     }
     *last_rx_clbk++ = clbk;
 }
 
-void bsp_stdin_unreg_if (cmd_func_t clbk)
+void bsp_stdout_register_if (cmd_func_t clbk)
 {
-    cmd_func_t *first = &serial_rx_clbk[0];
-    if (!last_rx_clbk) {
+    if (last_tx_clbk == &serial_tx_clbk[INOUT_MAX_FUNC]) {
         return;
     }
-    while (first != &serial_rx_clbk[DEBUG_SERIAL_MAX_CLBK]) {
-        if (*first == clbk) {
-            *first = *(--last_rx_clbk);
-            *last_rx_clbk = NULL;
-            return;
+    *last_tx_clbk++ = clbk;
+}
+
+static cmd_func_t *__bsp_inout_unreg_if (cmd_func_t *begin, cmd_func_t *end,
+                                    cmd_func_t *last, cmd_func_t h)
+{
+    cmd_func_t *first = &begin[0];
+    if (!last) {
+        return NULL;
+    }
+    while (first != &end[0]) {
+        if (*first == h) {
+            *first = *(--last);
+            *last = NULL;
+            return NULL;
         }
         first++;
     }
+    return last;
+}
+
+void bsp_stdin_unreg_if (cmd_func_t clbk)
+{
+    last_rx_clbk = __bsp_inout_unreg_if(&serial_rx_clbk[0], &serial_rx_clbk[INOUT_MAX_FUNC],
+                          last_rx_clbk, clbk);
+}
+
+void bsp_stout_unreg_if (cmd_func_t clbk)
+{
+    last_tx_clbk = __bsp_inout_unreg_if(&serial_tx_clbk[0], &serial_tx_clbk[INOUT_MAX_FUNC],
+                          last_tx_clbk, clbk);
 }
 
 static void __bsp_stdin_iter_fwd 
                 (cmd_func_t *_begin, cmd_func_t *end,
                 int argc, const char **argv);
+
+static void
+__bsp_stout_iter_fwd_raw (cmd_func_t *_begin, cmd_func_t *end, int argc, const char **argv);
 
 cmd_func_t stdin_redir = NULL;
 
@@ -119,13 +147,13 @@ cmd_func_t bsp_stdin_unstash (cmd_func_t func)
     return tmp;
 }
 
-void bsp_stdin_forward (char *buf, int size)
+void bsp_inout_forward (char *buf, int size, char dir)
 {
     char *argv_buf[MAX_TOKENS] = {NULL};
     const char **argv = (const char **)&argv_buf[0];
     int argc = MAX_TOKENS, offset = 0;
 
-    if (stdin_redir) {
+    if (dir == '<' && stdin_redir) {
         offset = size;
         size = stdin_redir(size, (const char **)&buf);
         offset = offset - size;
@@ -133,8 +161,30 @@ void bsp_stdin_forward (char *buf, int size)
     if (!size) {
         return;
     }
-    argc = str_tokenize(&argv_buf[0], argc, buf + offset);
-    __bsp_stdin_iter_fwd(&serial_rx_clbk[0], last_rx_clbk, argc, argv);
+    switch (dir) {
+        case '>':
+            argc = 1;
+            argv[0] = buf;
+            __bsp_stout_iter_fwd_raw(&serial_tx_clbk[0], last_tx_clbk, argc, argv);
+        break;
+        case '<':
+            argc = str_tokenize(&argv_buf[0], argc, buf + offset);
+            __bsp_stdin_iter_fwd(&serial_rx_clbk[0], last_rx_clbk, argc, argv);
+        break;
+        default: assert(0);
+    }
+    
+}
+
+
+static void
+__bsp_stout_iter_fwd_raw (cmd_func_t *_begin, cmd_func_t *end, int argc, const char **argv)
+{
+    cmd_func_t *begin = _begin;
+    while (*begin && begin < end) {
+        (*begin)(argc, argv);
+        begin++;
+    };
 }
 
 static void __bsp_stdin_iter_fwd 

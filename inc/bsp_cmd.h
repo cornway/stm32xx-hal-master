@@ -38,7 +38,7 @@ int cmd_register_float (float *var, const char *name);
 int cmd_register_str (char *str, int len, const char *name);
 int cmd_register_func (cmd_func_t func, const char *name);
 int cmd_unregister (const char *name);
-void bsp_stdin_forward (char *buf, int size);
+void bsp_inout_forward (char *buf, int size, char dir);
 int cmd_txt_exec (const char *cmd, int len);
 void cmd_exec_dsr (const char *cmd, const char *text, void *user1, void *user2);
 void cmd_exec_pending (cmd_handler_t hdlr);
