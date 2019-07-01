@@ -257,7 +257,7 @@ int dev_main (void)
 
     VID_PreConfig();
     boot_gui_preinit();
-#if defined(APPLICATION)
+#if BSP_INDIR_API
     {
         static bsp_user_api_t user_api =
         {
@@ -269,7 +269,7 @@ int dev_main (void)
         };
         sys_user_attach(&user_api);
     }
-#endif /*APPLICATION*/
+#endif /*BSP_INDIR_API*/
     mainloop(0, NULL);
 
     return 0;
