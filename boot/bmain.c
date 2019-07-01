@@ -204,8 +204,7 @@ void *bsp_cache_bin_file (const bsp_heap_api_t *heapapi, const char *path, int *
     return cache;
 }
 
-int bsp_install_exec (arch_word_t *progaddr, const char *path,
-                          int argc, const char *argv)
+int bsp_install_exec (arch_word_t *progaddr, const char *path)
 {
     void *bindata;
     int binsize = 0, err = 0;
@@ -227,10 +226,13 @@ int bsp_install_exec (arch_word_t *progaddr, const char *path,
     return 0;
 }
 
-int bsp_start_exec (arch_word_t *progaddr)
+extern void bsp_argc_argv_set (int argc, const char **argv);
+
+int bsp_start_exec (arch_word_t *progaddr, int argc, const char **argv)
 {
     dprintf("Starting app... \n");
 
+    bsp_argc_argv_set(argc, argv);
     bsp_stout_unreg_if(gui_stdout_hook);
     gui_destroy(&gui);
     dev_deinit();

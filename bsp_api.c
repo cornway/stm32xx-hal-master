@@ -1,6 +1,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include "int/bsp_mod_int.h"
+#include "int/term_int.h"
 #include <bsp_cmd.h>
 #include <bsp_api.h>
 #include <audio_main.h>
@@ -14,6 +15,11 @@
 #include <debug.h>
 
 bspapi_t *g_bspapi;
+
+typedef struct {
+    uint32_t size;
+    uint32_t data[1];
+} tlv_t;
 
 typedef struct {
     uint32_t size;
@@ -78,6 +84,7 @@ bspapi_t *bsp_api_attach (void)
 {
     arch_word_t *ptr, size;
     bsp_api_int_t *api;
+    tlv_t *tlv;
 
     arch_get_shared(&ptr, &size);
     assert(ptr);
@@ -86,6 +93,7 @@ bspapi_t *bsp_api_attach (void)
     memset(ptr, 0, size);
 
     api = (bsp_api_int_t *)ptr;
+    tlv = (tlv_t *)ptr;
     API_SETUP(api, io);
     API_SETUP(api, vid);
     API_SETUP(api, sfx);
@@ -97,6 +105,7 @@ bspapi_t *bsp_api_attach (void)
     API_SETUP(api, cmd);
 
     api->size = sizeof(*api);
+    assert(api->size == tlv->size);
     g_bspapi = &api->api;
 
     BSP_IO_API(dev.init)     = dev_io_init;
@@ -268,7 +277,66 @@ void bsp_tickle (void)
     cmd_tickle();
 }
 
+#define MAX_ARGC 16
+
+char **bsp_argc_argv_get (int *argc)
+{
+    arch_word_t *ptr, size;
+    char *charptr;
+    tlv_t *tlv;
+    arch_get_shared(&ptr, &size);
+
+    tlv = (tlv_t *)ptr;
+    charptr = (char *)ptr + tlv->size;
+    tlv = (tlv_t *)charptr;
+    *argc = *(int *)&tlv->data[0];
+    return (char **)&tlv->data[1];
+}
+
+
 #if defined(BSP_DRIVER)
+
+void bsp_argc_argv_set (int argc, const char **argv)
+{
+    arch_word_t *ptr, maxsize;
+    int size, _argc = argc, i, tmp;
+    char **_argv;
+    char *charptr, *tempptr;
+    tlv_t *tlv;
+
+    dprintf("argv set :\n");
+
+    arch_get_shared(&ptr, &maxsize);;
+    tlv = (tlv_t *)(ptr);
+    tempptr = (char *)ptr + tlv->size;
+    maxsize = maxsize - tlv->size;
+    size = maxsize;
+    charptr = tempptr;
+
+    i = 0;
+    while (argc-- && size > 0) {
+        tmp = snprintf(charptr, size, "%s ", argv[i]);
+        charptr += tmp;
+        size -= tmp;
+        i++;
+    }
+    argc++;
+    assert(!argc);
+    size -= sizeof(tlv_t);
+    tlv->size = maxsize - size;
+    dprintf("user string : [%s], size : <%u>\n", (char *)tempptr, tlv->size);
+
+    tlv = (tlv_t *)charptr;
+    tmp = MAX_ARGC * sizeof(char *) + sizeof(tlv_t) + sizeof(uint32_t);
+    size -= tmp;
+    tlv->size = tmp;
+    assert(size > 0);
+
+    _argv = (char **)(&tlv->data[1]);
+    argc = str_tokenize(_argv, _argc, tempptr);
+    assert(argc == _argc);
+    tlv->data[0] = argc;
+}
 
 void *sys_user_alloc (int size)
 {
