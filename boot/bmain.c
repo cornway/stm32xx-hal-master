@@ -226,12 +226,8 @@ int bsp_install_exec (arch_word_t *progaddr, const char *path,
     return 0;
 }
 
-int bsp_start_exec (arch_word_t *progaddr, const char *path,
-                          int argc, const char *argv)
+int bsp_start_exec (arch_word_t *progaddr)
 {
-    if (bsp_install_exec(progaddr, path, argc, argv) < 0) {
-        return 0;
-    }
     dprintf("Starting app... \n");
 
     dev_deinit();

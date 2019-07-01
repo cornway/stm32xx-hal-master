@@ -202,7 +202,6 @@ extern void Sys_LeakCheck (void);
 
 #endif /*!BSP_INDIR_API*/
 
-
 #if defined(BSP_DRIVER)
 
 int dev_hal_init (void)
@@ -238,7 +237,16 @@ int dev_init (void)
 
 #else /*BSP_DRIVER*/
 
-#define dev_init(user) g_bspapi->sys.init(user)
+#define dev_init BSP_SYS_API(dev.init)
+
+static bsp_user_api_t user_api =
+{
+    .heap =
+    {
+        .malloc = heap_malloc,
+        .free = heap_free
+    },
+};
 
 #endif /*BSP_DRIVER*/
 
@@ -256,19 +264,11 @@ int dev_main (void)
     audio_conf("samplerate=22050, volume=100");
 
     VID_PreConfig();
+#if defined(BOOT)
     boot_gui_preinit();
+#endif
 #if BSP_INDIR_API
-    {
-        static bsp_user_api_t user_api =
-        {
-            .heap =
-            {
-                .malloc = heap_malloc,
-                .free = heap_free
-            },
-        };
-        sys_user_attach(&user_api);
-    }
+    sys_user_attach(&user_api);
 #endif /*BSP_INDIR_API*/
     mainloop(0, NULL);
 

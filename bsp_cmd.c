@@ -1064,18 +1064,32 @@ int cmd_install_executable (int argc, const char **argv)
 int cmd_start_executable (int argc, const char **argv)
 {
     arch_word_t progaddr;
+    const char *scanaddr;
+    int doinstall = 1;
 
-    if (argc < 2) {
+    if (argc < 1) {
         dprintf("usage : /path/to/file <boot address 0x0xxx..>");
+        dprintf("or : <boot address 0x0xxx..>");
         return -1;
     }
-    if (!sscanf(argv[1], "%x", &progaddr)) {
+    if (argc > 1) {
+        scanaddr = argv[1];
+    } else {
+        /*image already loaded*/
+        doinstall = 0;
+        scanaddr = argv[0];
+    }
+    if (!sscanf(scanaddr, "%x", &progaddr)) {
+        dprintf("cannot scan addr : [%s]\n", scanaddr);
         return -1;
     }
 
-    bsp_start_exec((arch_word_t *)progaddr, argv[0], 1, argv[1]);
+    if (doinstall && bsp_install_exec(progaddr, argv[0], argc, argv) < 0) {
+        return 0;
+    }
+    bsp_start_exec((arch_word_t *)progaddr);
 
-    return argc - 2;
+    return argc - 1 - doinstall;
 }
 
 static int cmd_mod_insert (int argc, const char **argv)
