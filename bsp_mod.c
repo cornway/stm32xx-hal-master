@@ -4,8 +4,6 @@
 #include "int/bsp_mod_int.h"
 #include <bsp_sys.h>
 
-#if defined(BOOT)
-
 #define MOD_MAX_NAME 24
 
 typedef struct bspmod_s {
@@ -182,5 +180,3 @@ const void *bspmod_get_api (const char *name, int *apisize)
     *apisize = mod->apisize;
     return mod->api;
 }
-
-#endif /*BOOT*/

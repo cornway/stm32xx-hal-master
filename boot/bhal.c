@@ -7,8 +7,6 @@
 #include <bsp_sys.h>
 #include <stm32f769i_discovery_sdram.h>
 
-#if defined(BOOT)
-
 /* Base address of the Flash sectors */
 #if defined(DUAL_BANK)
 #define ADDR_FLASH_SECTOR_0     ((uint32_t)0x08000000) /* Base address of Sector 0, 16 Kbytes */
@@ -499,5 +497,3 @@ static uint32_t GetSector(uint32_t Address)
 #endif /* DUAL_BANK */  
   return sector;
 }
-
-#endif /*BOOT*/

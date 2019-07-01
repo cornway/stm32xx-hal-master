@@ -7,10 +7,10 @@
 
 #if defined(MODULE)
 #define BSP_INDIR_API 1
-#elif defined(APPLICATION)
-#define BSP_INDIR_API 1
 #elif defined(BSP_DRIVER)
 #define BSP_INDIR_API 0
+#elif defined(APPLICATION)
+#define BSP_INDIR_API 1
 #else
 #define BSP_INDIR_API 0
 #endif

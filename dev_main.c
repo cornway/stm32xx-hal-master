@@ -259,7 +259,7 @@ int dev_main (void)
     boot_gui_preinit();
 #if defined(APPLICATION)
     {
-        static const bsp_user_api_t user_api =
+        static bsp_user_api_t user_api =
         {
             .heap =
             {

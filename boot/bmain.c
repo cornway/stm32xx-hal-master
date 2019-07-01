@@ -12,8 +12,6 @@
 #include <bsp_sys.h>
 #include <bsp_cmd.h>
 
-#if defined(BOOT)
-
 #define BOOT_SYS_DIR_PATH "/sys"
 #define BOOT_SYS_LOG_NAME "log.txt"
 #define BOOT_BIN_DIR_NAME "BIN"
@@ -419,5 +417,3 @@ static void boot_gui_bsp_init (gui_t *gui)
     gui_init(gui, "gui", 25, &dim, &bspapi);
     input_soft_init(__post_key, kbdmap);
 }
-
-#endif /*BOOT*/

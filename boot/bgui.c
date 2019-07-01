@@ -6,8 +6,6 @@
 #include <heap.h>
 #include <bsp_cmd.h>
 
-#if defined(BOOT)
-
 #define gui_error(fmt, args ...) \
     if (gui->dbglvl >= DBG_ERR) {dprintf("%s() [fatal] : "fmt, __func__, args);}
 
@@ -618,5 +616,3 @@ void gui_release_pane (gui_t *gui, pane_t *pane)
     }
     pane->repaint = 0;
 }
-
-#endif /*BOOT*/
