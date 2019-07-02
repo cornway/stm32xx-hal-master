@@ -13,6 +13,14 @@
 #define INOUT_MAX_FUNC 4
 #define MAX_TOKENS 16
 
+typedef int (*tknmatch_t) (char c, int *state);
+
+typedef enum {
+    INVALID,
+    SOLID,
+    SQUASH,
+} tkntype_t;
+
 static cmd_func_t serial_rx_clbk[INOUT_MAX_FUNC] = {NULL};
 static cmd_func_t *last_rx_clbk = &serial_rx_clbk[0];
 
@@ -20,7 +28,6 @@ static cmd_func_t serial_tx_clbk[INOUT_MAX_FUNC] = {NULL};
 static cmd_func_t *last_tx_clbk = &serial_tx_clbk[0];
 
 inout_clbk_t inout_early_clbk = NULL;
-
 
 static inline char str_char_printable (char c)
 {
@@ -62,7 +69,122 @@ done:
     return ret;
 }
 
-int str_tokenize (char **tok, int tokcnt, char *str)
+/*Split 'quoted' text with other*/
+static int
+str_tkn_split (const char **argv, tknmatch_t match, int *argc, char *str)
+{
+    int matchcnt = 0, totalcnt = 0;
+    int tknstart = 1, dummy = 0;
+    int maxargs = *argc;
+
+    argv[totalcnt++] = str;
+    while (*str && totalcnt < maxargs) {
+
+        if (match(*str, &dummy)) {
+            *str = 0;
+            if (!tknstart) {
+                argv[totalcnt++] = str + 1;
+            } else {
+                argv[totalcnt++] = str + 1;
+                matchcnt++;
+            }
+            tknstart = 1 - tknstart;
+        }
+        str++;
+    }
+    *argc = totalcnt;
+    return matchcnt;
+}
+
+static int
+str_tkn_continue (const char **dest, const char **src, tknmatch_t tkncmp,
+                     tkntype_t *flags, int argc, int maxargc)
+{
+    int i, n;
+    int tmp, total = 0;
+
+    for (i = 0; i < argc; i++) {
+        tmp = 0;
+        if (flags[i] == SQUASH) {
+            /*Split into*/
+            maxargc = str_tokenize(dest, maxargc, (char *)src[i]);
+            tmp = maxargc;
+        } else {
+            dest[0] = src[i];
+            tmp = 1;
+        }
+        dest += tmp;
+        total += tmp;
+    }
+    return total;
+}
+
+
+/*brief : remove empty strings - ""*/
+static int str_tkn_clean (const char **dest, const char **src, tkntype_t *flags, int argc)
+{
+    int i = 0, maxargc = argc;
+
+    for (i = 0; i < maxargc; i++) {
+        if (src[i][0]) {
+            dest[0] = src[i];
+            /*each even - squashable, odd - solid, e.g - " ", ' ', { }, ..*/
+            if (i & 0x1) {
+                *flags = SOLID;
+            } else {
+                *flags = SQUASH;
+            }
+            flags++;
+            dest++;
+        } else {
+            argc--;
+        }
+    }
+    return argc;
+}
+
+int quotematch (char c, int *state)
+{
+    if (c == '\'' || c == '\"') {
+        return 1;
+    }
+    return 0;
+}
+
+/*brief : convert " 1 '2 3 4' 5 6 " -> {"1", "2 3 4", "5 6"}*/
+/*argc - in argc*/
+/*argv - output buffer*/
+/*ret - result argc*/
+static int str_tokenize_string (char *buf, int argc, const char **argv)
+{
+    const char *tempbuf[MAX_TOKENS], **tempptr = &tempbuf[0];
+    tkntype_t flags[MAX_TOKENS];
+
+    int totalcnt, tmp;
+
+    if (argc < 2) {
+        return -1;
+    }
+
+    dprintf("user: [%s]\n", buf);
+
+    totalcnt = MAX_TOKENS;
+    str_tkn_split(tempptr, quotematch, &totalcnt, buf);
+
+    totalcnt = str_tkn_clean(argv, tempptr, flags, totalcnt);
+
+    totalcnt = str_tkn_continue(tempptr, argv, quotematch, flags, totalcnt, MAX_TOKENS);
+
+    totalcnt = str_tkn_clean(argv, tempptr, flags, totalcnt);
+    return totalcnt;
+}
+
+static inline int str_tokenize_parms (char *buf, int argc, const char **argv)
+{
+    return str_tokenize_string(buf, argc, argv);
+}
+
+int str_tokenize (const char **tok, int tokcnt, char *str)
 {
     char *p = str;
     int toktotal = tokcnt;
@@ -168,7 +290,8 @@ void bsp_inout_forward (char *buf, int size, char dir)
             __bsp_stout_iter_fwd_raw(&serial_tx_clbk[0], last_tx_clbk, argc, argv);
         break;
         case '<':
-            argc = str_tokenize(&argv_buf[0], argc, buf + offset);
+
+            argc = str_tokenize_parms(buf, argc, &argv[0]);
             __bsp_stdin_iter_fwd(&serial_rx_clbk[0], last_rx_clbk, argc, argv);
         break;
         default: assert(0);

@@ -198,28 +198,43 @@ static void a_check_cfg (a_intcfg_t *cfg)
 static void AUDIO_ParseCfgString (a_intcfg_t *cfg, const char *str)
 {
     char *tok;
+    int fails = 0;
 
     assert(str);
 
-    dprintf("%s()\n", __func__);
+    dprintf("%config audio : \n[%s]\n", __func__, str);
     tok = "samplerate";
     if (str_parse_tok(str, tok, &cfg->samplerate) <= 0) {
         cfg->samplerate = AUDIO_RATE_DEFAULT;
+        fails++;
+    } else {
+        dprintf("%s :ok\n", tok);
     }
     tok = "volume";
     if (str_parse_tok(str, tok, &cfg->volume) <= 0) {
         cfg->volume = AUDIO_VOLUME_DEFAULT;
+        fails++;
+    } else {
+        dprintf("%s :ok\n", tok);
     }
     tok = "samplebits";
     if (str_parse_tok(str, tok, &cfg->samplebits) <= 0) {
         cfg->samplebits = AUDIO_SAMPLEBITS_DEFAULT;
+        fails++;
+    } else {
+        dprintf("%s :ok\n", tok);
     }
     tok = "cnannels";
     if (str_parse_tok(str, tok, &cfg->channels) <= 0) {
         cfg->channels = AUDIO_CHANNELS_NUM_DEFAULT;
+        fails++;
+    } else {
+        dprintf("%s :ok\n", tok);
     }
     a_check_cfg(cfg);
+    dprintf("done : %i fails\n", fails);
 }
+
 
 static void AUDIO_Config (a_intcfg_t *cfg)
 {
