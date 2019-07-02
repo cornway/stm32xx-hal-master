@@ -279,64 +279,108 @@ void bsp_tickle (void)
 
 #define MAX_ARGC 16
 
-char **bsp_argc_argv_get (int *argc)
+static inline tlv_t *__get_tlv (void *_tlv)
+{
+    tlv_t *tlv = (tlv_t *)_tlv;
+    return tlv;
+}
+
+static inline tlv_t *__get_next_tlv (void *_tlv)
+{
+    tlv_t *tlv = (tlv_t *)_tlv;
+    tlv = (tlv_t *)((uint32_t)tlv + tlv->size);
+    return tlv;
+}
+
+static inline tlv_t *__set_next_tlv (void *_tlv, uint32_t size)
+{
+    tlv_t *tlv = (tlv_t *)_tlv;
+    tlv->size = size + sizeof(tlv->size);
+    tlv = (tlv_t *)((uint32_t)tlv + tlv->size);
+    return tlv;
+}
+
+const char **bsp_argc_argv_get (int *argc)
 {
     arch_word_t *ptr, size;
-    char *charptr;
     tlv_t *tlv;
+
     arch_get_shared(&ptr, &size);
 
-    tlv = (tlv_t *)ptr;
-    charptr = (char *)ptr + tlv->size;
-    tlv = (tlv_t *)charptr;
-    charptr = charptr + tlv->size;
-    tlv = (tlv_t *)charptr;
+    tlv = __get_next_tlv(ptr);
+    tlv = __get_next_tlv(tlv);
     *argc = *(int *)&tlv->data[0];
-    return (char **)&tlv->data[1];
+    return (const char **)&tlv->data[1];
 }
 
 #if defined(BSP_DRIVER)
 
-void bsp_argc_argv_set (int argc, const char **argv)
+int bsp_argc_argv_check (const char *arg)
+{
+    const char *argvbuf[MAX_ARGC], **argv = &argvbuf[0];
+    const char **__argv;
+    char charbuf[256];
+    int __argc, argc, i, fails = 0, size;
+
+    size = snprintf(charbuf, sizeof(charbuf), "%s ", arg);
+    if (size >= sizeof(charbuf) - 1) {
+        dprintf("too large cmd line\n");
+        return -1;
+    } 
+    argc = str_tokenize(argv, MAX_ARGC, charbuf);
+
+    __argv = bsp_argc_argv_get(&__argc);
+    if (argc != __argc) {
+        dprintf("%s() : fail - argc != __argc\n", __func__);
+        return -1;
+    }
+    for (i = 0; i < argc; i++) {
+        if (strcmp(__argv[i], argv[i])) {
+            fails++;
+            dprintf("mismatch : \'%s\' != \'%s\'\n", __argv[i], argv[i]);
+        }
+    }
+    if (fails) {
+        dprintf("%s() : failed : %u fails\n", __func__, fails);
+        return -fails;
+    }
+    return 0;
+}
+
+void bsp_argc_argv_set (const char *arg)
 {
     arch_word_t *ptr, maxsize;
-    int size, _argc = argc, i, tmp;
+    int size, i, tmp;
     char **_argv;
     char *charptr, *tempptr;
     tlv_t *tlv;
 
-    dprintf("argv set :\n");
+    arch_get_shared(&ptr, &maxsize);
 
-    arch_get_shared(&ptr, &maxsize);;
-    tlv = (tlv_t *)(ptr);
-    tempptr = (char *)ptr + tlv->size;
+    tlv = __get_tlv(ptr);
     maxsize = maxsize - tlv->size;
+    tlv = __get_next_tlv(ptr);
+
+    tempptr = (char *)&tlv->data[0];
     size = maxsize;
     charptr = tempptr;
 
-    i = 0;
-    while (argc-- && size > 0) {
-        tmp = snprintf(charptr, size, "%s ", argv[i]);
-        charptr += tmp;
-        size -= tmp;
-        i++;
-    }
-    argc++;
-    assert(!argc);
-    size -= sizeof(tlv_t);
-    tlv->size = maxsize - size;
-    dprintf("user string : [%s], size : <%u>\n", (char *)tempptr, tlv->size);
+    size = snprintf(charptr, size, "%s ", arg);
+    charptr += tmp;
+    maxsize -= tmp;
 
-    tlv = (tlv_t *)charptr;
-    tmp = MAX_ARGC * sizeof(char *) + sizeof(tlv_t) + sizeof(uint32_t);
-    size -= tmp;
-    tlv->size = tmp;
-    assert(size > 0);
+    tlv = __set_next_tlv(tlv, size);
+
+    dprintf("user args : [%s], size : <%u>\n", (char *)charptr, tlv->size);
+
+    size = MAX_ARGC * sizeof(char *) + sizeof(uint32_t) + sizeof(uint32_t);
+    maxsize -= size;
+    assert(maxsize > 0);
 
     _argv = (char **)(&tlv->data[1]);
-    argc = str_tokenize(_argv, _argc, tempptr);
-    assert(argc == _argc);
-    tlv->data[0] = argc;
+    tlv->data[0] = str_tokenize(_argv, MAX_ARGC, tempptr);
+
+    __set_next_tlv(tlv, size);
 }
 
 void *sys_user_alloc (int size)

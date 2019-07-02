@@ -244,6 +244,10 @@ void cmd_parm_load_val (cmd_keyval_t *kv, const char *str)
         dprintf("%s() : fail\n", __func__);
     }
 }
+void cmd_parm_load_str (cmd_keyval_t *kv, const char *str)
+{
+    strcpy(kv->val, str);
+}
 
 static int __cmd_parm_check (const char *str, int *iscombo)
 {
@@ -1060,38 +1064,55 @@ int cmd_install_executable (int argc, const char **argv)
     return argc - 2;
 }
 
+const char *cmd_start_exec_usage =
+"-p - path to file to load from\n"
+"-a - args will be passed to app, - [-a \"myname -path tosomewhere\"] "
+"ex : boot 0x08000000 -p /exe.bin -a \"superapplication\"";
+
 int cmd_start_executable (int argc, const char **argv)
 {
+    const char *argvbuf[CMD_MAX_ARG];
     arch_word_t progaddr;
-    const char *scanaddr = argv[0];
     const char **moreargs = NULL;
     int xcnt = 0, doinstall = 0;
+    int i;
+    char apparg[CMD_MAX_BUF] = {0};
+    char binpath[CMD_MAX_PATH] = {0};
+
+    cmd_keyval_t kvarr[] = 
+    {
+        CMD_KVSTR_S("p", &binpath[0]),
+        CMD_KVSTR_S("a", &apparg[0]),
+    };
+    cmd_keyval_t *kvlist[arrlen(kvarr)];
+
+    for (i = 0; i < arrlen(kvarr); i++) kvlist[i] = &kvarr[i];
+    kvarr[1].handle = cmd_parm_load_str;
 
     if (argc < 1) {
-        dprintf("usage : /path/to/file <boot address 0x0xxx..>");
-        dprintf("or : <boot address 0x0xxx..>");
-        return -1;
-    }
-    if (argc > 2) {
-        moreargs = &argv[1];
-        xcnt++;
-    } else if (argc > 1) {
-        xcnt += 2;
-        scanaddr = argv[1];
-        doinstall = 1;
-    } else {
-        xcnt++;
-    }
-    if (!sscanf(scanaddr, "%x", &progaddr)) {
-        dprintf("cannot scan addr : [%s]\n", scanaddr);
+        dprintf(cmd_start_exec_usage);
         return -1;
     }
 
-    argc -= xcnt;
-    if (doinstall && bsp_install_exec((arch_word_t *)progaddr, argv[0]) < 0) {
+    argc = cmd_argv_to_parm(&kvlist[0], &kvlist[arrlen(kvlist) - 1],
+                                argc, argvbuf, argv);
+
+
+    if (binpath[0]) {
+        doinstall = 1;
+    }
+
+    /*prog addr always first*/
+    if (!sscanf(argv[0], "%x", &progaddr)) {
+        dprintf("cannot parse addr : [%s]\n", argv[0]);
+        return -1;
+    }
+
+    if (doinstall && bsp_install_exec((arch_word_t *)progaddr, binpath) < 0) {
         return 0;
     }
-    bsp_start_exec((arch_word_t *)progaddr, argc, moreargs);
+    argvbuf[0] = apparg;
+    bsp_start_exec((arch_word_t *)progaddr, 1, &argvbuf[0]);
 
     return 0;
 }

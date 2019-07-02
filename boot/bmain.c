@@ -226,13 +226,17 @@ int bsp_install_exec (arch_word_t *progaddr, const char *path)
     return 0;
 }
 
-extern void bsp_argc_argv_set (int argc, const char **argv);
+extern void bsp_argc_argv_set (const char *arg);
+extern int bsp_argc_argv_check (const char *arg);
 
 int bsp_start_exec (arch_word_t *progaddr, int argc, const char **argv)
 {
     dprintf("Starting app... \n");
 
-    bsp_argc_argv_set(argc, argv);
+    bsp_argc_argv_set(argv[0]);
+    if (bsp_argc_argv_check(argv[0]) < 0) {
+        return -1;
+    }
     bsp_stout_unreg_if(gui_stdout_hook);
     gui_destroy(&gui);
     dev_deinit();

@@ -151,6 +151,7 @@ void gui_destroy (gui_t *gui)
         heap_free(pane);
         pane = pane->next;
     }
+    gui->destroy = 0;
 }
 
 pane_t *gui_get_pane (gui_t *gui, const char *name, int extra)
