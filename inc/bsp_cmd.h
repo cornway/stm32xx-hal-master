@@ -27,6 +27,13 @@ typedef struct bsp_cmd_api_s {
 #define cmd_execute            BSP_CMD_API(exec)
 #define cmd_tickle             BSP_CMD_API(tickle)
 
+static inline int cmd_bsp_exec (const  char *cmd)
+{
+    char buf[128];
+    int len;
+    len = snprintf(buf, sizeof(buf), "bsp %s", cmd);
+    return cmd_execute(buf, len);
+}
 
 #else /*BSP_INDIR_API*/
 

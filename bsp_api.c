@@ -270,9 +270,7 @@ void bsp_tickle (void)
 {
     audio_update();
     input_tickle();
-#if defined(BOOT)
     serial_tickle();
-#endif
     profiler_reset();
     cmd_tickle();
 }
