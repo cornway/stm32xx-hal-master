@@ -135,16 +135,20 @@ static int bhal_prog_erase (bhal_cplth_t cplth, arch_word_t *_addr, void *_bin, 
 static int bhal_prog_prog_chunk (arch_word_t *dst, const arch_word_t *src, int size)
 {
     int errcnt = 0;
+
+    hdd_led_on();
     while (size > 0) {
-        hdd_led_on();
-        if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, (arch_word_t)dst, *src) != HAL_OK) {
+        if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, (arch_word_t)dst, (*src) & 0xffff) != HAL_OK) {
             errcnt++;
         }
-        hdd_led_off();
+        if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, (arch_word_t)dst + 2, (*src) >> 16) != HAL_OK) {
+            errcnt++;
+        }
         src++;
         dst++;
         size--;
     }
+    hdd_led_off();
     return errcnt ? -errcnt : 0;
 }
 
@@ -325,7 +329,6 @@ typedef int (*exec_t) (void);
 
 d_bool bhal_prog_exist (arch_word_t *progaddr, void *progdata, size_t progsize)
 {
-    progsize = progsize / sizeof(arch_word_t);
     uint32_t pad = sizeof(arch_word_t) - 1;
 
     assert(!((arch_word_t)progdata & pad));

@@ -1108,9 +1108,24 @@ int cmd_start_executable (int argc, const char **argv)
         return -1;
     }
 
-    if (doinstall && bsp_install_exec((arch_word_t *)progaddr, binpath) < 0) {
-        return 0;
+    if (doinstall) {
+        bsp_exec_file_type_t type;
+        type = bsp_bin_file_compat(binpath);
+        switch (type) {
+            case BIN_FILE:
+                if (bsp_install_exec((arch_word_t *)progaddr, binpath) < 0) {
+                    return 0;
+                }
+            break;
+            case BIN_LINK:
+                return bsp_exec_link(NULL, binpath);
+                
+            break;
+            default:
+                assert(0);
+        }
     }
+
     argvbuf[0] = apparg;
     bsp_start_exec((arch_word_t *)progaddr, 1, &argvbuf[0]);
 

@@ -28,24 +28,13 @@ typedef struct {
     int width, height;
 } screen_t;
 
-typedef struct {
-    void *fb_mem;
-    void *lay_mem[LCD_MAX_LAYER];
-    uint32_t fb_size;
-    uint32_t lay_size;
-    void *lay_halcfg;
-    lcd_layers_t active_lay_idx;
-    uint16_t w, h;
-    uint8_t lay_cnt;
-} lcd_wincfg_t;
-
 typedef void *(*lcd_mem_malloc_t) (uint32_t size);
 
 typedef struct bsp_video_api_s {
     bspdev_t dev;
     void (*get_wh) (screen_t *);
     uint32_t (*mem_avail) (void);
-    int (*win_cfg) (lcd_mem_malloc_t, lcd_wincfg_t *, screen_t *, uint32_t, int);
+    int (*win_cfg) (lcd_mem_malloc_t, void *, screen_t *, uint32_t, int);
     void (*set_clut) (void *, uint32_t);
     void (*update) (screen_t *);
     void (*direct) (screen_t *);
@@ -76,7 +65,7 @@ int vid_init (void);
 void vid_deinit (void);
 void vid_wh (screen_t *s);
 uint32_t vid_mem_avail (void);
-int vid_config (lcd_mem_malloc_t __malloc,lcd_wincfg_t *cfg,
+int vid_config (lcd_mem_malloc_t __malloc, void *cfg,
                     screen_t *screen, uint32_t colormode, int layers_cnt);
 void vid_set_clut (void *palette, uint32_t clut_num_entries);
 void vid_upate (screen_t *in);

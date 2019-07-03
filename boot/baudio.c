@@ -72,7 +72,7 @@ int bsp_open_wave_sfx (const char *name)
     if (sfxidx < 0) {
         return -1;
     }
-    sfx = heap_malloc(sizeof(*sfx) + cachesize + 1);
+    sfx = heap_alloc_shared(sizeof(*sfx) + cachesize + 1);
     if (!sfx) {
         return -1;
     }

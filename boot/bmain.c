@@ -11,6 +11,7 @@
 #include <heap.h>
 #include <bsp_sys.h>
 #include <bsp_cmd.h>
+#include <audio_main.h>
 
 #define BOOT_SYS_DIR_PATH "/sys"
 #define BOOT_SYS_LOG_NAME "log.txt"
@@ -45,7 +46,7 @@ bsp_bin_file_compat (const char *in)
     } extmap[BIN_MAX] =
     {
         {BIN_FILE, ".bin"},
-        {BIN_LINK, ".lnk"},
+        {BIN_LINK, ".als"},
     };
 
     int pos = strlen(in) - EXT_LEN;
@@ -117,14 +118,30 @@ bsp_setup_bin_desc (bsp_bin_t *bin, const char *path,
     return bin;
 }
 
+bsp_bin_t *
+bsp_setup_bin_link (bsp_bin_t *bin, const char *path,
+                           const char *originname, bsp_exec_file_type_t type)
+{
+    snprintf(bin->name, sizeof(bin->name), "%s", originname);
+    snprintf(bin->path, sizeof(bin->path), "%s", path);
+    bin->filetype = type;
+    bin->progaddr = 0;
+    return bin;
+}
+
+
 static bsp_bin_t *
 boot_alloc_bin_desc (const char *path,
                            const char *originname, bsp_exec_file_type_t type)
 {
     bsp_bin_t *bin = (bsp_bin_t *)heap_malloc(sizeof(*bin));
 
-    bin = bsp_setup_bin_desc(bin, path, originname, type);
-    assert(bin && g_app_program_addr == bin->progaddr);
+    if (type == BIN_FILE) {
+        bin = bsp_setup_bin_desc(bin, path, originname, type);
+        assert(bin);
+    } else if (type == BIN_LINK) {
+        bin = bsp_setup_bin_link(bin, path, originname, type);
+    }
     boot_add_exec_2_list(bin);
     return bin;
 }
@@ -134,7 +151,7 @@ void boot_read_path (const char *path)
     fobj_t fobj;
     int dir, bindir;
     char buf[BOOT_MAX_PATH];
-    char origin_name[BOOT_MAX_NAME];
+    char binpath[BOOT_MAX_NAME];
     d_bool filesfound = 0;
 
     dir = d_opendir(path);
@@ -151,14 +168,13 @@ void boot_read_path (const char *path)
             if (bindir < 0) {
                 continue;
             }
-            strcpy(origin_name, fobj.name);
             while (d_readdir(bindir, &binobj) >= 0) {
                 if (binobj.type == FTYPE_FILE) {
                     bsp_exec_file_type_t type = bsp_bin_file_compat(binobj.name);
 
                     if (type != BIN_MAX) {
-                        snprintf(buf, sizeof(buf), "%s/%s", buf, binobj.name);
-                        if (boot_alloc_bin_desc(buf, origin_name, type)) {
+                        snprintf(binpath, sizeof(binpath), "%s/%s", buf, binobj.name);
+                        if (boot_alloc_bin_desc(binpath, binobj.name, type)) {
                             filesfound++;
                         }
                     }
@@ -199,9 +215,16 @@ void *bsp_cache_bin_file (const bsp_heap_api_t *heapapi, const char *path, int *
     d_close(f);
 
     if (cache)
-        dprintf("Cache done : <0x%p> : 0x%8x Kb\n", cache, fsize / 1024);
+        dprintf("Cache done : <0x%p> : 0x%08x bytes\n", cache, fsize);
 
     return cache;
+}
+
+static int b_handle_lnk (const char *path);
+
+int bsp_exec_link (arch_word_t *progaddr, const char *path)
+{
+    return b_handle_lnk(path);
 }
 
 int bsp_install_exec (arch_word_t *progaddr, const char *path)
@@ -209,6 +232,7 @@ int bsp_install_exec (arch_word_t *progaddr, const char *path)
     void *bindata;
     int binsize = 0, err = 0;
     bsp_heap_api_t heap = {.malloc = heap_alloc_shared, .free = heap_free};
+    bsp_exec_file_type_t type;
 
     dprintf("Installing : \'%s\'\n", path);
 
@@ -244,6 +268,24 @@ int bsp_start_exec (arch_word_t *progaddr, int argc, const char **argv)
     return 0;
 }
 
+static int b_handle_lnk (const char *path)
+{
+    int f;
+    char strbuf[256];
+
+    d_open(path, &f, "r");
+    if (f < 0) {
+        dprintf("%s() : fail\n", __func__);
+        return -1;
+    }
+    if (!d_gets(f, strbuf, sizeof(strbuf))) {
+        return -1;
+    }
+    d_close(f);
+    cmd_exec_dsr("bsp", strbuf, NULL, NULL);
+    return 0;
+}
+
 static int b_handle_selected (pane_t *pane, component_t *com, void *user)
 {
     bsp_bin_t *bindesc = *((bsp_bin_t **)com->user);
@@ -253,9 +295,12 @@ static int b_handle_selected (pane_t *pane, component_t *com, void *user)
         return 0;
     }
 
-    pane->parent->destroy = 1;
-    g_app_program_addr = bindesc->progaddr;
-    cmd_exec_dsr("boot", bindesc->path, NULL, NULL);
+    if (bindesc->filetype == BIN_FILE) {
+        g_app_program_addr = bindesc->progaddr;
+        cmd_exec_dsr("boot", bindesc->path, NULL, NULL);
+    } else if (bindesc->filetype == BIN_LINK) {
+        assert(b_handle_lnk(bindesc->path));
+    }
     boot_destr_exec_list();
     com->user = NULL;
     return 1;
@@ -295,9 +340,78 @@ static void boot_handle_input (gevt_t *evt)
 static int gui_stdout_hook (int argc, const char **argv)
 {
     assert(argc > 0);
-    gui_draw(&gui);
     win_con_append(pane_console, argv[0], COLOR_WHITE);
     return 0;
+}
+
+void bin_cmd_print (void)
+{
+    int i = 0;
+    bsp_bin_t *bin = boot_bin_head;
+
+    dprintf("%s() :\n", __func__);
+    while (bin) {
+        if (bin->filetype == BIN_FILE) {
+            dprintf("[%i] %s, %s, <0x%p> %u bytes\n",
+                i++, bin->name, bin->path, bin->progaddr, bin->size);
+        } else if (bin->filetype == BIN_LINK) {
+            dprintf("[%i] %s, %s, <link file>\n",
+                i++, bin->name, bin->path);
+        } else {
+            dprintf("unable to handle : [%i] %s, %s, ???\n",
+                i++, bin->name, bin->path);
+            assert(0)
+        }
+        bin = bin->next;
+    }
+}
+
+void __bin_cmd_dump (arch_word_t addr, arch_word_t size, const char *path)
+{
+    int f;
+
+    dprintf("Bin dump:\n");
+    d_open(path, &f, "+w");
+
+    if (f < 0) {
+        return;
+    }
+
+    size = size * sizeof(arch_word_t);
+    size = d_write(f, (void *)addr, size * sizeof(arch_word_t));
+    d_close(f);
+    dprintf("Done; <0x%p> : <0x%x> bytes)\n", (void *)addr, size);
+}
+
+/*addres(hex) - size(hex) - path/to/file*/
+void bin_cmd_dump (int argc, const char **argv)
+{
+    arch_word_t addr, size;
+    if (argc < 3) {
+        dprintf("usage : addres(hex) - size(hex) - path/to/file(optional)\n");
+        return;
+    }
+    if (!sscanf(argv[0], "%x", &addr)) {
+        dprintf("fail to parse addr : \'%s\'", argv[0]);
+    }
+    if (!sscanf(argv[1], "%x", &size)) {
+        dprintf("fail to parse size : \'%s\'", argv[1]);
+    }
+    __bin_cmd_dump(addr, size, argv[2]);
+}
+
+static int __bin_cmd_handle (int argc, const char **argv)
+{
+    if (argc < 1) {
+        return -1;
+    }
+    if (strcmp(argv[0], "print") == 0) {
+        bin_cmd_print();
+    } else if (strcmp(argv[0], "dump") == 0) {
+        bin_cmd_dump(argc - 1, &argv[1]);
+    } else {
+        dprintf("unknown parameter : %s\n", argv[0]);
+    }
 }
 
 void boot_gui_preinit (void)
@@ -342,9 +456,14 @@ void boot_gui_preinit (void)
 
 int boot_main (int argc, const char **argv)
 {
+    cd_track_t cd;
+
     boot_read_path("");
     cmd_register_i32(&boot_program_bypas, "skipflash");
+    cmd_register_func(__bin_cmd_handle, "bin");
     dprintf("Ready\n");
+
+    cd_play_name(&cd, "/doom/music/psx/PSXCRDTS.wav");
 
     while (!gui.destroy) {
 

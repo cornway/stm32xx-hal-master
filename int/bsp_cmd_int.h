@@ -29,6 +29,7 @@ typedef struct {
 
 cmd_func_t bsp_stdin_unstash (cmd_func_t func);
 cmd_func_t bsp_stdin_stash (cmd_func_t func);
+int bsp_exec_link (arch_word_t *progaddr, const char *path);
 
 #endif /*__BSP_CMD_INT_H__*/
 
