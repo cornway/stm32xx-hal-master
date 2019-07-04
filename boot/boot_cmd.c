@@ -31,7 +31,8 @@ static int boot_print_bin_list (int argc, const char **argv)
 
 static void __bin_cmd_dump (arch_word_t addr, arch_word_t size, const char *path)
 {
-    int f;
+    int f, i, tmp;
+    uint8_t *ptr = (uint8_t *)addr;
 
     dprintf("Bin dump:\n");
     d_open(path, &f, "+w");
@@ -39,9 +40,22 @@ static void __bin_cmd_dump (arch_word_t addr, arch_word_t size, const char *path
     if (f < 0) {
         return;
     }
-
+    dprintf("[ ");
     size = size * sizeof(arch_word_t);
-    size = d_write(f, (void *)addr, size * sizeof(arch_word_t));
+    for (i = 0; i < size && tmp > 0;) {
+        tmp = d_write(f, ptr, 1024 * 16);
+        ptr += tmp;
+        i += tmp;
+        dprintf(">");
+    }
+    tmp = size - i;
+    if (tmp > 0) {
+        for (i = 0; i < tmp && tmp > 0;) {
+            tmp = d_write(f, ptr, 1024);
+            dprintf(">");
+        }
+    }
+    dprintf(" ]\n");
     d_close(f);
     dprintf("Done; <0x%p> : <0x%x> bytes)\n", (void *)addr, size);
 }
@@ -109,22 +123,26 @@ static int bin_cmd_copy (int argc, const char **argv)
 
     d_open(argv[0], &fdst, "+w");
     if (!fdst) {
+        dprintf("cannot open : \'%s\'\n", argv[0]);
         return -1;
     }
     srclen = d_open(argv[1], &fsrc, "r");
     dstlen = 0;
     if (fsrc < 0) {
         d_close(fdst);
+        dprintf("cannot open : \'%s\'\n", argv[1]);
         return -1;
     }
     while (dstlen < srclen) {
         tmp = d_read(fsrc, buf, sizeof(buf));
         if (!tmp) {
+            dprintf("unexpected eof\n");
             break;
         }
         d_write(fdst, buf, tmp);
         dstlen += tmp;
     }
+    dprintf("Done : %u bytes copied\n", dstlen);
     d_close(fsrc);
     d_close(fdst);
 

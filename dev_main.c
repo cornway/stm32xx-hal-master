@@ -195,7 +195,7 @@ void dev_deinit (void)
 
     irq_save(&irq);
     irq_destroy();
-    HAL_DeInit();
+    //HAL_DeInit();
 }
 
 #endif /*!BSP_INDIR_API*/
