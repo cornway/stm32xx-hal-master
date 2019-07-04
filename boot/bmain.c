@@ -43,10 +43,11 @@ bsp_bin_file_compat (const char *in)
     const struct exec_file_ext_map {
         bsp_exec_file_type_t type;
         const char *ext;
-    } extmap[BIN_MAX] =
+    } extmap[] =
     {
         {BIN_FILE, ".bin"},
         {BIN_LINK, ".als"},
+        {BIN_LINK, ".lnk"},
     };
 
     int pos = strlen(in) - EXT_LEN;
@@ -344,76 +345,6 @@ static int gui_stdout_hook (int argc, const char **argv)
     return 0;
 }
 
-void bin_cmd_print (void)
-{
-    int i = 0;
-    bsp_bin_t *bin = boot_bin_head;
-
-    dprintf("%s() :\n", __func__);
-    while (bin) {
-        if (bin->filetype == BIN_FILE) {
-            dprintf("[%i] %s, %s, <0x%p> %u bytes\n",
-                i++, bin->name, bin->path, bin->progaddr, bin->size);
-        } else if (bin->filetype == BIN_LINK) {
-            dprintf("[%i] %s, %s, <link file>\n",
-                i++, bin->name, bin->path);
-        } else {
-            dprintf("unable to handle : [%i] %s, %s, ???\n",
-                i++, bin->name, bin->path);
-            assert(0)
-        }
-        bin = bin->next;
-    }
-}
-
-void __bin_cmd_dump (arch_word_t addr, arch_word_t size, const char *path)
-{
-    int f;
-
-    dprintf("Bin dump:\n");
-    d_open(path, &f, "+w");
-
-    if (f < 0) {
-        return;
-    }
-
-    size = size * sizeof(arch_word_t);
-    size = d_write(f, (void *)addr, size * sizeof(arch_word_t));
-    d_close(f);
-    dprintf("Done; <0x%p> : <0x%x> bytes)\n", (void *)addr, size);
-}
-
-/*addres(hex) - size(hex) - path/to/file*/
-void bin_cmd_dump (int argc, const char **argv)
-{
-    arch_word_t addr, size;
-    if (argc < 3) {
-        dprintf("usage : addres(hex) - size(hex) - path/to/file(optional)\n");
-        return;
-    }
-    if (!sscanf(argv[0], "%x", &addr)) {
-        dprintf("fail to parse addr : \'%s\'", argv[0]);
-    }
-    if (!sscanf(argv[1], "%x", &size)) {
-        dprintf("fail to parse size : \'%s\'", argv[1]);
-    }
-    __bin_cmd_dump(addr, size, argv[2]);
-}
-
-static int __bin_cmd_handle (int argc, const char **argv)
-{
-    if (argc < 1) {
-        return -1;
-    }
-    if (strcmp(argv[0], "print") == 0) {
-        bin_cmd_print();
-    } else if (strcmp(argv[0], "dump") == 0) {
-        bin_cmd_dump(argc - 1, &argv[1]);
-    } else {
-        dprintf("unknown parameter : %s\n", argv[0]);
-    }
-}
-
 void boot_gui_preinit (void)
 {
     
@@ -460,7 +391,6 @@ int boot_main (int argc, const char **argv)
 
     boot_read_path("");
     cmd_register_i32(&boot_program_bypas, "skipflash");
-    cmd_register_func(__bin_cmd_handle, "bin");
     dprintf("Ready\n");
 
     cd_play_name(&cd, "/doom/music/psx/PSXCRDTS.wav");

@@ -368,13 +368,10 @@ void vid_print_info (void)
     assert(lcd_active_cfg);
 
     Layercfg = lcd_active_cfg->lay_halcfg;
-    dprintf("width=%4.3u height=%4.3u\n"
-             "layers=%u, color mode=<%s>\n"
-             "memory= <0x%x> 0x%08x bytes\n",
-        lcd_active_cfg->w, lcd_active_cfg->h,
-        lcd_active_cfg->lay_cnt,
-        screen_mode2txt_map[lcd_active_cfg->colormode],
-        lcd_active_cfg->fb_mem, lcd_active_cfg->fb_size);
+    dprintf("width=%4.3u height=%4.3u\n", lcd_active_cfg->w, lcd_active_cfg->h);
+    dprintf("layers=%u, color mode=<%s>\n",
+             lcd_active_cfg->lay_cnt, screen_mode2txt_map[lcd_active_cfg->colormode]);
+    dprintf("memory= <0x%x> 0x%08x bytes\n", lcd_active_cfg->fb_mem, lcd_active_cfg->fb_size);
 }
 
 typedef uint8_t pix8_t;

@@ -36,6 +36,8 @@ bsp_bin_t *bsp_setup_bin_desc (bsp_bin_t *bin, const char *path,
 int bsp_setup_bin_param (bsp_bin_t *bin);
 int bhal_load_program (bhal_cplth_t cplth, arch_word_t *progaddr,
                             void *progdata, size_t progsize);
+int bhal_set_mem (bhal_cplth_t cplth, arch_word_t *progaddr,
+                        size_t progsize, arch_word_t value);
 bsp_exec_file_type_t bsp_bin_file_compat (const char *in);
 d_bool bhal_prog_exist (arch_word_t *progaddr, void *progdata, size_t progsize);
 void bhal_execute_app (void *addr);
@@ -46,4 +48,7 @@ int bsp_open_wave_sfx (const char *name);
 int bsp_play_wave_sfx (int hdl, uint8_t volume);
 int bsp_stop_wave_sfx (int hdl);
 void bsp_release_wave_sfx (int hdl);
+
+int boot_cmd_handle (int argc, const char **argv);
+
 

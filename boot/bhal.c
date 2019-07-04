@@ -166,6 +166,19 @@ static int bhal_prog_write_chunk (arch_word_t *dst, const arch_word_t *src, int 
     return bhal_prog_read_chunk(dst, src, size);
 }
 
+static int bhal_prog_clear_chunk (arch_word_t *dst, const arch_word_t *src, int size)
+{
+    arch_word_t val = *src;
+    hdd_led_on();
+    while (size > 0) {
+        *dst = val;
+        dst++;
+        size--;
+    }
+    hdd_led_off();
+    return 0;
+}
+
 static int bhal_prog_cmp_chunk (arch_word_t *dst, const arch_word_t *src, int size)
 {
     int miss = 0;
@@ -185,6 +198,7 @@ typedef struct {
     const char *statchar;
 
     d_bool isfatal;
+    d_bool srcinc; /*Increment source ptr*/
     int (*func) (arch_word_t *dst, const arch_word_t *src, int size);
 } prog_func_t;
 
@@ -195,7 +209,19 @@ const prog_func_t func_program =
     "Corrupted memory",
     "#O",
     d_true,
+    d_true,
     bhal_prog_prog_chunk,
+};
+
+const prog_func_t func_clear =
+{
+    "Clear memory",
+    "",
+    "Clear failed",
+    "E?",
+    d_true,
+    d_false,
+    bhal_prog_clear_chunk,
 };
 
 const prog_func_t func_compare =
@@ -205,6 +231,7 @@ const prog_func_t func_compare =
     "Mismatch",
     ".X",
     d_false,
+    d_true,
     bhal_prog_cmp_chunk,
 };
 
@@ -215,6 +242,7 @@ const prog_func_t func_read =
     "Read fail",
     "..",
     d_false,
+    d_true,
     bhal_prog_read_chunk,
 };
 
@@ -224,6 +252,7 @@ const prog_func_t func_write =
     "",
     "Write fail",
     "#O",
+    d_true,
     d_true,
     bhal_prog_write_chunk,
 };
@@ -240,17 +269,21 @@ static int bhal_prog_handle_func
         cplth(func->entermsg, 0);
     }
 
-    dprintf("%s() : %s :\n[", __func__, func->entermsg);
+    dprintf("%s :\n", func->entermsg);
+    dprintf("addr : <0x%p>; size : 0x%08x\n", addr, size);
+    dprintf(" [");
     while (blkcnt < blktotal) {
 
         errors += func->func(tmpaddr, bin, RW_PORTION);
         tmpaddr += RW_PORTION;
-        bin += RW_PORTION;
+        if (func->srcinc) {
+            bin += RW_PORTION;
+        }
         errors_total += errors;
 
         dprintf("%c", func->statchar[!!errors]);
         if ((blkcnt & DBG_MAXLINE) == DBG_MAXLINE) {
-            dprintf("\n");
+            dprintf("]\n [");
         }
         blkcnt++;
         if (cplth) {
@@ -258,11 +291,12 @@ static int bhal_prog_handle_func
             cplth("+", per);
         }
     }
+    dprintf("]\n");
     size = size - (tmpaddr - addr);
     if (size > 0) {
         errors_total += func->func(tmpaddr, bin, size);
     }
-    dprintf("]\n Done, errors : %i\n", errors_total);
+    dprintf("Done, errors : %i\n", errors_total);
     if (errors_total && func->isfatal) {
         dprintf("Fatal : %s\n", func->fatalmsg);
         if (cplth) {
@@ -343,6 +377,7 @@ int __bhal_write_ROM (bhal_cplth_t cplth, arch_word_t *progaddr,
                             void *progdata, size_t progsize)
 {
     int err = 0;
+
     bhal_prog_begin();
     err = bhal_prog_erase(cplth, progaddr, progdata, progsize);
     if (err >= 0) {
@@ -358,8 +393,16 @@ int __bhal_write_ROM (bhal_cplth_t cplth, arch_word_t *progaddr,
 int __bhal_write_RAM (bhal_cplth_t cplth, arch_word_t *progaddr,
                             void *progdata, size_t progsize)
 {
+    bhal_prog_handle_func(cplth, &func_clear, progaddr, progdata, progsize);
     return bhal_prog_handle_func(cplth, &func_write, progaddr, progdata, progsize);
 }
+
+
+int __bhal_clear_RAM (bhal_cplth_t cplth, arch_word_t *progaddr, void *val, size_t progsize)
+{
+    return bhal_prog_handle_func(cplth, &func_clear, progaddr, val, progsize);
+}
+
 
 int bhal_load_program (bhal_cplth_t cplth, arch_word_t *progaddr,
                             void *progdata, size_t progsize)
@@ -385,6 +428,30 @@ int bhal_load_program (bhal_cplth_t cplth, arch_word_t *progaddr,
     return -1;
 }
 
+int bhal_set_mem (bhal_cplth_t cplth, arch_word_t *progaddr,
+                        size_t progsize, arch_word_t value)
+{
+    int (*bhal_op) (bhal_cplth_t, arch_word_t *, void *, size_t) = NULL;
+    exec_mem_type_t exec_mem_type = bsp_get_exec_mem_type((arch_word_t)progaddr);
+
+    switch (exec_mem_type) {
+        case EXEC_ROM :
+            dprintf("%s() : [EXEC_ROM] not yet\n", __func__);
+            return -1;
+        break;
+        case EXEC_SDRAM :
+        case EXEC_SRAM :
+            bhal_op = __bhal_clear_RAM;
+        break;
+        default:
+        break;
+    }
+    if (bhal_op) {
+        return bhal_op(cplth, progaddr, &value, progsize);
+    }
+    dprintf("Unsupported memory region type : %i\n", exec_mem_type);
+    return -1;
+}
 
 /**
   * @brief  Gets the sector of a given address

@@ -76,7 +76,7 @@ extern int32_t g_serial_rx_eof;
 #endif /*BSP_INDIR_API*/
 
 void dvprintf (const char *fmt, va_list argptr);
-void hexdump (const uint8_t *data, int len, int rowlength);
+void hexdump_u8 (const uint8_t *data, int len, int rowlength);
 
 #else /*DEBUG_SERIAL*/
 
@@ -88,7 +88,6 @@ static inline void serial_flush (void){}
 
 static inline void dprintf (const char *fmt, ...){}
 static inline void dvprintf (const char *fmt, va_list argptr) {}
-void hexdump (const uint8_t *data, int len, int rowlength) {}
 
 #endif /*DEBUG_SERIAL*/
 

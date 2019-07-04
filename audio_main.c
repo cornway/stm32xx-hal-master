@@ -202,8 +202,7 @@ static void AUDIO_ParseCfgString (a_intcfg_t *cfg, const char *str)
 
     assert(str);
 
-    dprintf("%s() : [%s]\n", __func__, str);
-    dprintf("config audio : \n[%s]\n", __func__, str);
+    dprintf("Audio config : [%s]\n", str);
     tok = "samplerate";
     if (str_parse_tok(str, tok, &cfg->samplerate) <= 0) {
         cfg->samplerate = AUDIO_RATE_DEFAULT;
@@ -362,8 +361,9 @@ a_intcfg_t *a_get_conf (void)
 void audio_deinit (void)
 {
     dprintf("%s() :\n", __func__);
-    AUDIO_DeInitApplication();
     audio_stop_all();
+    AUDIO_DeInitApplication();
+    /*TODO : use deinit..*/
     cd_init();
 }
 
@@ -391,6 +391,7 @@ void audio_stop_all (void)
         a_channel_remove(cur);
     }
     irq_restore(irq_flags);
+    a_clear_master();
 }
 
 void audio_mixer_ext (void (*mixer_callback) (int, void *, int, void *))

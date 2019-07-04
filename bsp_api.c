@@ -348,8 +348,8 @@ int bsp_argc_argv_check (const char *arg)
 void bsp_argc_argv_set (const char *arg)
 {
     arch_word_t *ptr, maxsize;
-    int size, i, tmp;
-    char **_argv;
+    int size, tmp;
+    const char **_argv;
     char *charptr, *tempptr;
     tlv_t *tlv;
 

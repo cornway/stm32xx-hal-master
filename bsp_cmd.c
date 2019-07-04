@@ -1,6 +1,8 @@
 #include <string.h>
 #include <ctype.h>
+#include "int/term_int.h"
 #include "boot/int/boot_int.h"
+#include "int/bsp_cmd_int.h"
 #include "int/bsp_mod_int.h"
 #include <bsp_cmd.h>
 #include <debug.h>
@@ -23,11 +25,6 @@ typedef struct dvar_int_s {
     char name[CMD_MAX_NAME];
     uint16_t namelen;
 } dvar_int_t;
-
-typedef struct {
-    const char *name;
-    cmd_func_t func;
-} cmd_func_map_t;
 
 typedef struct cmd_keyval_s {
     const char *key;
@@ -402,6 +399,7 @@ const cmd_func_map_t cmd_func_tbl[] =
     {"bsp",         __cmd_exec_internal},
     {"list",        __cmd_fs_print_dir},
     {"cat",         cmd_util_cat},
+    {"bin",         boot_cmd_handle},
 };
 
 cmd_func_map_t cmd_priv_func_tbl[] =
@@ -1180,19 +1178,27 @@ static int cmd_mod_rm (int argc, const char **argv)
 
 int cmd_util_cat (int argc, const char **argv)
 {
-    int f, fseek = 0;
-    int a = 0, b = 0, c = -1, h = 0;
-    char str[256], *pstr;
+    void (*dumpfunc) (const uint8_t *, int, int) = NULL;
+
+    int f, fseek = 0, fsize = 0;
+    int a = 0, b = 0, c = -1, h = 0, w = 0;
+    char str[256];
     const char *argvbuf[CMD_MAX_ARG];
 
     cmd_keyval_t kvarr[] = 
     {
-        CMD_KVI32_S("n", &c),
-        CMD_KVI32_S("a", &a),
-        CMD_KVI32_S("b", &b),
-        CMD_KVI32_S("h", &h),
+        CMD_KVI32_S("n", &c), /*how many bytes..*/
+        CMD_KVI32_S("a", &a), /*start position*/
+        CMD_KVI32_S("b", &b), /*end position*/
+        CMD_KVI32_S("h", &h), /*use hex dump, [-h 8] - will print 8 items per row*/
+        CMD_KVI32_S("w", &w), /*type width(bits) for hex dump, applicable : 8, 16, 32*/
     };
     cmd_keyval_t *kvlist[arrlen(kvarr)];
+
+    if (argc < 1) {
+        return -1;
+        /*TODO : print usage...*/
+    }
 
     for (a = 0; a < arrlen(kvarr); a++) kvlist[a] = &kvarr[a];
     a = 0;
@@ -1204,7 +1210,27 @@ int cmd_util_cat (int argc, const char **argv)
         dprintf("%s() : unexpected arguments\n", __func__);
         return -1;
     }
-    d_open(argv[0], &f, "r");
+
+    if (w) {
+        assert(h);
+    } else {
+        w = 32;
+    }
+    if (h) {
+        switch (w) {
+            case 8:
+                dumpfunc = hexdump_u8;
+            break;
+            case 16:
+                dprintf("hexdump_16 not implemented yet, using hexdump_8\n");
+                dumpfunc = hexdump_u8;
+            break;
+            case 32:
+                dumpfunc = hexdump_le_u32;
+            break;
+        }
+    }
+    fsize = d_open(argv[0], &f, "r");
     if (f < 0) {
         dprintf("path does not exist : %s\n", argv[0]);
         return -1;
@@ -1223,30 +1249,33 @@ int cmd_util_cat (int argc, const char **argv)
         }
         d_seek(f, fseek, DSEEK_SET);
     }
-    pstr = str;
     if (h > 0 && h < 4) {
         h = 4;
     }
+    if (!c) {
+        c = fsize;
+    } else {
+        c = min(c, fsize);
+    }
     dprintf("******************************\n");
-    while (!d_eof(f) && c--) {
-        if (h) {
-            int len = sizeof(str) / 2;
+    while (!d_eof(f) && c > 0) {
+        int len;
+        char *pstr = str;
 
-            len = d_read(f, pstr, ROUND_DOWN(len, h));
-            if (!len) {
-                break;
-            }
-            hexdump((const uint8_t *)str, len, h);
-        } else {
-            pstr = d_gets(f, pstr, sizeof(str));
-            if (!pstr) {
-                break;
-            }
-            dprintf("%s\n", str);
+        len = sizeof(str) / 2;
+        len = d_read(f, pstr, ROUND_DOWN(len, h));
+        if (!len) {
+            break;
         }
+        if (h) {
+            dumpfunc((const uint8_t *)pstr, len, h);
+        } else {
+            dprintf("%s\n", pstr);
+        }
+        c = c - len;
     }
     d_close(f);
-    dprintf("\n");
+    dprintf("******************************\n");
     return 0;
 }
 

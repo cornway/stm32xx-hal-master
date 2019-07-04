@@ -337,8 +337,6 @@ int gui_string_direct (component_t *com, int line, rgba_t textcolor, const char 
 
 static void gui_comp_draw (pane_t *pane, component_t *com)
 {
-    gui_t *gui = pane->parent;
-
     if (com->ispad) {
         BSP_LCD_SetTextColor(com->bcolor);
         BSP_LCD_FillRect(com->dim.x, com->dim.y, com->dim.w, com->dim.h);

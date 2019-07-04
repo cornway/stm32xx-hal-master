@@ -100,7 +100,7 @@ static int
 str_tkn_continue (const char **dest, const char **src, tknmatch_t tkncmp,
                      tkntype_t *flags, int argc, int maxargc)
 {
-    int i, n;
+    int i;
     int tmp, total = 0;
 
     for (i = 0; i < argc; i++) {
@@ -160,13 +160,11 @@ static int str_tokenize_string (char *buf, int argc, const char **argv)
     const char *tempbuf[MAX_TOKENS], **tempptr = &tempbuf[0];
     tkntype_t flags[MAX_TOKENS];
 
-    int totalcnt, tmp;
+    int totalcnt;
 
     if (argc < 2) {
         return -1;
     }
-
-    dprintf("user: [%s]\n", buf);
 
     totalcnt = MAX_TOKENS;
     str_tkn_split(tempptr, quotematch, &totalcnt, buf);
@@ -339,18 +337,74 @@ static void __bsp_stdin_iter_fwd
     }
 }
 
-void hexdump (const uint8_t *data, int len, int rowlength)
+void hexdump_u8 (const uint8_t *data, int len, int rowlength)
 {
-    int x, y, xn;
-    for (y = 0; y <= len / rowlength; y++) {
-        xn = len < rowlength ? len : rowlength;
-        dprintf("[0x%04x:0x%04x] : ", y, y + xn);
-        for (x = 0; x < xn; x++) {
-            dprintf("0x%02x ", data[x + y * rowlength]);
+    int col, row, colmax;
+    int maxrows, total = 0;
+
+    if (!rowlength) {
+        rowlength = len;
+    }
+    maxrows = len / rowlength;
+    colmax = min(len, rowlength);
+
+    for (row = 0; row < maxrows; row++) {
+
+        dprintf("[0x%04x:0x%04x] : ", total, total + colmax);
+
+        for (col = 0; col < colmax; col++) {
+            dprintf("0x%02x ", data[row + row * rowlength]);
         }
+        total += colmax;
         dprintf("\n");
     }
+    len = len - (row * rowlength);
+    assert(len >= 0 && len < rowlength);
+
+    if (len) {
+
+        dprintf("[0x%04x:0x%04x] >> ", total, total + colmax);
+        for (col = 0; col < len; col++) {
+            dprintf("0x%02x ", data[row + row * rowlength]);
+        }
+    }
 }
+
+void hexdump_le_u32 (const uint32_t *data, int len, int rowlength)
+{
+    int col, row, colmax;
+    int maxrows, total;
+
+    len = len / sizeof(uint32_t);
+
+    if (!rowlength) {
+        rowlength = len;
+    }
+    maxrows = len / rowlength;
+    colmax = min(len, rowlength);
+
+    for (row = 0; row < maxrows; row++) {
+
+        dprintf("[0x%04x:0x%04x] >> ", total, total + colmax);
+
+        for (col = 0; col < colmax; col++) {
+            dprintf("0x%08x ", data[row + row * rowlength]);
+        }
+        total += colmax;
+        dprintf("\n");
+    }
+    len = len - (row * rowlength);
+    assert(len >= 0 && len < rowlength);
+
+    if (len) {
+
+        dprintf("[0x%04x:0x%04x] : ", total, total + colmax);
+        for (col = 0; col < len; col++) {
+            dprintf("0x%08x ", data[row + row * rowlength]);
+        }
+    }
+}
+
 
 #endif
 

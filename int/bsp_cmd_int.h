@@ -27,9 +27,15 @@ typedef struct {
     void *user1, *user2;
 } cmdexec_t;
 
+typedef struct {
+    const char *name;
+    cmd_func_t func;
+} cmd_func_map_t;
+
 cmd_func_t bsp_stdin_unstash (cmd_func_t func);
 cmd_func_t bsp_stdin_stash (cmd_func_t func);
 int bsp_exec_link (arch_word_t *progaddr, const char *path);
+int boot_cmd_handle (int argc, const char **argv);
 
 #endif /*__BSP_CMD_INT_H__*/
 
