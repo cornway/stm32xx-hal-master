@@ -48,11 +48,6 @@
 #define ADDR_FLASH_SECTOR_11    ((uint32_t)0x081C0000) /* Base address of Sector 11, 256 Kbytes */
 #endif /* DUAL_BANK */
 
-#if defined(DUAL_BANK)
-arch_word_t g_app_program_addr = ADDR_FLASH_SECTOR_12;
-#else
-arch_word_t g_app_program_addr = ADDR_FLASH_SECTOR_8;
-#endif
 
 #define RW_PORTION (1 << 8)
 #define RW_ALIGN_MS (RW_PORTION - 1)
@@ -138,10 +133,7 @@ static int bhal_prog_prog_chunk (arch_word_t *dst, const arch_word_t *src, int s
 
     hdd_led_on();
     while (size > 0) {
-        if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, (arch_word_t)dst, (*src) & 0xffff) != HAL_OK) {
-            errcnt++;
-        }
-        if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, (arch_word_t)dst + 2, (*src) >> 16) != HAL_OK) {
+        if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, (arch_word_t)dst, *src) != HAL_OK) {
             errcnt++;
         }
         src++;
@@ -264,6 +256,7 @@ static int bhal_prog_handle_func
     arch_word_t *tmpaddr = addr, *bin = (arch_word_t *)_bin;
     int errors = 0, errors_total = 0;
     int blkcnt = 0, blktotal = size / RW_PORTION;
+    char linebuf[B_MAX_LINEBUF];
 
     if (cplth) {
         cplth(func->entermsg, 0);
@@ -271,7 +264,6 @@ static int bhal_prog_handle_func
 
     dprintf("%s :\n", func->entermsg);
     dprintf("addr : <0x%p>; size : 0x%08x\n", addr, size);
-    dprintf(" [");
     while (blkcnt < blktotal) {
 
         errors += func->func(tmpaddr, bin, RW_PORTION);
@@ -281,9 +273,10 @@ static int bhal_prog_handle_func
         }
         errors_total += errors;
 
-        dprintf("%c", func->statchar[!!errors]);
+        linebuf[blkcnt] = func->statchar[!!errors];
         if ((blkcnt & DBG_MAXLINE) == DBG_MAXLINE) {
-            dprintf("]\n [");
+            linebuf[blkcnt + 1] = 0;
+            dprintf("[ %s ]\n", linebuf);
         }
         blkcnt++;
         if (cplth) {
@@ -291,7 +284,6 @@ static int bhal_prog_handle_func
             cplth("+", per);
         }
     }
-    dprintf("]\n");
     size = size - (tmpaddr - addr);
     if (size > 0) {
         errors_total += func->func(tmpaddr, bin, size);

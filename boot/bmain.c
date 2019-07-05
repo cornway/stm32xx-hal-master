@@ -1,10 +1,10 @@
 #include <string.h>
+#include <debug.h>
 #include "int/boot_int.h"
 #include "../int/term_int.h"
 #include <gfx.h>
 #include <gui.h>
 #include <dev_io.h>
-#include <debug.h>
 #include <nvic.h>
 #include <input_main.h>
 #include <lcd_main.h>
@@ -17,8 +17,6 @@
 #define BOOT_SYS_LOG_NAME "log.txt"
 #define BOOT_BIN_DIR_NAME "BIN"
 #define BOOT_SYS_LOG_PATH BOOT_SYS_DIR_PATH"/"BOOT_SYS_LOG_NAME
-
-extern uint32_t g_app_program_addr;
 
 static int boot_program_bypas = 0;
 
@@ -298,7 +296,6 @@ static int b_handle_selected (pane_t *pane, component_t *com, void *user)
     }
 
     if (bindesc->filetype == BIN_FILE) {
-        g_app_program_addr = bindesc->progaddr;
         cmd_exec_dsr("boot", bindesc->path, NULL, NULL);
     } else if (bindesc->filetype == BIN_LINK) {
         assert(b_handle_lnk(bindesc->path));

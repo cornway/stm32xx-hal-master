@@ -363,11 +363,8 @@ void vid_direct (screen_t *s)
 
 void vid_print_info (void)
 {
-    LCD_LayerCfgTypeDef *Layercfg;
-
     assert(lcd_active_cfg);
 
-    Layercfg = lcd_active_cfg->lay_halcfg;
     dprintf("width=%4.3u height=%4.3u\n", lcd_active_cfg->w, lcd_active_cfg->h);
     dprintf("layers=%u, color mode=<%s>\n",
              lcd_active_cfg->lay_cnt, screen_mode2txt_map[lcd_active_cfg->colormode]);
