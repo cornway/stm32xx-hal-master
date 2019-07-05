@@ -587,25 +587,28 @@ void serial_flush (void)
     irq_restore(irq_flags);
 }
 
-void dvprintf (const char *fmt, va_list argptr)
+int dvprintf (const char *fmt, va_list argptr)
 {
     /*TODO : use local buf*/
-    static char            string[1024];
+    char            string[1024];
     int size = 0;
 #if SERIAL_TSF
     size = __insert_tsf(fmt, string, sizeof(string));
 #endif
     size += vsnprintf(string + size, sizeof(string) - size, fmt, argptr);
     bsp_serial_send(string, size);
+    return size;
 }
 
-void dprintf (const char *fmt, ...)
+int dprintf (const char *fmt, ...)
 {
     va_list         argptr;
+    int size;
 
     va_start (argptr, fmt);
-    dvprintf(fmt, argptr);
+    size = dvprintf(fmt, argptr);
     va_end (argptr);
+    return size;
 }
 
 #if DEBUG_SERIAL_USE_DMA

@@ -42,7 +42,7 @@ typedef struct bsp_io_api_s {
     char *(*gets) (int, PACKED char *, int);
     char (*getc) (int);
     int (*write) (int, PACKED const void *, int);
-    int (*printf) (int, char *, ...);
+    int (*printf) (int, const char *, ...);
     int (*mkdir) (const char *);
     int (*opendir) (const char *);
     int (*closedir) (int );
@@ -95,7 +95,7 @@ int d_read (int handle, PACKED void *dst, int count);
 char *d_gets (int handle, PACKED char *dst, int count);
 char d_getc (int h);
 int d_write (int handle, PACKED const void *src, int count);
-int d_printf (int handle, char *fmt, ...);
+int d_printf (int handle, const char *fmt, ...);
 int d_mkdir (const char *path);
 int d_opendir (const char *path);
 int d_closedir (int dir);

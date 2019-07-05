@@ -138,9 +138,7 @@ void cmd_unregister_all (void);
 
 int dev_io_init (void)
 {
-    _devio_mount(SDPath, NULL);
-    
-    return 0;
+    return _devio_mount(SDPath, NULL);
 }
 
 void dev_io_deinit (void)
@@ -315,7 +313,7 @@ int d_write (int handle, PACKED const void *src, int count)
 #endif
 }
 
-int d_printf (int handle, char *fmt, ...)
+int d_printf (int handle, const char *fmt, ...)
 {
     va_list args;
     char buf[1024];

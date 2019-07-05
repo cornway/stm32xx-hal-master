@@ -27,7 +27,7 @@ typedef struct bsp_debug_api_s {
     void (*reg_clbk) (int (*) (int , const char **));
     void (*unreg_clbk) (int (*) (int , const char **));
     void (*tickle) (void);
-    void (*dprintf) (const char *, ...);
+    int (*dprintf) (const char *, ...);
 } bsp_debug_api_t;
 
 #ifndef DEBUG_SERIAL
@@ -69,14 +69,13 @@ void serial_flush (void);
 void bsp_stdin_register_if (int (*) (int , const char **));
 void bsp_stdin_unreg_if (int (*) (int , const  char **));
 void serial_tickle (void);
-void dprintf (const char *fmt, ...) PRINTF;
+int dprintf (const char *fmt, ...) PRINTF;
 
 extern int32_t g_serial_rx_eof;
 
 #endif /*BSP_INDIR_API*/
 
-void dvprintf (const char *fmt, va_list argptr);
-void hexdump_u8 (const uint8_t *data, int len, int rowlength);
+int dvprintf (const char *fmt, va_list argptr);
 
 #else /*DEBUG_SERIAL*/
 
@@ -86,8 +85,8 @@ static inline char serial_getc (void) {return 0;}
 static inline void serial_send_buf (const void *data, size_t cnt){}
 static inline void serial_flush (void){}
 
-static inline void dprintf (const char *fmt, ...){}
-static inline void dvprintf (const char *fmt, va_list argptr) {}
+static inline int dprintf (const char *fmt, ...){return 0;}
+static inline int dvprintf (const char *fmt, va_list argptr) {return 0;}
 
 #endif /*DEBUG_SERIAL*/
 

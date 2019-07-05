@@ -21,7 +21,6 @@ extern void VID_PreConfig (void);
 
 static void SystemClock_Config(void);
 static void CPU_CACHE_Enable(void);
-static void SystemDump (void);
 
 int g_dev_debug_level = DBG_ERR;
 
@@ -173,11 +172,6 @@ static void CPU_CACHE_Enable(void)
     SCB_EnableDCache();
 }
 
-static void SystemDump (void)
-{
-    //NVIC_dump();
-}
-
 void dev_deinit (void)
 {
     irqmask_t irq = NVIC_IRQ_MASK;
@@ -226,7 +220,6 @@ int dev_init (void)
     input_bsp_init();
     profiler_init();
     vid_init();
-    SystemDump();
     cmd_register_i32(&g_dev_debug_level, "dbglvl");
     cmd_register_i32(&g_serial_rx_eof, "set_rxeof");
     return 0;
