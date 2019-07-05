@@ -70,6 +70,7 @@ void bsp_stdin_register_if (int (*) (int , const char **));
 void bsp_stdin_unreg_if (int (*) (int , const  char **));
 void serial_tickle (void);
 int dprintf (const char *fmt, ...) PRINTF;
+int aprint (const char *str, int size);
 
 extern int32_t g_serial_rx_eof;
 

@@ -81,5 +81,8 @@ int cmd_txt_exec (const char *, int);
 void cmd_exec_dsr (const char *, const char *,
                         void *, void *);
 
+void __print_cmd_map (const cmd_func_map_t *map, int cnt);
+#define PRINT_CMD_MAP(map) __print_cmd_map(map, arrlen(map))
+
 #endif /*__BSP_CMD_INT_H__*/
 

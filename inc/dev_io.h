@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stdarg.h>
 
 #ifndef __DEVIO_H__
 #define __DEVIO_H__
@@ -16,10 +17,17 @@ typedef enum {
 } ftype_t;
 
 typedef struct {
+    size_t  size;
+    uint32_t date;
+    uint32_t time;
+    uint8_t attrib;
+} fcom_t;
+
+typedef struct {
+    fcom_t com;
     ftype_t type;
     int h;
     char name[128];
-    void *ptr;
 } fobj_t;
 
 typedef int (*list_clbk_t)(char *name, ftype_t type);
@@ -104,5 +112,9 @@ uint32_t d_time (void);
 int d_dirlist (const char *path, flist_t *flist);
 
 #endif
+
+int _d_vprintf (int handle, const char *fmt, va_list argptr);
+
+#define d_vprintf _d_vprintf
 
 #endif

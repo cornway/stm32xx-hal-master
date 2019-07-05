@@ -589,7 +589,6 @@ void serial_flush (void)
 
 int dvprintf (const char *fmt, va_list argptr)
 {
-    /*TODO : use local buf*/
     char            string[1024];
     int size = 0;
 #if SERIAL_TSF
@@ -608,6 +607,17 @@ int dprintf (const char *fmt, ...)
     va_start (argptr, fmt);
     size = dvprintf(fmt, argptr);
     va_end (argptr);
+    return size;
+}
+
+/*prints ascii only(printable?)*/
+int aprint (const char *str, int size)
+{
+    char            string[1024];
+    int offset = 0;
+    memcpy(string, str, size);
+    str_replace_2_ascii(string);
+    bsp_serial_send(string, size);
     return size;
 }
 

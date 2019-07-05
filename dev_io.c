@@ -240,11 +240,28 @@ int d_unlink (const char *path)
 /*TODO : handle mode arg*/
 int d_seek (int handle, int position, uint32_t mode)
 {
+    FRESULT res;
+
     if (handle < 0) {
         return -1;
     }
-    assert(mode == DSEEK_SET);
-    return f_lseek(getfile(handle), position) == FR_OK ? position : -1;
+    switch (mode) {
+        case DSEEK_SET:
+            res = f_lseek(getfile(handle), position);
+        break;
+        case DSEEK_CUR:
+            res = d_tell(handle);
+        break;
+        case DSEEK_END:
+            position = d_size(handle);
+            res = f_lseek(getfile(handle), position);
+        break;
+        default:
+            dprintf("Unknown SEEK mode : %u\n", mode);
+            return -1;
+        break;
+    }
+    return res == FR_OK ? position : -1;
 }
 
 int d_eof (int handle)
@@ -316,16 +333,23 @@ int d_write (int handle, PACKED const void *src, int count)
 int d_printf (int handle, const char *fmt, ...)
 {
     va_list args;
-    char buf[1024];
     int size;
 
     va_start(args, fmt);
-    size = vsnprintf(buf, sizeof(buf), fmt, args);
+    size = _d_vprintf(handle, fmt, args);
     va_end(args);
 
-    return d_write(handle, buf, size);
+    return size;
 }
 
+int _d_vprintf (int h, const char *fmt, va_list argptr)
+{
+    char            string[1024];
+    int size = 0;
+    size = vsnprintf(string, sizeof(string), fmt, argptr);
+    size = d_write(h, string, size);
+    return size;
+}
 
 int d_mkdir (const char *path)
 {
@@ -385,6 +409,10 @@ int d_readdir (int dir, fobj_t *fobj)
     } else {
         fobj->type = FTYPE_DIR;
     }
+    fobj->com.attrib = dh->fn.fattrib;
+    fobj->com.time = dh->fn.ftime;
+    fobj->com.date = dh->fn.fdate;
+    fobj->com.size = dh->fn.fsize;
     return dir;
 }
 

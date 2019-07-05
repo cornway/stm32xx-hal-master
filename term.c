@@ -37,7 +37,15 @@ static inline char str_char_printable (char c)
     return c;
 }
 
-void str_filter_printable (char *str)
+void str_collect_ascii (char *str)
+{
+    while (*str) {
+        *str = str_char_printable(*str);
+        str++;
+    }
+}
+
+void str_replace_2_ascii (char *str)
 {
     while (*str) {
         *str = str_char_printable(*str);
@@ -203,12 +211,13 @@ int str_tokenize (const char **tok, int tokcnt, char *str)
     *tok = p;
     p = strtok(str, " ");
     while (p && tokcnt > 0) {
-        str_filter_printable(p);
+        str_collect_ascii(p);
         p = strtok(NULL, " ");
-        tok++;
-        tokcnt--;
-        *tok = p;
-        str_remove_spaces(p);
+        if (*p) {
+            tokcnt--;
+            tok++;
+            *tok = p;
+        }
     }
     return toktotal - tokcnt;
 }
@@ -447,7 +456,7 @@ static int __printfmt (int unused, const char *fmt, ...)
 int __hexdump_u8 (printfmt_t printfmt, int stream, const uint8_t *data, int len, int rowlength)
 {
     int col, row, colmax, bytescnt = len;
-    int maxrows, total = 0;
+    int maxrows;
     uint8_t *startptr = (uint8_t *)data, *endptr = startptr;
 
     if (!rowlength) {
@@ -458,22 +467,22 @@ int __hexdump_u8 (printfmt_t printfmt, int stream, const uint8_t *data, int len,
 
     for (row = 0; row < maxrows; row++) {
 
-        startptr += total;
+        startptr += colmax;
         endptr = startptr + colmax;
-        printfmt(stream, "[0x%px:0x%p] : ", startptr, endptr);
+        printfmt(stream, "[0x%p : 0x%p] : ", startptr, endptr);
 
         for (col = 0; col < colmax; col++) {
             printfmt(stream, "0x%02x ", data[row + row * rowlength]);
         }
-        total += colmax;
         printfmt(stream, "\n");
     }
     len = len - (row * rowlength);
     assert(len >= 0 && len < rowlength);
 
     if (len) {
-
-        printfmt(stream, "[0x%04x:0x%04x] >> ", total, total + colmax);
+        startptr += colmax;
+        endptr = startptr + colmax;
+        printfmt(stream, "[0x%p : 0x%p] : ", startptr, endptr);
         for (col = 0; col < len; col++) {
             printfmt(stream, "0x%02x ", data[row + row * rowlength]);
         }
@@ -490,7 +499,7 @@ int __hexdump_le_u32 (printfmt_t printfmt, int stream,
                               const uint32_t *data, int len, int rowlength)
 {
     int col, row, colmax, bytescnt = len;
-    int maxrows, total = 0;
+    int maxrows;
     uint8_t *startptr = (uint8_t *)data, *endptr = startptr;
 
     len = len / sizeof(uint32_t);
@@ -503,22 +512,22 @@ int __hexdump_le_u32 (printfmt_t printfmt, int stream,
 
     for (row = 0; row < maxrows; row++) {
 
-        startptr += total;
+        startptr += colmax;
         endptr = startptr + colmax;
-        printfmt(stream, "[0x%px:0x%p] : ", startptr, endptr);
+        printfmt(stream, "[0x%p : 0x%p] : ", startptr, endptr);
 
         for (col = 0; col < colmax; col++) {
             printfmt(stream, "0x%08x ", data[row + row * rowlength]);
         }
-        total += colmax;
         printfmt(stream, "\n");
     }
     len = len - (row * rowlength);
     assert(len >= 0 && len < rowlength);
 
     if (len) {
-
-        printfmt(stream, "[0x%04x:0x%04x] : ", total, total + colmax);
+        startptr += colmax;
+        endptr = startptr + colmax;
+        printfmt(stream, "[0x%p : 0x%p] : ", startptr, endptr);
         for (col = 0; col < len; col++) {
             printfmt(stream, "0x%08x ", data[row + row * rowlength]);
         }
@@ -529,6 +538,28 @@ int __hexdump_le_u32 (printfmt_t printfmt, int stream,
 void hexdump_le_u32 (const void *data, int len, int rowlength)
 {
     __hexdump_le_u32(__printfmt, -1, (const uint32_t *)data, len, rowlength);
+}
+
+void hexdump (const void *data, int bits, int len, int rowlength)
+{
+    __hexdump(__printfmt, -1, (const uint32_t *)data, bits, len, rowlength);
+}
+
+void __hexdump (printfmt_t printfmt, int stream,
+                  const void *data, int bits, int len, int rowlength)
+{
+    switch(bits) {
+        case 8: __hexdump_u8(printfmt, -1, (uint8_t *)data, len, rowlength);
+        break;
+        case 16: dprintf("hexdump_u16: not yet");
+        break;
+        case 32: __hexdump_le_u32(printfmt, -1, (uint32_t *)data, len, rowlength);
+        break;
+        case 64: dprintf("hexdump_u64: not yet");
+        break;
+        default: assert(0);
+        break;
+    }
 }
 
 #endif

@@ -1,5 +1,6 @@
 #include <string.h>
 #include <ctype.h>
+#include <debug.h>
 #include "int/term_int.h"
 #include "boot/int/boot_int.h"
 #include "int/bsp_cmd_int.h"
@@ -25,8 +26,8 @@ static const char *cmd_errno_text (void);
 static void cmd_set_errno (int err);
 static const char *cmd_check_errno (cmd_errno_t *err);
 static int _cmd_register_var (cmdvar_t *var, const char *name);
-static int cmd_stdin_forward (int argc, const char **argv);
-static int __cmd_stdin_handle (dvar_int_t *v, int argc, const char **argv);
+static int cmd_stdin_ascii_forward (int argc, const char **argv);
+static int __cmd_handle_ascii (dvar_int_t *v, int argc, const char **argv);
 static int __cmd_print_env (int argc, const char **argv);
 static int __cmd_register_var (int argc, const char **argv);
 static int __cmd_unregister_var (int argc, const char **argv);
@@ -46,14 +47,15 @@ static int cmd_mod_rm (int argc, const char **argv);
 static int cmd_mod_probe (int argc, const char **argv);
 static int cmd_stdin_ctrl (int argc, const char **argv);
 static int cmd_util_serial (int argc, const char **argv);
-static int cmd_util_cat (int argc, const char **argv);
+static int cmd_intutil_cat (int argc, const char **argv);
 static int cmd_stdin_to_path_write (int argc, const char **argv);
 static int cmd_stdin_path_close (void);
 static int cmd_exec_cmdfile (int argc, const char **argv);
 static int cmd_util_nop (int argc, const char **argv);
 
 static int
-__dir_list (char *pathbuf, int recursion, int maxrecursion, const char *path);
+__dir_list (int verbose, char *pathbuf, int recursion,
+             int maxrecursion, const char *path);
 
 static dvar_int_t *dvar_head = NULL;
 static cmd_func_t saved_stdin_hdlr = NULL;
@@ -69,7 +71,7 @@ static const cmd_func_map_t cmd_func_tbl[] =
     {"unreg",       __cmd_unregister_var},
     {"bsp",         __cmd_exec_internal},
     {"list",        __cmd_fs_print_dir},
-    {"cat",         cmd_util_cat},
+    {"cat",         cmd_intutil_cat},
     {"bin",         boot_cmd_handle},
     {"nop",         cmd_util_nop},
 };
@@ -156,7 +158,7 @@ static uint32_t __cmd_tofile_usage_tsf = 0;
 
 int cmd_init (void)
 {
-    bsp_stdin_register_if(cmd_stdin_forward);
+    bsp_stdin_register_if(cmd_stdin_ascii_forward);
 
     int i;
 
@@ -169,7 +171,7 @@ int cmd_init (void)
 
 void cmd_deinit (void)
 {
-    bsp_stdin_unreg_if(cmd_stdin_forward);
+    bsp_stdin_unreg_if(cmd_stdin_ascii_forward);
     cmd_unregister_all();
 }
 
@@ -419,17 +421,18 @@ static int cmd_stdin_ctrl (int argc, const char **argv)
     return argc;
 }
 
-static int __cmd_stdin_forward (int argc, const char **argv)
+static int __cmd_stdin_ascii_fwd (int argc, const char **argv)
 {
     dvar_int_t *v = dvar_head;
 
     if (argc < 1) {
+        __cmd_print_env(argc, argv);
         return -CMDERR_NOARGS;
     }
 
     while (v) {
         if (strncmp(argv[0], v->name, v->namelen) == 0) {
-            argc = __cmd_stdin_handle(v, --argc, ++argv);
+            argc = __cmd_handle_ascii(v, --argc, ++argv);
             break;
         }
         v = v->next;
@@ -437,16 +440,16 @@ static int __cmd_stdin_forward (int argc, const char **argv)
     return argc;
 }
 
-static int cmd_stdin_forward (int argc, const char **argv)
+static int cmd_stdin_ascii_forward (int argc, const char **argv)
 {
-    argc = __cmd_stdin_forward(argc, argv);
+    argc = __cmd_stdin_ascii_fwd(argc, argv);
     if (argc < 0) {
         cmd_set_errno(argc);
     }
     return argc;
 }
 
-static int __cmd_stdin_handle (dvar_int_t *v, int argc, const char **argv)
+static int __cmd_handle_ascii (dvar_int_t *v, int argc, const char **argv)
 {
     switch (v->dvar.type) {
         case DVAR_INT32:
@@ -584,9 +587,11 @@ static int __cmd_fs_print_dir (int argc, const char **argv)
     char pathbuf[CMD_MAX_PATH];
     const char *argvbuf[16];
     uint32_t recursion = CMD_MAX_RECURSION;
+    int verbose = -1;
 
     cmd_keyval_t kva = CMD_KVI32_S("n", &recursion);
-    cmd_keyval_t *kvlist[] ={&kva};
+    cmd_keyval_t kvb = CMD_KVI32_S("v", &verbose);
+    cmd_keyval_t *kvlist[] ={&kva, &kvb};
 
     assert(arrlen(argvbuf) > argc);
 
@@ -602,10 +607,10 @@ static int __cmd_fs_print_dir (int argc, const char **argv)
     } else {
         ppath = "";
     }
-    return __dir_list(pathbuf, 0, recursion, ppath);
+    return __dir_list(verbose, pathbuf, 0, recursion, ppath);
 }
 
-static int __dir_list (char *pathbuf, int recursion,
+static int __dir_list (int verbose, char *pathbuf, int recursion,
                         int maxrecursion, const char *path)
 {
     int h;
@@ -622,14 +627,24 @@ static int __dir_list (char *pathbuf, int recursion,
     }
     while(d_readdir(h, &obj) >= 0) {
 
-        dprintf("%*s|%s %s \n",
-            recursion * 2, "-", obj.name, obj.type == FTYPE_FILE ? "f" : "d");
+        dprintf("%*s|%s %s ",
+            recursion * 2, "-", obj.name, obj.type == FTYPE_FILE ? "F" : "D");
         if (obj.type == FTYPE_DIR) {
             sprintf(pathbuf, "%s/%s", path, obj.name);
-            if (__dir_list(pathbuf, recursion + 1, maxrecursion, pathbuf) < 0) {
+            if (__dir_list(verbose, pathbuf, recursion + 1, maxrecursion, pathbuf) < 0) {
                 break;
             }
+        } else {
+            switch (verbose) {
+                case 3:
+                    dprintf("d[%u] ", obj.com.date);
+                case 2:
+                    dprintf("t[%u] ", obj.com.time);
+                case 1:
+                    dprintf("s[%u] ", obj.com.size);
+            }
         }
+        dprintf(" |\n");
     }
     d_closedir(h);
     return 0;
@@ -701,14 +716,15 @@ static int cmd_mod_rm (int argc, const char **argv)
     return argc - 1;
 }
 
-static int cmd_util_cat (int argc, const char **argv)
+static int cmd_intutil_cat (int argc, const char **argv)
 {
     void (*dumpfunc) (const void *, int, int) = NULL;
 
     int f, fseek = 0, fsize = 0;
     int a = 0, b = 0, c = -1, h = 0, w = 0;
-    char str[256];
+    char str[256], *pstr = str;
     const char *argvbuf[CMD_MAX_ARG];
+    int len = 0;
 
     cmd_keyval_t kvarr[] = 
     {
@@ -716,7 +732,7 @@ static int cmd_util_cat (int argc, const char **argv)
         CMD_KVI32_S("a", &a), /*start position*/
         CMD_KVI32_S("b", &b), /*end position*/
         CMD_KVI32_S("h", &h), /*use hex dump, [-h 8] - will print 8 items per row*/
-        CMD_KVI32_S("w", &w), /*type width(bits) for hex dump, applicable : 8, 16, 32*/
+        CMD_KVI32_S("w", &w), /*type width(bits) for hex dump, applicable : 8, , 32*/
     };
     cmd_keyval_t *kvlist[arrlen(kvarr)];
 
@@ -741,19 +757,17 @@ static int cmd_util_cat (int argc, const char **argv)
     } else {
         w = 32;
     }
-    if (h) {
-        switch (w) {
-            case 8:
-                dumpfunc = hexdump_u8;
-            break;
-            case 16:
-                dprintf("hexdump_16 not implemented yet, using hexdump_8\n");
-                dumpfunc = hexdump_u8;
-            break;
-            case 32:
-                dumpfunc = hexdump_le_u32;
-            break;
-        }
+    switch (w) {
+        case 8:
+            dumpfunc = hexdump_u8;
+        break;
+        case 16:
+            dprintf("hexdump_16 not implemented yet, using hexdump_8\n");
+            dumpfunc = hexdump_u8;
+        break;
+        case 32:
+            dumpfunc = hexdump_le_u32;
+        break;
     }
     fsize = d_open(argv[0], &f, "r");
     if (f < 0) {
@@ -782,25 +796,22 @@ static int cmd_util_cat (int argc, const char **argv)
     } else {
         c = min(c, fsize);
     }
-    dprintf("******************************\n");
     while (!d_eof(f) && c > 0) {
-        int len;
-        char *pstr = str;
 
         len = sizeof(str) / 2;
-        len = d_read(f, pstr, ROUND_DOWN(len, h));
+        len = d_read(f, pstr, len);
         if (!len) {
             break;
         }
         if (h) {
             dumpfunc((const uint8_t *)pstr, len, h);
         } else {
-            dprintf("%s\n", pstr);
+            aprint(pstr, len);
         }
-        c = c - len;
+        pstr += len;
+        c -= len;
     }
     d_close(f);
-    dprintf("******************************\n");
     return CMDERR_OK;
 }
 
@@ -1108,7 +1119,10 @@ static int _cmd_export_all (int argc, const char **argv)
 static int __cmd_exec_internal (int argc, const char **argv)
 {
     int  i;
-
+    if (argc < 1) {
+        PRINT_CMD_MAP(cmd_priv_func_tbl);
+        return -1;
+    }
     for (i = 0; i < arrlen(cmd_priv_func_tbl) && argc > 0; i++) {
         if (strcmp(argv[0], cmd_priv_func_tbl[i].name) == 0) {
             argc = cmd_priv_func_tbl[i].func(--argc, &argv[1]);
@@ -1296,6 +1310,15 @@ cmd_parm_collect (cmd_keyval_t **begin, cmd_keyval_t **end, int argc,
     }
 
     return argc + moreparams;
+}
+
+void __print_cmd_map (const cmd_func_map_t *map, int cnt)
+{
+    int i;
+    dprintf("functions :\n");
+    for (i = 0; i < cnt; i++) {
+        dprintf("[%s]\n", map[i].name);
+    }
 }
 
 /*PUBLIC, INTERNAL============================================================*/
