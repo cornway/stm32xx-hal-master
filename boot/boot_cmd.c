@@ -1,5 +1,6 @@
 #include <string.h>
 #include "../int/bsp_cmd_int.h"
+#include "../int/term_int.h"
 #include "int/boot_int.h"
 #include <dev_io.h>
 #include <debug.h>
@@ -29,7 +30,7 @@ static int boot_print_bin_list (int argc, const char **argv)
     return argc;
 }
 
-static void __bin_cmd_dump (arch_word_t addr, arch_word_t size, const char *path)
+static void __bin_cmd_dump (arch_word_t addr, arch_word_t bytescnt, const char *path)
 {
     int f, i, tmp;
     uint8_t *ptr = (uint8_t *)addr;
@@ -41,32 +42,69 @@ static void __bin_cmd_dump (arch_word_t addr, arch_word_t size, const char *path
         return;
     }
     dprintf("[ ");
-    size = size * sizeof(arch_word_t);
-    for (i = 0; i < size && tmp > 0;) {
+    for (i = 0; i < bytescnt && tmp > 0;) {
         tmp = d_write(f, ptr, 1024 * 16);
         ptr += tmp;
         i += tmp;
         dprintf(">");
     }
-    tmp = size - i;
+    tmp = bytescnt - i;
     if (tmp > 0) {
-        for (i = 0; i < tmp && tmp > 0;) {
-            tmp = d_write(f, ptr, 1024);
-            dprintf(">");
-        }
+        tmp = d_write(f, ptr, tmp);
+        dprintf(">");
     }
     dprintf(" ]\n");
     d_close(f);
-    dprintf("Done; <0x%p> : <0x%x> bytes)\n", (void *)addr, size);
+    dprintf("Done; <0x%p> : <0x%x> bytes)\n", (void *)addr, bytescnt);
 }
 
+static void __bin_cmd_hexdump_le_u32 (arch_word_t addr, arch_word_t bytescnt, const char *path)
+{
+    int f, i, tmp;
+    uint8_t *ptr = (uint8_t *)addr;
 
-/*addres(hex) - size(hex) - path/to/file*/
+    dprintf("Hex dump: <0x%p> : 0x%08x\n", (void *)addr, bytescnt);
+    d_open(path, &f, "+w");
+
+    if (f < 0) {
+        return;
+    }
+    dprintf("[ ");
+
+    for (i = 0; i < bytescnt && tmp > 0;) {
+        tmp = __hexdump_le_u32(d_printf, f, (uint32_t *)ptr, 1024 * 16, 16);
+        ptr += tmp;
+        i += tmp;
+        dprintf(">");
+    }
+    tmp = bytescnt - i;
+    if (tmp > 0) {
+        tmp = __hexdump_le_u32(d_printf, f, (uint32_t *)ptr, tmp, 16);
+    }
+    dprintf(" ]\n");
+    d_close(f);
+    dprintf("Done; <0x%x> bytes)\n", bytescnt);
+}
+
+const char *bin_cmd_dump_usage =
+"usage : dump <address(hex)> <size>(hex) <path/to/file>\n"
+"-h : use hexdump, no parameters, little endian, 32 bit\n";
+
 static int bin_cmd_dump (int argc, const char **argv)
 {
     arch_word_t addr, size;
+    const char *argvbuf[16];
+
+    cmd_keyval_t dohex = CMD_KVI32_S("h", NULL);
+    cmd_keyval_t *kvlist[] ={&dohex};
+
+    assert(arrlen(argvbuf) > argc);
+
+    argc = cmd_parm_collect(&kvlist[0], &kvlist[arrlen(kvlist) - 1],
+                                argc, argvbuf, argv);
+
     if (argc < 3) {
-        dprintf("usage : addres(hex) - size(hex) - path/to/file(optional)\n");
+        dprintf("%s", bin_cmd_dump_usage);
         return - 1;
     }
     argc -= 3;
@@ -78,11 +116,14 @@ static int bin_cmd_dump (int argc, const char **argv)
         dprintf("fail to parse size : \'%s\'", argv[1]);
         return -1;
     }
-    __bin_cmd_dump(addr, size / sizeof(arch_word_t), argv[2]);
+    if (dohex.valid) {
+        __bin_cmd_hexdump_le_u32(addr, size, argv[2]);
+    } else {
+        __bin_cmd_dump(addr, size, argv[2]);
+    }
     return argc;
 }
 
-/*addres(hex) - size(hex) - val(hex)*/
 static int bin_cmd_mem_set (int argc, const char **argv)
 {
     arch_word_t addr, size, value = 0;
@@ -164,6 +205,86 @@ static int bin_cmd_remove (int argc, const char **argv)
     return argc;
 }
 
+int bin_install (int argc, const char **argv)
+{
+    arch_word_t progaddr;
+
+    if (argc < 2) {
+        dprintf("usage : <boot address 0x0xxx..> </path/to/file>");
+        return -CMDERR_NOARGS;
+    }
+    if (!sscanf(argv[0], "%x", &progaddr)) {
+        return -CMDERR_INVPARM;
+    }
+    bsp_install_exec((arch_word_t *)progaddr, argv[1]);
+
+    return argc - 2;
+}
+
+const char *cmd_start_exec_usage =
+"-p - path to file to load from\n"
+"-a - args will be passed to app, - [-a \"myname -path tosomewhere\"]\n"
+"ex : boot 0x08000000 -p /exe.bin -a \"superapplication\"\n";
+
+int bin_execute (int argc, const char **argv)
+{
+    int i, err = CMDERR_OK, doinstall = 0;
+    const char *argvbuf[CMD_MAX_ARG];
+    char apparg[CMD_MAX_BUF] = {0};
+    char binpath[CMD_MAX_PATH] = {0};
+    arch_word_t progaddr;
+
+    cmd_keyval_t kvarr[] = 
+    {
+        CMD_KVSTR_S("p", &binpath[0]),
+        CMD_KVSTR_S("a", &apparg[0]),
+    };
+    cmd_keyval_t *kvlist[arrlen(kvarr)];
+
+    for (i = 0; i < arrlen(kvarr); i++) kvlist[i] = &kvarr[i];
+    kvarr[1].handle = cmd_parm_load_str;
+
+    if (argc < 1) {
+        dprintf("%s", cmd_start_exec_usage);
+        return -CMDERR_NOARGS;
+    }
+
+    argc = cmd_parm_collect(&kvlist[0], &kvlist[arrlen(kvlist) - 1],
+                                argc, argvbuf, argv);
+
+
+    if (binpath[0]) {
+        doinstall = 1;
+    }
+
+    /*prog addr always first*/
+    if (!sscanf(argv[0], "%x", &progaddr)) {
+        dprintf("cannot parse addr : [%s]\n", argv[0]);
+        return -CMDERR_INVPARM;
+    }
+
+    if (doinstall) {
+        bsp_exec_file_type_t type;
+        type = bsp_bin_file_compat(binpath);
+        switch (type) {
+            case BIN_FILE:
+                err = bsp_install_exec((arch_word_t *)progaddr, binpath);
+            break;
+            case BIN_LINK:
+                return bsp_exec_link(NULL, binpath);
+            break;
+            default:
+                assert(0);
+        }
+    }
+
+    if (err == CMDERR_OK) {
+        argvbuf[0] = apparg;
+        bsp_start_exec((arch_word_t *)progaddr, 1, &argvbuf[0]);
+    }
+    return err;
+}
+
 static const cmd_func_map_t boot_cmd_map [] =
 {
     {"print", boot_print_bin_list},
@@ -171,6 +292,8 @@ static const cmd_func_map_t boot_cmd_map [] =
     {"memset", bin_cmd_mem_set},
     {"copy",  bin_cmd_copy},
     {"rm",    bin_cmd_remove},
+    {"write", bin_install},
+    {"boot",  bin_execute},
 };
 
 int boot_cmd_handle (int argc, const char **argv)
@@ -186,7 +309,7 @@ int boot_cmd_handle (int argc, const char **argv)
         }
 
     }
-    dprintf("unknown cmd : \'%s\'", argv[0]);
+    dprintf("unknown cmd : \'%s\'\n", argv[0]);
     return -1;
 }
 

@@ -12,11 +12,6 @@
 
 #if defined(BSP_DRIVER)
 
-#define CMD_MAX_NAME (16)
-#define CMD_MAX_PATH (128)
-#define CMD_MAX_BUF (256)
-#define CMD_MAX_ARG (16)
-
 #define FLAG_EXPORT (1 << 0)
 
 typedef struct dvar_int_s {
@@ -26,105 +21,75 @@ typedef struct dvar_int_s {
     uint16_t namelen;
 } dvar_int_t;
 
-typedef struct cmd_keyval_s {
-    const char *key;
-    void *val;
-    const char fmt[3];
-    uint8_t valid;
-    void (*handle) (struct cmd_keyval_s *, const char *);
-} cmd_keyval_t;
-
-/**_S - means 'short', for '-x' cases*/
-#define CMD_KVI32_S(c, v) \
-    {c, v, "%i", 0, NULL}
-
-#define CMD_KVSTR_S(c, v) \
-    {c, v, "%s", 0, NULL}
-
-static dvar_int_t *dvar_head = NULL;
-
+static const char *cmd_errno_text (void);
+static void cmd_set_errno (int err);
+static const char *cmd_check_errno (cmd_errno_t *err);
 static int _cmd_register_var (cmdvar_t *var, const char *name);
-static int __cmd_stdin_forward (int argc, const char **argv);
+static int cmd_stdin_forward (int argc, const char **argv);
 static int __cmd_stdin_handle (dvar_int_t *v, int argc, const char **argv);
 static int __cmd_print_env (int argc, const char **argv);
 static int __cmd_register_var (int argc, const char **argv);
 static int __cmd_unregister_var (int argc, const char **argv);
+static int _cmd_register_func (cmd_func_t func, const char *name);
 static int __cmd_exec_internal (int argc, const char **argv);
 static int __cmd_var_readonly (const char *name);
 static int __cmd_fs_print_dir (int argc, const char **argv);
 static int _cmd_export_all (int argc, const char **argv);
 static int __cmd_fs_touch (int argc, const char **argv);
+static void cmd_unregister_all (void);
 static int cmd_bsp_sys_reset (int argc, const char **argv);
 static int __cmd_fs_mkdir (int argc, const char **argv);
-static int cmd_install_executable (int argc, const char **argv);
 static int __cmd_fs_mkdir (int argc, const char **argv);
-static int cmd_start_executable (int argc, const char **argv);
+static void cmd_exec_pending (cmd_handler_t hdlr);
 static int cmd_mod_insert (int argc, const char **argv);
 static int cmd_mod_rm (int argc, const char **argv);
 static int cmd_mod_probe (int argc, const char **argv);
-int cmd_stdin_ctrl (int argc, const char **argv);
 static int cmd_stdin_ctrl (int argc, const char **argv);
 static int cmd_util_serial (int argc, const char **argv);
-int cmd_util_cat (int argc, const char **argv);
-static int cmd_argv_to_parm (cmd_keyval_t **begin, cmd_keyval_t **end, int argc,
-                                        const char **argv_dst, const char **argv);
+static int cmd_util_cat (int argc, const char **argv);
 static int cmd_stdin_to_path_write (int argc, const char **argv);
+static int cmd_stdin_path_close (void);
+static int cmd_exec_cmdfile (int argc, const char **argv);
+static int cmd_util_nop (int argc, const char **argv);
 
+static int
+__dir_list (char *pathbuf, int recursion, int maxrecursion, const char *path);
 
-#define MAX_RECURSION 16
-
-static int __dir_list (char *pathbuf, int recursion,
-                        int maxrecursion, const char *path);
-
+static dvar_int_t *dvar_head = NULL;
 static cmd_func_t saved_stdin_hdlr = NULL;
 static int stdin_file = -1;
 static char __eof_sequence[16] = "...............";
 
-static int cmd_var_exist (PACKED const char *name, dvar_int_t **_prev, dvar_int_t **_dvar)
+/*FUNCTION TABLES=============================================================*/
+
+static const cmd_func_map_t cmd_func_tbl[] =
 {
-    dvar_int_t *v = dvar_head;
-    dvar_int_t *prev = NULL;
+    {"print",       __cmd_print_env},
+    {"register",    __cmd_register_var},
+    {"unreg",       __cmd_unregister_var},
+    {"bsp",         __cmd_exec_internal},
+    {"list",        __cmd_fs_print_dir},
+    {"cat",         cmd_util_cat},
+    {"bin",         boot_cmd_handle},
+    {"nop",         cmd_util_nop},
+};
 
-    while (v) {
-
-        if (strcmp(v->name, name) == 0) {
-            *_prev = prev;
-            *_dvar = v;
-            return 1;
-        }
-
-        prev = v;
-        v = v->next;
-    }
-    return 0;
-}
-
-static int _cmd_register_var (cmdvar_t *var, const char *name)
+static const cmd_func_map_t cmd_priv_func_tbl[] =
 {
-    dvar_int_t *v;
+    {"export",  _cmd_export_all}, /*Must be first*/
+    {"testfs",  __cmd_fs_touch},
+    {"reset",   cmd_bsp_sys_reset},
+    {"mkdir",   __cmd_fs_mkdir},
+    {"insmod",  cmd_mod_insert},
+    {"rmmod",   cmd_mod_rm},
+    {"modprobe",cmd_mod_probe},
+    {"stdin",   cmd_stdin_ctrl},
+    {"serial",  cmd_util_serial},
+    {"runcmd",  cmd_exec_cmdfile},
+    
+};
 
-    if (cmd_var_exist(name, &v, &v)) {
-        dprintf("var \'%s\' already exist\n", name);
-        return -1;
-    }
-
-    v = (dvar_int_t *)heap_malloc(sizeof(dvar_int_t));
-    if (!v) {
-        return -1;
-    }
-
-    v->namelen = snprintf(v->name, sizeof(v->name), "%s", name);
-    memcpy(&v->dvar, var, sizeof(v->dvar));
-
-    if (dvar_head == NULL) {
-        dvar_head = v;
-        v->next = NULL;
-    } else {
-        v->next = dvar_head;
-        dvar_head = v;
-    }
-    return 0;
-}
+/*============================================================================*/
 
 int cmd_register_var (cmdvar_t *var, const char *name)
 {
@@ -171,253 +136,6 @@ int cmd_register_func (cmd_func_t func, const char *name)
     return cmd_register_var(&v, name);
 }
 
-static int _cmd_register_func (cmd_func_t func, const char *name)
-{
-    cmdvar_t v;
-    v.ptr = func;
-    v.ptrsize = sizeof(func);
-    v.type = DVAR_FUNC;
-    return _cmd_register_var(&v, name);
-}
-
-int cmd_unregister (const char *name)
-{
-    dvar_int_t *v = NULL;
-    dvar_int_t *prev = NULL;
-
-    if (__cmd_var_readonly(name)) {
-        dprintf("read-only : \'%s\'\n", name);
-        return -1;
-    }
-
-    if (!cmd_var_exist(name, &prev, &v)) {
-        dprintf("unknown : \'%s\'", name);
-        return -1;
-    }
-
-    if (prev) {
-        prev->next = v->next;
-    } else {
-        dvar_head = v->next;
-    }
-    return 0;
-}
-
-static void cmd_unregister_all (void)
-{
-    dvar_int_t *next = NULL;
-    dvar_int_t *v = dvar_head;
-    while (v) {
-        next = v->next;
-        heap_free(v);
-        v = next;
-    }
-    dvar_head = NULL;
-}
-
-static cmd_keyval_t *
-__cmd_parm_short_match (cmd_keyval_t **begin, cmd_keyval_t **end,
-                            const char *str)
-{
-    cmd_keyval_t *kv;
-
-    while (begin <= end) {
-        if (begin[0]->key[0] == str[0]) {
-            kv = begin[0];
-            if (end[0]) {
-                begin[0] = end[0];
-                end[0] = NULL;
-            }
-            return kv;
-        }
-        begin++;
-    }
-    return NULL;
-}
-
-void cmd_parm_load_val (cmd_keyval_t *kv, const char *str)
-{
-    if (!sscanf(str, kv->fmt, kv->val)) {
-        dprintf("%s() : fail\n", __func__);
-    }
-}
-void cmd_parm_load_str (cmd_keyval_t *kv, const char *str)
-{
-    strcpy(kv->val, str);
-}
-
-static int __cmd_parm_check (const char *str, int *iscombo)
-{
-    int dashes = 0;
-
-    *iscombo = 0;
-    while (*str == '-') {
-        dashes++; str++;
-    }
-    if (str[0] && str[1]) {
-        /*More than one key present : -xyz..*/
-        *iscombo = 1;
-    }
-    return dashes;
-}
-
-static const char **
-__cmd_parm_split_combo (const char **argv_dst, const char *cmb)
-{
-    while (*cmb) {
-        if (isalpha(*cmb)) {
-            argv_dst[0] = cmb;
-            argv_dst++;
-        }
-        cmb++;
-    }
-    return argv_dst;
-}
-
-static int __cmd_parm_arrange (int argc, const char **keys,
-                                    const char **params, const char **src,
-                                    uint8_t *flags) /*!! N(flags) == N(src)*/
-{
-    int dashes, iscombo;
-    int paramcnt = 0;
-
-    while (argc > 0) {
-
-        dashes = __cmd_parm_check(src[0], &iscombo);
-
-        if (dashes > 2) {
-
-            dprintf("%s() : fail \'%s\'\n", __func__, src[0]);
-        } else if (dashes == 2) {
-
-            assert(!iscombo);
-            /*TODO : support for "--abcd." sequences ?*/
-            dprintf("%s() : not yet\n", __func__);
-        } else if (dashes) {
-
-            const char *key = src[0] += dashes;
-
-            if (iscombo) {
-                keys = __cmd_parm_split_combo(keys, key);
-            } else {
-                keys[0] = key;
-            }
-            flags[0] = 'k'; /*mark key*/
-            /*collect parameter : -x 'val'*/
-            if (argc > 1) {
-                if (__cmd_parm_check(src[1], &iscombo) == 0) {
-                    flags[1] = 'v'; /*mark next as value*/
-                    keys[1] = src[1];
-                    keys++; flags++;
-                    src++; argc--;
-                } else {
-                    /*Next key follows, nothing todo*/
-                }
-            }
-            keys++; flags++;
-        } else {
-            params[0] = src[0];
-            params++;
-            paramcnt++;
-        }
-        src++; argc--;
-    }
-    keys[0] = NULL;
-    return paramcnt;
-}
-static int
-__cmd_parm_proc_keys
-                (cmd_keyval_t **begin, cmd_keyval_t **end, 
-                const char **params, const char **keys, /*Null terminated*/
-                uint8_t *flags)
-{
-    int paramcnt = 0;
-    cmd_keyval_t *kv = NULL;
-
-    for (; begin[0] && keys[0]; ) {
-
-        kv = __cmd_parm_short_match(begin, end, keys[0]);
-        if (!kv) {
-            assert(*flags == 'k');
-            dprintf("unknown param : \'%s\'", keys[0]);
-            return -1;
-        }
-        assert(!end[0]);
-        kv->valid = 1;
-        end--; keys++; flags++;
-
-        if (*flags == 'v') {
-            if (!keys[0]) {
-                dprintf("%s() : oops!\n", __func__);
-                break;
-            }
-            if (!kv->val) {
-                /*Does not require parameter*/
-                params[0] = keys[0]; /*Push back to parameters*/
-                params++;
-                paramcnt++;
-            } else if (kv->handle) {
-                kv->handle(kv, keys[0]);
-            } else {
-                cmd_parm_load_val(kv, keys[0]);
-            }
-            flags++; keys++;
-        }
-    }
-    return paramcnt;
-}
-
-static int
-cmd_argv_to_parm (cmd_keyval_t **begin, cmd_keyval_t **end, int argc,
-                                        const char **params, const char **src)
-{
-    const char *keys[CMD_MAX_ARG];
-    uint8_t flags[CMD_MAX_ARG] = {0};
-    int moreparams = 0;
-
-    if (argc < 1) {
-        /*at least one arg required*/
-        return argc;
-    }
-
-    argc = __cmd_parm_arrange(argc, keys, params, src, flags);
-
-    moreparams = __cmd_parm_proc_keys(begin, end, params, keys, flags);
-    if (moreparams < 0) {
-        return -1;
-    }
-
-    return argc + moreparams;
-}
-
-
-const cmd_func_map_t cmd_func_tbl[] =
-{
-    {"print",       __cmd_print_env},
-    {"register",    __cmd_register_var},
-    {"unreg",       __cmd_unregister_var},
-    {"bsp",         __cmd_exec_internal},
-    {"list",        __cmd_fs_print_dir},
-    {"cat",         cmd_util_cat},
-    {"bin",         boot_cmd_handle},
-};
-
-cmd_func_map_t cmd_priv_func_tbl[] =
-{
-    {"export",  _cmd_export_all}, /*Must be first*/
-    {"testfs",  __cmd_fs_touch},
-    {"reset",   cmd_bsp_sys_reset},
-    {"mkdir",   __cmd_fs_mkdir},
-    {"load",    cmd_install_executable},
-    {"boot",    cmd_start_executable},
-    {"insmod",  cmd_mod_insert},
-    {"rmmod",   cmd_mod_rm},
-    {"modprobe",cmd_mod_probe},
-    {"stdin",   cmd_stdin_ctrl},
-    {"serial",  cmd_util_serial},
-    
-};
-
 typedef enum {
     STDIN_CHAR,
     STDIN_PATH,
@@ -436,11 +154,9 @@ static uint8_t __cmd_tofile_full = 0;
 static uint8_t __cmd_tofile_tresh = 128;
 static uint32_t __cmd_tofile_usage_tsf = 0;
 
-static int cmd_stdin_path_close (void);
-
 int cmd_init (void)
 {
-    bsp_stdin_register_if(__cmd_stdin_forward);
+    bsp_stdin_register_if(cmd_stdin_forward);
 
     int i;
 
@@ -453,11 +169,11 @@ int cmd_init (void)
 
 void cmd_deinit (void)
 {
-    bsp_stdin_unreg_if(__cmd_stdin_forward);
+    bsp_stdin_unreg_if(cmd_stdin_forward);
     cmd_unregister_all();
 }
 
-char *cmd_get_eof (const char *data, int len)
+static char *cmd_get_eof (const char *data, int len)
 {
     char *p;
 
@@ -467,12 +183,11 @@ char *cmd_get_eof (const char *data, int len)
 
 static void __cmd_filebuf_flush (void)
 {
-    int len = 0;
     __cmd_tofile_usage_tsf = 0;
     if (!__cmd_tofile_full) {
         return;
     }
-    len = d_write(stdin_file, &__cmd_tofile_buf[0], __cmd_tofile_full);
+    d_write(stdin_file, &__cmd_tofile_buf[0], __cmd_tofile_full);
     __cmd_tofile_full = 0;
 }
 
@@ -495,7 +210,7 @@ static int __cmd_set_stdin_char (int argc, const char **argv)
     int num;
 
     if (bsp_stdin_type == STDIN_CHAR) {
-        return -1;
+        return -CMDERR_INVPARM;
     }
     num = argv[0][0] - '0';
     assert(num >= 0);
@@ -517,7 +232,7 @@ static int __cmd_set_stdin_file (int argc, const char **argv)
     const char *payload = NULL;
 
     if (bsp_stdin_type == STDIN_PATH) {
-        return -1;
+        return -CMDERR_INVPARM;
     }
     assert(argc > 1);
     if (argc > 2) {
@@ -535,7 +250,7 @@ static int __cmd_set_stdin_file (int argc, const char **argv)
 
     if (f < 0) {
         dprintf("unable to create : \'%s\'\n", argv[0]);
-        return -1;
+        return -CMDERR_NOPATH;
     }
     dprintf("stdin > \'%s\'\n", argv[0]);
     g_serial_rx_eof = 0;
@@ -561,7 +276,7 @@ static int cmd_stdin_path_close (void)
     stdin_file = -1;
     stdin_eof_recv = 0;
     g_stdin_eof_timeout_var = 0;
-    return 0;
+    return CMDERR_OK;
 }
 
 static int cmd_stdin_to_path_write (int argc, const char **argv)
@@ -646,12 +361,12 @@ static int __cmd_stdin_redirect (int argc, const char **argv)
     }
 
     /*path must be always as argv[0]*/
-    argc = cmd_argv_to_parm(&kvlist[0], &kvlist[arrlen(kvlist) - 1],
+    argc = cmd_parm_collect(&kvlist[0], &kvlist[arrlen(kvlist) - 1],
                         argc - 1, argvbuf, &argv[1]);
 
     if (argc < 0) {
         dprintf("%s() : unexpected arguments\n", __func__);
-        return -1;
+        return -CMDERR_NOARGS;
     }
 
     stdin_to_path_bytes_limit = bytes_limit;
@@ -704,81 +419,29 @@ static int cmd_stdin_ctrl (int argc, const char **argv)
     return argc;
 }
 
-void cmd_tickle (void)
-{
-    cmd_exec_pending(cmd_txt_exec);
-    if (g_stdin_eof_timeout_var && g_stdin_eof_timeout_var < d_time()) {
-        dprintf("wait for stdin : timeout\n");
-        dprintf("flushing..\n");
-        cmd_exec_dsr("bsp", "stdin > 0 -g", NULL, NULL);
-    } else if (__cmd_tofile_usage_tsf && __cmd_tofile_usage_tsf < d_time()) {
-        dprintf("stdin: flushed\n");
-        __cmd_filebuf_flush();
-    }
-}
-
-static int __cmd_var_readonly (const char *name)
-{
-    int i;
-
-    for (i = 0; i < arrlen(cmd_func_tbl); i++) {
-        if (strcmp(cmd_func_tbl[i].name, name) == 0) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
-static int __cmd_bsp_export_cmd (cmd_func_map_t *hdlrs, int len)
-{
-    int i;
-
-    for (i = 0; i < len; i++) {
-        dbg_eval(DBG_INFO) {
-            dprintf("export : \'%s\'\n", hdlrs[i].name);
-        }
-        cmd_register_func(hdlrs[i].func, hdlrs[i].name);
-    }
-    return 0;
-}
-
-static int _cmd_unregister_var (void *p1, void *p2)
-{
-    cmd_unregister((char *)p1);
-
-    return strlen((char *)p1);
-}
-
-static int __cmd_register_var (int argc, const char **argv)
-{
-    dprintf("%s() : Not yet\n", __func__);
-    return 0;
-}
-
-static int __cmd_unregister_var (int argc, const char **argv)
-{
-    if (argc < 1) {
-        return -1;
-    }
-    dprintf("not yet\n");
-
-    return argc - 1;
-}
-
 static int __cmd_stdin_forward (int argc, const char **argv)
 {
     dvar_int_t *v = dvar_head;
 
     if (argc < 1) {
-        return -1;
+        return -CMDERR_NOARGS;
     }
 
     while (v) {
         if (strncmp(argv[0], v->name, v->namelen) == 0) {
             argc = __cmd_stdin_handle(v, --argc, ++argv);
-            return argc;
+            break;
         }
         v = v->next;
+    }
+    return argc;
+}
+
+static int cmd_stdin_forward (int argc, const char **argv)
+{
+    argc = __cmd_stdin_forward(argc, argv);
+    if (argc < 0) {
+        cmd_set_errno(argc);
     }
     return argc;
 }
@@ -859,54 +522,17 @@ static int __cmd_print_env (int argc, const char **argv)
 
 /*=======================================================================================*/
 
-#define CMD_EXEC_MAX 6
-cmdexec_t cmd_exec_pool[CMD_EXEC_MAX];
-cmdexec_t *boot_cmd_top = &cmd_exec_pool[0];
-
-void cmd_exec_dsr (const char *cmd, const char *text, void *user1, void *user2)
+void cmd_tickle (void)
 {
-    int i;
-    char buf[CMD_MAX_BUF];
-
-    if (boot_cmd_top == &cmd_exec_pool[arrlen(cmd_exec_pool)]) {
-        return;
+    cmd_exec_pending(cmd_txt_exec);
+    if (g_stdin_eof_timeout_var && g_stdin_eof_timeout_var < d_time()) {
+        dprintf("wait for stdin : timeout\n");
+        dprintf("flushing..\n");
+        cmd_exec_dsr("bsp", "stdin > 0 -g", NULL, NULL);
+    } else if (__cmd_tofile_usage_tsf && __cmd_tofile_usage_tsf < d_time()) {
+        dprintf("stdin: flushed\n");
+        __cmd_filebuf_flush();
     }
-    i = snprintf(buf, sizeof(buf), "%s %s", cmd, text);
-    boot_cmd_top->text = heap_malloc(i + 1);
-    assert(boot_cmd_top->text);
-    strcpy(boot_cmd_top->text, buf);
-    boot_cmd_top->user1 = user1;
-    boot_cmd_top->user2 = user2;
-    boot_cmd_top->len = i;
-    boot_cmd_top++;
-    dprintf("%s() : \'%s\' [%s]\n", __func__, cmd, text);
-}
-
-static cmdexec_t *__cmd_iter_next (char *text, cmdexec_t *cmd)
-{
-    if (boot_cmd_top == &cmd_exec_pool[0]) {
-        return NULL;
-    }
-    boot_cmd_top--;
-    strcpy(text, boot_cmd_top->text);
-    heap_free(boot_cmd_top->text);
-    boot_cmd_top->text = NULL;
-    cmd->user1 = boot_cmd_top->user1;
-    cmd->user2 = boot_cmd_top->user2;
-    cmd->len = boot_cmd_top->len;
-    return cmd;
-}
-
-void cmd_exec_pending (cmd_handler_t hdlr)
-{
-     cmdexec_t cmd;
-     char buf[256];
-     cmdexec_t *cmdptr = __cmd_iter_next(buf, &cmd);
-
-     while (cmdptr) {
-        hdlr(buf, cmdptr->len);
-        cmdptr = __cmd_iter_next(buf, cmdptr);
-     }
 }
 
 static int __cmd_fs_touch (int argc, const char **argv)
@@ -944,7 +570,7 @@ static int __cmd_fs_touch (int argc, const char **argv)
 static int __cmd_fs_mkdir (int argc, const char **argv)
 {
     if (argc < 1) {
-        return -1;
+        return -CMDERR_NOARGS;
     }
     if (d_mkdir(argv[0]) < 0) {
         dprintf("%s() : fail\n", __func__);
@@ -957,18 +583,18 @@ static int __cmd_fs_print_dir (int argc, const char **argv)
     const char *ppath;
     char pathbuf[CMD_MAX_PATH];
     const char *argvbuf[16];
-    uint32_t recursion = MAX_RECURSION;
+    uint32_t recursion = CMD_MAX_RECURSION;
 
     cmd_keyval_t kva = CMD_KVI32_S("n", &recursion);
     cmd_keyval_t *kvlist[] ={&kva};
 
     assert(arrlen(argvbuf) > argc);
 
-    argc = cmd_argv_to_parm(&kvlist[0], &kvlist[arrlen(kvlist) - 1],
+    argc = cmd_parm_collect(&kvlist[0], &kvlist[arrlen(kvlist) - 1],
                                 argc, argvbuf, argv);
 
     if (argc < 0) {
-        return -1;
+        return -CMDERR_NOARGS;
     }
 
     if (argc >= 1) {
@@ -1016,118 +642,15 @@ extern void SystemSoftReset (void);
     serial_flush();
     SystemSoftReset();
     assert(0);
-    return -1;
-}
-
-static int _cmd_export_all (int argc, const char **argv)
-{
-    return __cmd_bsp_export_cmd(cmd_priv_func_tbl + 1, arrlen(cmd_priv_func_tbl) - 1);
-}
-
-static int __cmd_exec_internal (int argc, const char **argv)
-{
-    int  i;
-
-    for (i = 0; i < arrlen(cmd_priv_func_tbl) && argc > 0; i++) {
-        if (strcmp(argv[0], cmd_priv_func_tbl[i].name) == 0) {
-            argc = cmd_priv_func_tbl[i].func(--argc, &argv[1]);
-            break;
-        }
-    }
-    return argc;
+    return -CMDERR_UNKNOWN;
 }
 
 int cmd_txt_exec (const char *cmd, int len)
 {
+
     char buf[256];
     len = snprintf(buf, sizeof(buf), "%s", cmd);
-    bsp_inout_forward(buf, len, '<');
-    /*TODO : cmd errno ?*/
-    return 0;
-}
-
-int cmd_install_executable (int argc, const char **argv)
-{
-    arch_word_t progaddr;
-
-    if (argc < 2) {
-        dprintf("usage : /path/to/file <boot address 0x0xxx..>");
-        return -1;
-    }
-    if (!sscanf(argv[1], "%x", &progaddr)) {
-        return -1;
-    }
-    bsp_install_exec((arch_word_t *)progaddr, argv[0]);
-
-    return argc - 2;
-}
-
-const char *cmd_start_exec_usage =
-"-p - path to file to load from\n"
-"-a - args will be passed to app, - [-a \"myname -path tosomewhere\"] "
-"ex : boot 0x08000000 -p /exe.bin -a \"superapplication\"";
-
-int cmd_start_executable (int argc, const char **argv)
-{
-    const char *argvbuf[CMD_MAX_ARG];
-    arch_word_t progaddr;
-    const char **moreargs = NULL;
-    int xcnt = 0, doinstall = 0;
-    int i;
-    char apparg[CMD_MAX_BUF] = {0};
-    char binpath[CMD_MAX_PATH] = {0};
-
-    cmd_keyval_t kvarr[] = 
-    {
-        CMD_KVSTR_S("p", &binpath[0]),
-        CMD_KVSTR_S("a", &apparg[0]),
-    };
-    cmd_keyval_t *kvlist[arrlen(kvarr)];
-
-    for (i = 0; i < arrlen(kvarr); i++) kvlist[i] = &kvarr[i];
-    kvarr[1].handle = cmd_parm_load_str;
-
-    if (argc < 1) {
-        dprintf(cmd_start_exec_usage);
-        return -1;
-    }
-
-    argc = cmd_argv_to_parm(&kvlist[0], &kvlist[arrlen(kvlist) - 1],
-                                argc, argvbuf, argv);
-
-
-    if (binpath[0]) {
-        doinstall = 1;
-    }
-
-    /*prog addr always first*/
-    if (!sscanf(argv[0], "%x", &progaddr)) {
-        dprintf("cannot parse addr : [%s]\n", argv[0]);
-        return -1;
-    }
-
-    if (doinstall) {
-        bsp_exec_file_type_t type;
-        type = bsp_bin_file_compat(binpath);
-        switch (type) {
-            case BIN_FILE:
-                if (bsp_install_exec((arch_word_t *)progaddr, binpath) < 0) {
-                    return 0;
-                }
-            break;
-            case BIN_LINK:
-                return bsp_exec_link(NULL, binpath);
-                
-            break;
-            default:
-                assert(0);
-        }
-    }
-
-    argvbuf[0] = apparg;
-    bsp_start_exec((arch_word_t *)progaddr, 1, &argvbuf[0]);
-
-    return 0;
+    return bsp_inout_forward(buf, len, '<');
 }
 
 static int cmd_mod_insert (int argc, const char **argv)
@@ -1141,10 +664,10 @@ static int cmd_mod_insert (int argc, const char **argv)
 
     if (argc < 2) {
         dprintf("usage : /path/to/file <load address 0x0xxx..>");
-        return -1;
+        return -CMDERR_NOARGS;
     }
     if (!sscanf(argv[1], "%x", &progaddr)) {
-        return -1;
+        return -CMDERR_INVPARM;
     }
 
     bspmod_insert(&heap, argv[0], argv[1]);
@@ -1156,10 +679,12 @@ static int cmd_mod_probe (int argc, const char **argv)
 {
     if (argc < 1) {
         dprintf("usage : /path/to/file <load address 0x0xxx..>");
-        return -1;
+        return -CMDERR_NOARGS;
     }
 
-    bspmod_probe(argv[0]);
+    if (bspmod_probe(argv[0]) < 0) {
+        return -CMDERR_INVPARM;
+    }
 
     return argc - 1;
 }
@@ -1168,7 +693,7 @@ static int cmd_mod_rm (int argc, const char **argv)
 {
     if (argc < 1) {
         dprintf("usage : <mod name>");
-        return -1;
+        return -CMDERR_NOARGS;
     }
 
     bspmod_remove(argv[0]);
@@ -1176,9 +701,9 @@ static int cmd_mod_rm (int argc, const char **argv)
     return argc - 1;
 }
 
-int cmd_util_cat (int argc, const char **argv)
+static int cmd_util_cat (int argc, const char **argv)
 {
-    void (*dumpfunc) (const uint8_t *, int, int) = NULL;
+    void (*dumpfunc) (const void *, int, int) = NULL;
 
     int f, fseek = 0, fsize = 0;
     int a = 0, b = 0, c = -1, h = 0, w = 0;
@@ -1196,19 +721,19 @@ int cmd_util_cat (int argc, const char **argv)
     cmd_keyval_t *kvlist[arrlen(kvarr)];
 
     if (argc < 1) {
-        return -1;
+        return -CMDERR_NOARGS;
         /*TODO : print usage...*/
     }
 
     for (a = 0; a < arrlen(kvarr); a++) kvlist[a] = &kvarr[a];
     a = 0;
 
-    argc = cmd_argv_to_parm(&kvlist[0], &kvlist[arrlen(kvlist) - 1],
+    argc = cmd_parm_collect(&kvlist[0], &kvlist[arrlen(kvlist) - 1],
                         argc, argvbuf, argv);
 
     if (argc < 1) {
         dprintf("%s() : unexpected arguments\n", __func__);
-        return -1;
+        return -CMDERR_INVPARM;
     }
 
     if (w) {
@@ -1233,7 +758,7 @@ int cmd_util_cat (int argc, const char **argv)
     fsize = d_open(argv[0], &f, "r");
     if (f < 0) {
         dprintf("path does not exist : %s\n", argv[0]);
-        return -1;
+        return -CMDERR_NOPATH;
     }
     if (c && a && b) {
         fseek = c - a;
@@ -1276,7 +801,7 @@ int cmd_util_cat (int argc, const char **argv)
     }
     d_close(f);
     dprintf("******************************\n");
-    return 0;
+    return CMDERR_OK;
 }
 
 static int cmd_util_serial (int argc, const char **argv)
@@ -1284,6 +809,495 @@ static int cmd_util_serial (int argc, const char **argv)
     return argc;
 }
 
+/*Used to reset cmd_errno :)*/
+static int cmd_util_nop (int argc, const char **argv)
+{
+    return CMDERR_OK;
+}
 
+static int cmd_exec_cmdline (const char *cmd, int argc, const char **argv)
+{
+    char cmdbuf[CMD_MAX_BUF];
+    const char *cmdptr = cmd;
+    int err = 0;
+
+    if (argc) {
+        err = str_insert_args(cmdbuf, cmdptr, argc, argv);
+        if (err != CMDERR_OK) {
+            return err;
+        }
+        cmdptr = cmdbuf;
+    } else if (str_check_args_present(cmdptr)) {
+        dprintf("%s(): required user args for [%s]\n", __func__, cmdptr);
+        return -CMDERR_NOARGS;
+    }
+    return cmd_txt_exec(cmdptr, -1);
+}
+
+/*Here - each line within file represents separate command*/
+static int cmd_exec_cmdfile (int argc, const char **argv)
+{
+    int f, usrargc = 0, err = 0;
+    char strbuf[CMD_MAX_BUF], *strptr;
+    const char **usrargv = NULL;
+    int linenum = 1;
+
+    if (argc < 1) {
+        dprintf("usage : runcmd <path/to/file> <arg0> ... <argn>(optional)\n");
+        return -CMDERR_NOARGS;
+    }
+    argc--;
+    if (argc) {
+        usrargc = argc;
+        usrargv = &argv[1];
+    }
+
+    d_open(argv[0], &f, "r");
+    if (f < 0) {
+        dprintf("cannot open : [%s]\n", argv[0]);
+        return -CMDERR_NOPATH;
+    }
+    while (!d_eof(f)) {
+        strptr = d_gets(f, strbuf, sizeof(strbuf));
+        if (!strptr) {
+            break;
+        }
+        err = cmd_exec_cmdline(strptr, usrargc, usrargv);
+        if (err != CMDERR_OK) {
+            dprintf("failed: (%s); line: %u\n", cmd_errno_text(), linenum);
+            dprintf("during: [%s]\n", strptr);
+            dprintf("breaking\n");
+            return err;
+        }
+        linenum++;
+    }
+    return argc - usrargc;
+}
+
+/*PRIVATE, INTERNAL TOOLS=====================================================*/
+
+static cmd_errno_t cmd_errno = CMDERR_OK;
+
+static const char *cmd_errno_text (void)
+{
+#define errorcase(e) case e: return #e
+    switch (cmd_errno) {
+        errorcase(CMDERR_OK);
+        errorcase(CMDERR_GENERIC);
+        errorcase(CMDERR_NOARGS);
+        errorcase(CMDERR_NOPATH);
+        errorcase(CMDERR_INVPARM);
+        errorcase(CMDERR_PERMISS);
+        errorcase(CMDERR_UNKNOWN);
+    }
+    return "UNKNOWN";
+#undef errorcase
+}
+
+static void cmd_set_errno (int err)
+{
+    if (err < 0) {
+        err = -err;
+    }
+    if (err >= CMDERR_OK && err < CMDERR_MAX) {
+        cmd_errno = (cmd_errno_t)err;
+    } else {
+        cmd_errno = CMDERR_UNKNOWN;
+    }
+}
+
+static const char *smd_check_errno (cmd_errno_t *err)
+{
+    *err = cmd_errno;
+    return cmd_errno_text();
+}
+
+#define CMD_EXEC_MAX 6
+cmdexec_t cmd_exec_pool[CMD_EXEC_MAX];
+cmdexec_t *boot_cmd_top = &cmd_exec_pool[0];
+
+void cmd_exec_dsr (const char *cmd, const char *text, void *user1, void *user2)
+{
+    int i;
+    char buf[CMD_MAX_BUF];
+
+    if (boot_cmd_top == &cmd_exec_pool[arrlen(cmd_exec_pool)]) {
+        return;
+    }
+    i = snprintf(buf, sizeof(buf), "%s %s", cmd, text);
+    boot_cmd_top->text = heap_malloc(i + 1);
+    assert(boot_cmd_top->text);
+    strcpy(boot_cmd_top->text, buf);
+    boot_cmd_top->user1 = user1;
+    boot_cmd_top->user2 = user2;
+    boot_cmd_top->len = i;
+    boot_cmd_top++;
+    dprintf("%s() : \'%s\' [%s]\n", __func__, cmd, text);
+}
+
+static cmdexec_t *__cmd_iter_next (char *text, cmdexec_t *cmd)
+{
+    if (boot_cmd_top == &cmd_exec_pool[0]) {
+        return NULL;
+    }
+    boot_cmd_top--;
+    strcpy(text, boot_cmd_top->text);
+    heap_free(boot_cmd_top->text);
+    boot_cmd_top->text = NULL;
+    cmd->user1 = boot_cmd_top->user1;
+    cmd->user2 = boot_cmd_top->user2;
+    cmd->len = boot_cmd_top->len;
+    return cmd;
+}
+
+static void cmd_exec_pending (cmd_handler_t hdlr)
+{
+     cmdexec_t cmd;
+     char buf[256];
+     cmdexec_t *cmdptr = __cmd_iter_next(buf, &cmd);
+
+     while (cmdptr) {
+        hdlr(buf, cmdptr->len);
+        cmdptr = __cmd_iter_next(buf, cmdptr);
+     }
+}
+
+static int cmd_var_exist (PACKED const char *name, dvar_int_t **_prev, dvar_int_t **_dvar)
+{
+    dvar_int_t *v = dvar_head;
+    dvar_int_t *prev = NULL;
+
+    while (v) {
+
+        if (strcmp(v->name, name) == 0) {
+            *_prev = prev;
+            *_dvar = v;
+            return 1;
+        }
+
+        prev = v;
+        v = v->next;
+    }
+    return 0;
+}
+
+static int _cmd_register_var (cmdvar_t *var, const char *name)
+{
+    dvar_int_t *v;
+
+    if (cmd_var_exist(name, &v, &v)) {
+        dprintf("var \'%s\' already exist\n", name);
+        return -CMDERR_PERMISS;
+    }
+
+    v = (dvar_int_t *)heap_malloc(sizeof(dvar_int_t));
+    if (!v) {
+        return -CMDERR_NOARGS;
+    }
+
+    v->namelen = snprintf(v->name, sizeof(v->name), "%s", name);
+    memcpy(&v->dvar, var, sizeof(v->dvar));
+
+    if (dvar_head == NULL) {
+        dvar_head = v;
+        v->next = NULL;
+    } else {
+        v->next = dvar_head;
+        dvar_head = v;
+    }
+    return 0;
+}
+
+static int __cmd_var_readonly (const char *name)
+{
+    int i;
+
+    for (i = 0; i < arrlen(cmd_func_tbl); i++) {
+        if (strcmp(cmd_func_tbl[i].name, name) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int __cmd_bsp_export_cmd (const cmd_func_map_t *hdlrs, int len)
+{
+    int i;
+
+    for (i = 0; i < len; i++) {
+        dbg_eval(DBG_INFO) {
+            dprintf("export : \'%s\'\n", hdlrs[i].name);
+        }
+        cmd_register_func(hdlrs[i].func, hdlrs[i].name);
+    }
+    return 0;
+}
+
+static int _cmd_unregister_var (void *p1, void *p2)
+{
+    cmd_unregister((char *)p1);
+
+    return strlen((char *)p1);
+}
+
+static int __cmd_register_var (int argc, const char **argv)
+{
+    dprintf("%s() : Not yet\n", __func__);
+    return 0;
+}
+
+static int __cmd_unregister_var (int argc, const char **argv)
+{
+    if (argc < 1) {
+        return -CMDERR_NOARGS;
+    }
+    dprintf("not yet\n");
+
+    return argc - 1;
+}
+
+static int _cmd_register_func (cmd_func_t func, const char *name)
+{
+    cmdvar_t v;
+    v.ptr = func;
+    v.ptrsize = sizeof(func);
+    v.type = DVAR_FUNC;
+    return _cmd_register_var(&v, name);
+}
+
+int cmd_unregister (const char *name)
+{
+    dvar_int_t *v = NULL;
+    dvar_int_t *prev = NULL;
+
+    if (__cmd_var_readonly(name)) {
+        dprintf("read-only : \'%s\'\n", name);
+        return -CMDERR_PERMISS;
+    }
+
+    if (!cmd_var_exist(name, &prev, &v)) {
+        dprintf("unknown : \'%s\'", name);
+        return -CMDERR_INVPARM;
+    }
+
+    if (prev) {
+        prev->next = v->next;
+    } else {
+        dvar_head = v->next;
+    }
+    return 0;
+}
+
+static void cmd_unregister_all (void)
+{
+    dvar_int_t *next = NULL;
+    dvar_int_t *v = dvar_head;
+    while (v) {
+        next = v->next;
+        heap_free(v);
+        v = next;
+    }
+    dvar_head = NULL;
+}
+
+static int _cmd_export_all (int argc, const char **argv)
+{
+    return __cmd_bsp_export_cmd(cmd_priv_func_tbl + 1, arrlen(cmd_priv_func_tbl) - 1);
+}
+
+static int __cmd_exec_internal (int argc, const char **argv)
+{
+    int  i;
+
+    for (i = 0; i < arrlen(cmd_priv_func_tbl) && argc > 0; i++) {
+        if (strcmp(argv[0], cmd_priv_func_tbl[i].name) == 0) {
+            argc = cmd_priv_func_tbl[i].func(--argc, &argv[1]);
+            break;
+        }
+    }
+    return argc;
+}
+
+static cmd_keyval_t *
+__cmd_parm_short_match (cmd_keyval_t **begin, cmd_keyval_t **end,
+                            const char *str)
+{
+    cmd_keyval_t *kv;
+
+    while (begin <= end) {
+        if (begin[0]->key[0] == str[0]) {
+            kv = begin[0];
+            if (end[0]) {
+                begin[0] = end[0];
+                end[0] = NULL;
+            }
+            return kv;
+        }
+        begin++;
+    }
+    return NULL;
+}
+
+static int __cmd_parm_check (const char *str, int *iscombo)
+{
+    int dashes = 0;
+
+    *iscombo = 0;
+    while (*str == '-') {
+        dashes++; str++;
+    }
+    if (str[0] && str[1]) {
+        /*More than one key present : -xyz..*/
+        *iscombo = 1;
+    }
+    return dashes;
+}
+
+static const char **
+__cmd_parm_split_combo (const char **argv_dst, const char *cmb)
+{
+    while (*cmb) {
+        if (isalpha(*cmb)) {
+            argv_dst[0] = cmb;
+            argv_dst++;
+        }
+        cmb++;
+    }
+    return argv_dst;
+}
+
+static int __cmd_parm_arrange (int argc, const char **keys,
+                                    const char **params, const char **src,
+                                        uint8_t *flags) /*Must be: N(flags) == N(src) !!!*/
+{
+    int dashes, iscombo;
+    int paramcnt = 0;
+
+    while (argc > 0) {
+
+        dashes = __cmd_parm_check(src[0], &iscombo);
+
+        if (dashes > 2) {
+
+            dprintf("%s() : fail \'%s\'\n", __func__, src[0]);
+        } else if (dashes == 2) {
+
+            assert(!iscombo);
+            /*TODO : support for "--abcd." sequences ?*/
+            dprintf("%s() : not yet\n", __func__);
+        } else if (dashes) {
+
+            const char *key = src[0] += dashes;
+
+            if (iscombo) {
+                keys = __cmd_parm_split_combo(keys, key);
+            } else {
+                keys[0] = key;
+            }
+            flags[0] = 'k'; /*mark key*/
+            /*collect parameter : -x 'val'*/
+            if (argc > 1) {
+                if (__cmd_parm_check(src[1], &iscombo) == 0) {
+                    flags[1] = 'v'; /*mark next as value*/
+                    keys[1] = src[1];
+                    keys++; flags++;
+                    src++; argc--;
+                } else {
+                    /*Next key follows, nothing todo*/
+                }
+            }
+            keys++; flags++;
+        } else {
+            params[0] = src[0];
+            params++;
+            paramcnt++;
+        }
+        src++; argc--;
+    }
+    keys[0] = NULL;
+    return paramcnt;
+}
+
+static int
+__cmd_parm_proc_keys
+                (cmd_keyval_t **begin, cmd_keyval_t **end, 
+                const char **params, const char **keys, /*Null terminated*/
+                uint8_t *flags)
+{
+    int paramcnt = 0;
+    cmd_keyval_t *kv = NULL;
+
+    for (; begin[0] && keys[0]; ) {
+
+        kv = __cmd_parm_short_match(begin, end, keys[0]);
+        if (!kv) {
+            assert(*flags == 'k');
+            dprintf("unknown param : \'%s\'", keys[0]);
+            return -CMDERR_INVPARM;
+        }
+        assert(!end[0]);
+        kv->valid = 1;
+        end--; keys++; flags++;
+
+        if (*flags == 'v') {
+            if (!keys[0]) {
+                dprintf("%s() : oops!\n", __func__);
+                break;
+            }
+            if (!kv->val) {
+                /*Does not require parameter*/
+                params[0] = keys[0]; /*Push back to parameters*/
+                params++;
+                paramcnt++;
+            } else if (kv->handle) {
+                kv->handle(kv, keys[0]);
+            } else {
+                cmd_parm_load_val(kv, keys[0]);
+            }
+            flags++; keys++;
+        }
+    }
+    return paramcnt;
+}
+
+/*PRIVATE, INTERNAL TOOLS=====================================================*/
+
+/*PUBLIC, INTERNAL============================================================*/
+
+void cmd_parm_load_val (cmd_keyval_t *kv, const char *str)
+{
+    if (!sscanf(str, kv->fmt, kv->val)) {
+        dprintf("%s() : fail\n", __func__);
+    }
+}
+void cmd_parm_load_str (cmd_keyval_t *kv, const char *str)
+{
+    strcpy(kv->val, str);
+}
+
+int
+cmd_parm_collect (cmd_keyval_t **begin, cmd_keyval_t **end, int argc,
+                                        const char **params, const char **src)
+{
+    const char *keys[CMD_MAX_ARG];
+    uint8_t flags[CMD_MAX_ARG] = {0};
+    int moreparams = 0;
+
+    if (argc < 1) {
+        /*at least one arg required*/
+        return argc;
+    }
+
+    argc = __cmd_parm_arrange(argc, keys, params, src, flags);
+
+    moreparams = __cmd_parm_proc_keys(begin, end, params, keys, flags);
+    if (moreparams < 0) {
+        return -CMDERR_UNKNOWN;
+    }
+
+    return argc + moreparams;
+}
+
+/*PUBLIC, INTERNAL============================================================*/
 
 #endif /*BSP_DRIVER*/

@@ -375,7 +375,7 @@ void bsp_argc_argv_set (const char *arg)
     maxsize -= size;
     assert(maxsize > 0);
 
-    _argv = (char **)(&tlv->data[1]);
+    _argv = (const char **)(&tlv->data[1]);
     tlv->data[0] = str_tokenize(_argv, MAX_ARGC, tempptr);
 
     __set_next_tlv(tlv, size);

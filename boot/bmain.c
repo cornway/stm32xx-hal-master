@@ -199,16 +199,18 @@ void *bsp_cache_bin_file (const bsp_heap_api_t *heapapi, const char *path, int *
 
     fsize = d_open(path, &f, "r");
     if (f < 0) {
-        dprintf("%s() : open fail : \'%s\'\n", __func__, path);
+        dprintf("%s() : failed to open : \'%s\'\n", __func__, path);
         return NULL;
     }
     size = ROUND_UP(fsize, 32);
     cache = heapapi->malloc(size);
     assert(cache);
 
+    dprintf("caching bin : dest <0x%p> size [0x%08x]\n", cache, fsize);
+
     if (d_read(f, cache, fsize) < fsize) {
         dprintf("%s() : missing part\n", __func__);
-        heap_free(cache);
+        heapapi->free(cache);
         cache = NULL;
     } else {
         *binsize = fsize;
@@ -233,7 +235,6 @@ int bsp_install_exec (arch_word_t *progaddr, const char *path)
     void *bindata;
     int binsize = 0, err = 0;
     bsp_heap_api_t heap = {.malloc = heap_alloc_shared, .free = heap_free};
-    bsp_exec_file_type_t type;
 
     dprintf("Installing : \'%s\'\n", path);
 
@@ -256,7 +257,7 @@ extern int bsp_argc_argv_check (const char *arg);
 
 int bsp_start_exec (arch_word_t *progaddr, int argc, const char **argv)
 {
-    dprintf("Starting app... \n");
+    dprintf("Starting application... \n");
 
     bsp_argc_argv_set(argv[0]);
     if (bsp_argc_argv_check(argv[0]) < 0) {

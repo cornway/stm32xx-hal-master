@@ -45,6 +45,20 @@ void str_filter_printable (char *str)
     }
 }
 
+int str_remove_spaces (char *str)
+{
+    char *dest = str, *src = str;
+    while (*src) {
+        if (!isspace(*src)) {
+            *dest = *src;
+            dest++;
+        }
+        src++;
+    }
+    *dest = 0;
+    return (src - dest);
+}
+
 int str_parse_tok (const char *str, const char *tok, uint32_t *val)
 {
     int len = strlen(tok), ret = 0;
@@ -194,8 +208,70 @@ int str_tokenize (const char **tok, int tokcnt, char *str)
         tok++;
         tokcnt--;
         *tok = p;
+        str_remove_spaces(p);
     }
     return toktotal - tokcnt;
+}
+
+#define STR_MAXARGS     9
+#define STR_ARGKEY      "$"
+#define STR_ARG_TKNSIZE (sizeof(STR_ARGKEY) + 1 - 1) /*$[0..9]*/
+#define STR_ARGV(str)    strstr(str, STR_ARGKEY)
+#define STR_ARGN(str)   ((str)[1] - '0')
+
+static inline int __strncpy (char *dest, const char *src, int maxlen)
+{
+    int n = 0;
+
+    while (*src && maxlen) {
+        *dest = *src;
+        dest++; src++;
+        n++;
+        maxlen--;
+    }
+    return n;
+}
+
+int str_insert_args (char *dest, const char *src, int argc, const char **argv)
+{
+    const char *srcptr = src, *argptr;
+    char *dstptr = dest;
+    int n, argn;
+
+    while (*srcptr) {
+        argptr = STR_ARGV(srcptr);
+        if (argptr) {
+            n = argptr - srcptr;
+            if (n) {
+                n = __strncpy(dstptr, srcptr, n);
+                dstptr += n;
+                srcptr = argptr + STR_ARG_TKNSIZE;
+            }
+            argn = STR_ARGN(argptr);
+            if (argn >= argc) {
+                return -CMDERR_NOARGS;
+            }
+            n = __strncpy(dstptr, argv[argn], -1);
+            dstptr += n;
+            *dstptr = ' ';
+            dstptr++;
+        } else {
+            n = __strncpy(dstptr, srcptr, -1);
+            dstptr += n;
+            break;
+        }
+    }
+    *dstptr = 0;
+    return CMDERR_OK;
+}
+
+int str_check_args_present (const char *str)
+{
+    str = STR_ARGV(str);
+    if (str) {
+        return 1;
+    }
+    return 0;
 }
 
 void bsp_stdin_register_if (cmd_func_t clbk)
@@ -244,12 +320,18 @@ void bsp_stout_unreg_if (cmd_func_t clbk)
                           last_tx_clbk, clbk);
 }
 
-static void __bsp_stdin_iter_fwd 
+static int
+__bsp_stdin_handle_argv
                 (cmd_func_t *_begin, cmd_func_t *end,
                 int argc, const char **argv);
 
-static void
-__bsp_stout_iter_fwd_raw (cmd_func_t *_begin, cmd_func_t *end, int argc, const char **argv);
+static int
+__bsp_stdin_iter_fwd_ascii (cmd_func_t *begin, cmd_func_t *end, char *buf);
+
+static int
+__bsp_stdout_iter_fwd_raw
+                (cmd_func_t *_begin, cmd_func_t *end,
+                int argc, const char **argv);
 
 cmd_func_t stdin_redir = NULL;
 
@@ -267,48 +349,60 @@ cmd_func_t bsp_stdin_unstash (cmd_func_t func)
     return tmp;
 }
 
-void bsp_inout_forward (char *buf, int size, char dir)
+int bsp_inout_forward (char *buf, int size, char dir)
 {
-    char *argv_buf[MAX_TOKENS] = {NULL};
-    const char **argv = (const char **)&argv_buf[0];
-    int argc = MAX_TOKENS, offset = 0;
+    int offset = 0, err = 0;
+    const char *bufptr = (const char *)buf;
 
     if (dir == '<' && stdin_redir) {
         offset = size;
-        size = stdin_redir(size, (const char **)&buf);
+        size = stdin_redir(size, &bufptr);
         offset = offset - size;
     }
     if (!size) {
-        return;
+        return CMDERR_OK;
     }
     switch (dir) {
         case '>':
-            argc = 1;
-            argv[0] = buf;
-            __bsp_stout_iter_fwd_raw(&serial_tx_clbk[0], last_tx_clbk, argc, argv);
+            err = __bsp_stdout_iter_fwd_raw(&serial_tx_clbk[0], last_tx_clbk, 1, &bufptr);
         break;
         case '<':
-
-            argc = str_tokenize_parms(buf, argc, &argv[0]);
-            __bsp_stdin_iter_fwd(&serial_rx_clbk[0], last_rx_clbk, argc, argv);
+            err = __bsp_stdin_iter_fwd_ascii(&serial_rx_clbk[0], last_rx_clbk, buf);
         break;
         default: assert(0);
     }
-    
+    return err;
 }
 
 
-static void
-__bsp_stout_iter_fwd_raw (cmd_func_t *_begin, cmd_func_t *end, int argc, const char **argv)
+static int
+__bsp_stdout_iter_fwd_raw (cmd_func_t *_begin, cmd_func_t *end, int argc, const char **argv)
 {
+    int err = 0;
     cmd_func_t *begin = _begin;
     while (*begin && begin < end) {
-        (*begin)(argc, argv);
+        err = (*begin)(argc, argv);
+        if (err) {
+            dprintf("%s() : fail: %i\n", __func__, err);
+            break;
+        }
         begin++;
-    };
+    }
+    return err;
 }
 
-static void __bsp_stdin_iter_fwd 
+static int
+__bsp_stdin_iter_fwd_ascii (cmd_func_t *begin, cmd_func_t *end, char *buf)
+{
+    const char *argvbuf[MAX_TOKENS] = {NULL};
+    const char **argv = (const char **)&argvbuf[0];
+    int argc = MAX_TOKENS;
+
+    argc = str_tokenize_parms(buf, argc, &argv[0]);
+    return __bsp_stdin_handle_argv(begin, end, argc, argv);
+}
+
+static int __bsp_stdin_handle_argv 
                 (cmd_func_t *_begin, cmd_func_t *end,
                 int argc, const char **argv)
 {
@@ -321,26 +415,40 @@ static void __bsp_stdin_iter_fwd
             argv = &argv[prev_argc - argc];
             argc = (*begin)(argc, argv);
             if (argc <= 0) {
-                return;
+                break;
             }
             begin++;
         } while (argc > 0 && begin < end);
+
         if (argc <= 0) {
             break;
         }
         if (prev_argc == argc) {
-            dprintf("garbage\n");
+            dprintf("%s() : unknown arguments\n", __func__);
             break;
         }
         prev_argc = argc;
         begin = _begin;
     }
+    return argc;
 }
 
-void hexdump_u8 (const uint8_t *data, int len, int rowlength)
+static int __printfmt (int unused, const char *fmt, ...)
 {
-    int col, row, colmax;
+    va_list         argptr;
+    int size;
+
+    va_start (argptr, fmt);
+    size = dvprintf(fmt, argptr);
+    va_end (argptr);
+    return size;
+}
+
+int __hexdump_u8 (printfmt_t printfmt, int stream, const uint8_t *data, int len, int rowlength)
+{
+    int col, row, colmax, bytescnt = len;
     int maxrows, total = 0;
+    uint8_t *startptr = (uint8_t *)data, *endptr = startptr;
 
     if (!rowlength) {
         rowlength = len;
@@ -350,30 +458,40 @@ void hexdump_u8 (const uint8_t *data, int len, int rowlength)
 
     for (row = 0; row < maxrows; row++) {
 
-        dprintf("[0x%04x:0x%04x] : ", total, total + colmax);
+        startptr += total;
+        endptr = startptr + colmax;
+        printfmt(stream, "[0x%px:0x%p] : ", startptr, endptr);
 
         for (col = 0; col < colmax; col++) {
-            dprintf("0x%02x ", data[row + row * rowlength]);
+            printfmt(stream, "0x%02x ", data[row + row * rowlength]);
         }
         total += colmax;
-        dprintf("\n");
+        printfmt(stream, "\n");
     }
     len = len - (row * rowlength);
     assert(len >= 0 && len < rowlength);
 
     if (len) {
 
-        dprintf("[0x%04x:0x%04x] >> ", total, total + colmax);
+        printfmt(stream, "[0x%04x:0x%04x] >> ", total, total + colmax);
         for (col = 0; col < len; col++) {
-            dprintf("0x%02x ", data[row + row * rowlength]);
+            printfmt(stream, "0x%02x ", data[row + row * rowlength]);
         }
     }
+    return bytescnt;
 }
 
-void hexdump_le_u32 (const uint32_t *data, int len, int rowlength)
+void hexdump_u8 (const void* data, int len, int rowlength)
 {
-    int col, row, colmax;
-    int maxrows, total;
+    __hexdump_u8(__printfmt, -1, (uint8_t *)data, len, rowlength);
+}
+
+int __hexdump_le_u32 (printfmt_t printfmt, int stream,
+                              const uint32_t *data, int len, int rowlength)
+{
+    int col, row, colmax, bytescnt = len;
+    int maxrows, total = 0;
+    uint8_t *startptr = (uint8_t *)data, *endptr = startptr;
 
     len = len / sizeof(uint32_t);
 
@@ -385,26 +503,33 @@ void hexdump_le_u32 (const uint32_t *data, int len, int rowlength)
 
     for (row = 0; row < maxrows; row++) {
 
-        dprintf("[0x%04x:0x%04x] >> ", total, total + colmax);
+        startptr += total;
+        endptr = startptr + colmax;
+        printfmt(stream, "[0x%px:0x%p] : ", startptr, endptr);
 
         for (col = 0; col < colmax; col++) {
-            dprintf("0x%08x ", data[row + row * rowlength]);
+            printfmt(stream, "0x%08x ", data[row + row * rowlength]);
         }
         total += colmax;
-        dprintf("\n");
+        printfmt(stream, "\n");
     }
     len = len - (row * rowlength);
     assert(len >= 0 && len < rowlength);
 
     if (len) {
 
-        dprintf("[0x%04x:0x%04x] : ", total, total + colmax);
+        printfmt(stream, "[0x%04x:0x%04x] : ", total, total + colmax);
         for (col = 0; col < len; col++) {
-            dprintf("0x%08x ", data[row + row * rowlength]);
+            printfmt(stream, "0x%08x ", data[row + row * rowlength]);
         }
     }
+    return bytescnt;
 }
 
+void hexdump_le_u32 (const void *data, int len, int rowlength)
+{
+    __hexdump_le_u32(__printfmt, -1, (const uint32_t *)data, len, rowlength);
+}
 
 #endif
 
