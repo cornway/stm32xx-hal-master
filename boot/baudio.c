@@ -1,4 +1,5 @@
 
+#include <debug.h>
 #include "int/boot_int.h"
 #include <misc_utils.h>
 #include <audio_main.h>

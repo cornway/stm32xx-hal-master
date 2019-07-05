@@ -48,8 +48,7 @@
 #define ADDR_FLASH_SECTOR_11    ((uint32_t)0x081C0000) /* Base address of Sector 11, 256 Kbytes */
 #endif /* DUAL_BANK */
 
-
-#define RW_PORTION (1 << 8)
+#define RW_PORTION (1 << 10)
 #define RW_ALIGN_MS (RW_PORTION - 1)
 #define PERCENT 100
 #define DBG_MAXLINE ((1 << 6) - 1)
@@ -130,7 +129,12 @@ static int bhal_prog_erase (bhal_cplth_t cplth, arch_word_t *_addr, void *_bin, 
 static int bhal_prog_prog_chunk (arch_word_t *dst, const arch_word_t *src, int size)
 {
     int errcnt = 0;
+    int _size = size;
 
+    if (BOOT_LOG_CHECK(BOOT_LOG_INFO2)) {
+        BOOT_LOG_ALWAYS("%s() BEFORE:\n", __func__);
+        BOOT_LOG_ALWAYS("src: \n");  boot_log_hex(src, size);
+    }
     hdd_led_on();
     while (size > 0) {
         if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, (arch_word_t)dst, *src) != HAL_OK) {
@@ -141,14 +145,23 @@ static int bhal_prog_prog_chunk (arch_word_t *dst, const arch_word_t *src, int s
         size--;
     }
     hdd_led_off();
+    if (BOOT_LOG_CHECK(BOOT_LOG_INFO2)) {
+        BOOT_LOG_ALWAYS("%s() COMPARE:\n", __func__);
+        boot_log_comp_hex_u32(dst, src, _size);
+    }
     return errcnt ? -errcnt : 0;
 }
 
 static int bhal_prog_read_chunk (arch_word_t *dst, const arch_word_t *src, int size)
 {
+    int _size = size;
     while (size > 0) {
         *dst++ = *src++;
         size--;
+    }
+    if (BOOT_LOG_CHECK(BOOT_LOG_INFO2)) {
+        BOOT_LOG_ALWAYS("%s():\n", __func__);
+        BOOT_LOG_ALWAYS("src: \n");  boot_log_hex(dst, _size);
     }
     return 0;
 }
@@ -161,6 +174,12 @@ static int bhal_prog_write_chunk (arch_word_t *dst, const arch_word_t *src, int 
 static int bhal_prog_clear_chunk (arch_word_t *dst, const arch_word_t *src, int size)
 {
     arch_word_t val = *src;
+    int _size = size;
+    if (BOOT_LOG_CHECK(BOOT_LOG_INFO2)) {
+        BOOT_LOG_ALWAYS("%s() BEFORE:\n", __func__);
+        BOOT_LOG_ALWAYS("src: \n");  boot_log_hex(src, size);
+        BOOT_LOG_ALWAYS("dest: \n"); boot_log_hex(dst, size);
+    }
     hdd_led_on();
     while (size > 0) {
         *dst = val;
@@ -168,17 +187,26 @@ static int bhal_prog_clear_chunk (arch_word_t *dst, const arch_word_t *src, int 
         size--;
     }
     hdd_led_off();
+    if (BOOT_LOG_CHECK(BOOT_LOG_INFO2)) {
+        BOOT_LOG_ALWAYS("%s() COMPARE:\n", __func__);
+        boot_log_comp_hex_u32(dst, src, _size);
+    }
     return 0;
 }
 
 static int bhal_prog_cmp_chunk (arch_word_t *dst, const arch_word_t *src, int size)
 {
     int miss = 0;
+    int _size = size;
     while (size > 0) {
         if (*dst++ != *src++) {
             miss++;
         }
         size--;
+    }
+    if (BOOT_LOG_CHECK(BOOT_LOG_INFO)) {
+        BOOT_LOG_ALWAYS("%s() :\n", __func__);
+        boot_log_comp_hex_u32(dst, src, _size);
     }
     return miss;
 }

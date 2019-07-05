@@ -51,4 +51,29 @@ void bsp_release_wave_sfx (int hdl);
 
 int boot_cmd_handle (int argc, const char **argv);
 
+enum {
+    BOOT_LOG_NONE = -1,
+    BOOT_LOG_ERR = 0,
+    BOOT_LOG_WARN,
+    BOOT_LOG_INFO,
+    BOOT_LOG_INFO2,
+    BOOT_LOG_MAX,
+};
+
+extern int g_boot_log_level;
+
+#define BOOT_LOG_CHECK(lvl) (g_boot_log_level >= lvl)
+#define BOOT_ERR(args ...)      ((BOOT_LOG_CHECK(BOOT_LOG_ERR) ? boot_log(0, "[ERROR]: "args) : -1)
+#define BOOT_WARN(args ...)     ((BOOT_LOG_CHECK(BOOT_LOG_WARN) ? boot_log(0, "[WARN]: "args) : -1)
+#define BOOT_INFO(args ...)     ((BOOT_LOG_CHECK(BOOT_LOG_INFO) ? boot_log(0, "[INFO]: "args) : -1)
+#define BOOT_INFO2(args ...)    ((BOOT_LOG_CHECK(BOOT_LOG_INFO2) ? boot_log(0, "[INFO_2]: "args) : -1)
+#define BOOT_LOG_ALWAYS(args ...) boot_log(0, "[INFO_3]: "args)
+
+int boot_log (int, const char *, ...) PRINTF_ATTR(2, 3);
+int boot_log_comp_hex_le_u32 (const void *a, const void *b, int size);
+int boot_log_hex (const void *data, int len);
+
+#define B_MAX_LINEBUF (1 << 10)
+#define B_MAX_BIN_SIZE (RW_PORTION * MAX_LINEBUF) /*1 Mbyte*/
+
 
