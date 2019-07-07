@@ -14,12 +14,15 @@ static int boot_print_bin_list (int argc, const char **argv)
 {
     int i = 0;
     bsp_bin_t *bin = boot_bin_head;
+    boot_bin_parm_t *parm;
 
     dprintf("%s() :\n", __func__);
     while (bin) {
+        parm = &bin->parm;
+
         if (bin->filetype == BIN_FILE) {
             dprintf("[%i] %s, %s, <0x%p> %u bytes\n",
-                i++, bin->name, bin->path, (void *)bin->progaddr, bin->size);
+                i++, bin->name, bin->path, (void *)parm->progaddr, parm->size);
         } else if (bin->filetype == BIN_LINK) {
             dprintf("[%i] %s, %s, <link file>\n",
                 i++, bin->name, bin->path);
@@ -210,24 +213,31 @@ static int bin_cmd_remove (int argc, const char **argv)
 
 int bin_install (int argc, const char **argv)
 {
-    arch_word_t progaddr;
+    arch_word_t *progptr = NULL;
+    const char *path = argv[0];
 
-    if (argc < 2) {
-        dprintf("usage : <boot address 0x0xxx..> </path/to/file>");
+    if (argc < 1) {
+        dprintf("usage : <boot address 0x0xxx..>(opt) </path/to/file>");
         return -CMDERR_NOARGS;
     }
-    if (!sscanf(argv[0], "%x", &progaddr)) {
-        return -CMDERR_INVPARM;
+    if (argc > 1) {
+        if (!sscanf(argv[0], "%p", &progptr)) {
+            return -CMDERR_INVPARM;
+        }
+        path = argv[1];
+        argc--;
     }
-    bsp_install_exec((arch_word_t *)progaddr, argv[1]);
+    argc--;
+    bsp_install_exec(progptr, path);
 
-    return argc - 2;
+    return argc;
 }
 
 const char *cmd_start_exec_usage =
+"-x - address to write\n"
 "-p - path to file to load from\n"
 "-a - args will be passed to app, - [-a \"myname -path tosomewhere\"]\n"
-"ex : boot 0x08000000 -p /exe.bin -a \"superapplication\"\n";
+"ex : boot -x 0x08000000 -p /exe.bin -a \"superapplication\"\n";
 
 int bin_execute (int argc, const char **argv)
 {
@@ -235,12 +245,14 @@ int bin_execute (int argc, const char **argv)
     const char *argvbuf[CMD_MAX_ARG];
     char apparg[CMD_MAX_BUF] = {0};
     char binpath[CMD_MAX_PATH] = {0};
-    arch_word_t progaddr;
+    arch_word_t *progptr = NULL;
+    arch_word_t useraddr = (arch_word_t)NULL;
 
     cmd_keyval_t kvarr[] = 
     {
         CMD_KVSTR_S("p", &binpath[0]),
         CMD_KVSTR_S("a", &apparg[0]),
+        CMD_KVX32_S("x", &useraddr),
     };
     cmd_keyval_t *kvlist[arrlen(kvarr)];
 
@@ -260,10 +272,8 @@ int bin_execute (int argc, const char **argv)
         doinstall = 1;
     }
 
-    /*prog addr always first*/
-    if (!sscanf(argv[0], "%x", &progaddr)) {
-        dprintf("cannot parse addr : [%s]\n", argv[0]);
-        return -CMDERR_INVPARM;
+    if (useraddr && useraddr != BOOT_INV_ADDR) {
+        progptr = (arch_word_t *)useraddr;
     }
 
     if (doinstall) {
@@ -271,7 +281,7 @@ int bin_execute (int argc, const char **argv)
         type = bsp_bin_file_compat(binpath);
         switch (type) {
             case BIN_FILE:
-                err = bsp_install_exec((arch_word_t *)progaddr, binpath);
+                err = bsp_install_exec(progptr, binpath);
             break;
             case BIN_LINK:
                 return bsp_exec_link(NULL, binpath);
@@ -283,7 +293,7 @@ int bin_execute (int argc, const char **argv)
 
     if (err == CMDERR_OK) {
         argvbuf[0] = apparg;
-        bsp_start_exec((arch_word_t *)progaddr, 1, &argvbuf[0]);
+        bsp_start_exec(progptr, 1, &argvbuf[0]);
     }
     return err;
 }

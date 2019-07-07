@@ -454,7 +454,7 @@ static void gui_act (gui_t *gui, component_t *com, gevt_t *evt)
             com->focus = 0;
         }
     }
-    if (h(pane, com, NULL) > 0) {
+    if (h && h(pane, com, NULL) > 0) {
         if (!isrelease) {
             pane->onfocus = com;
             com->focus = 1;

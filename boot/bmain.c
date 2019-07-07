@@ -83,21 +83,31 @@ static void boot_destr_exec_list (void)
     boot_bin_head = NULL;
 }
 
+static int
+__bsp_setup_bin_param (boot_bin_parm_t *parm, void *ptr, int size)
+{
+    arch_word_t *bindata = (arch_word_t *)ptr;
+    parm->entrypoint = bindata[1];
+    parm->progaddr = bindata[1];
+    parm->spinitial = bindata[0];
+    parm->size = size;
+    return 0;
+}
 
 int
 bsp_setup_bin_param (bsp_bin_t *bin)
 {
     int f, size;
     arch_word_t entry;
+    uint8_t buf[sizeof(bin->parm)];
 
     size = d_open(bin->path, &f, "r");
     if (f < 0) {
         return -1;
     }
-    d_read(f, &bin->spinitial, sizeof(entry));
-    d_read(f, &bin->entrypoint, sizeof(entry));
+    d_read(f, buf, sizeof(buf));
+    __bsp_setup_bin_param(&bin->parm, buf, size);
     d_close(f);
-    bin->size = size;
     return 0;
 }
 
@@ -113,7 +123,7 @@ bsp_setup_bin_desc (bsp_bin_t *bin, const char *path,
     if (bsp_setup_bin_param(bin) < 0) {
         return NULL;
     }
-    bin->progaddr = ROUND_DOWN(bin->entrypoint, BOOT_MIN_SECTOR);
+    bin->parm.progaddr = ROUND_DOWN(bin->parm.entrypoint, BOOT_MIN_SECTOR);
     return bin;
 }
 
@@ -124,7 +134,7 @@ bsp_setup_bin_link (bsp_bin_t *bin, const char *path,
     snprintf(bin->name, sizeof(bin->name), "%s", originname);
     snprintf(bin->path, sizeof(bin->path), "%s", path);
     bin->filetype = type;
-    bin->progaddr = 0;
+    bin->parm.progaddr = 0;
     return bin;
 }
 
@@ -228,11 +238,12 @@ int bsp_exec_link (arch_word_t *progaddr, const char *path)
     return b_handle_lnk(path);
 }
 
-int bsp_install_exec (arch_word_t *progaddr, const char *path)
+int bsp_install_exec (arch_word_t *progptr, const char *path)
 {
     void *bindata;
     int binsize = 0, err = 0;
     bsp_heap_api_t heap = {.malloc = heap_alloc_shared, .free = heap_free};
+    boot_bin_parm_t parm;
 
     dprintf("Installing : \'%s\'\n", path);
 
@@ -240,9 +251,13 @@ int bsp_install_exec (arch_word_t *progaddr, const char *path)
     if (!bindata) {
         return -1;
     }
+    if (progptr == NULL) {
+        __bsp_setup_bin_param(&parm, bindata, binsize);
+        progptr = (arch_word_t *)parm.progaddr;
+    }
 
-    if (!boot_program_bypas && !bhal_prog_exist(progaddr, bindata, binsize / sizeof(arch_word_t))) {
-        err = bhal_load_program(NULL, progaddr, bindata, binsize / sizeof(arch_word_t));
+    if (!boot_program_bypas && !bhal_prog_exist(progptr, bindata, binsize / sizeof(arch_word_t))) {
+        err = bhal_load_program(NULL, progptr, bindata, binsize / sizeof(arch_word_t));
     }
     if (err < 0) {
         return -1;

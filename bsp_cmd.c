@@ -1201,7 +1201,7 @@ static int __cmd_parm_arrange (int argc, const char **keys,
             dprintf("%s() : not yet\n", __func__);
         } else if (dashes) {
 
-            const char *key = src[0] += dashes;
+            const char *key = src[0] + dashes;
 
             if (iscombo) {
                 keys = __cmd_parm_split_combo(keys, key);

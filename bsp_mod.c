@@ -70,7 +70,7 @@ static d_bool bspmod_check_mod_allowed (bspmod_t *modchk)
     bspmod_t *mod = bspmod_list.head;
 
     while (mod) {
-        if (mod->bin.entrypoint == modchk->bin.entrypoint) {
+        if (mod->bin.parm.entrypoint == modchk->bin.parm.entrypoint) {
             return d_false;
         }
         mod = mod->next;
@@ -107,12 +107,13 @@ void *bspmod_insert (const bsp_heap_api_t *heap, const char *path, const char *n
         return NULL;
     }
 
-    rawptr = bsp_cache_bin_file(heap, bin->path, (int *)&bin->size);
+    rawptr = bsp_cache_bin_file(heap, bin->path, (int *)&bin->parm.size);
 
     if (rawptr) {
         err = 0;
-        if (!bhal_prog_exist((arch_word_t *)bin->progaddr, rawptr, bin->size)) {
-            err = bhal_load_program(NULL, (arch_word_t *)bin->progaddr, rawptr, bin->size);
+        if (!bhal_prog_exist((arch_word_t *)bin->parm.progaddr, rawptr, bin->parm.size)) {
+            err = bhal_load_program(NULL, (arch_word_t *)bin->parm.progaddr,
+                                     rawptr, bin->parm.size);
         }
     }
     if (err < 0) {
@@ -148,7 +149,7 @@ int bspmod_probe (const char *name)
     if (!mod) {
         return -1;
     }
-    return bhal_execute_module(mod->bin.entrypoint);
+    return bhal_execute_module(mod->bin.parm.entrypoint);
 }
 
 /*must be used only within 'module' code*/

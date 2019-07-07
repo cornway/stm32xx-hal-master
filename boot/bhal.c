@@ -332,17 +332,14 @@ static int bhal_prog_handle_func
 
 static void __bhal_boot (arch_word_t addr)
 {
+extern void CPU_CACHE_Disable (void);
     register volatile arch_word_t *entryptr, *spinitial;
-    
+
     entryptr = (arch_word_t *)(addr + sizeof(arch_word_t));
     spinitial = (arch_word_t *)(addr);
 
-/*
-    SCB_DisableDCache();
-    SCB_DisableICache();
-    SCB_CleanInvalidateDCache();
-    SCB_InvalidateICache();
-*/
+    CPU_CACHE_Disable();
+
     __DSB();
     __msp_set(*spinitial);
     arch_asmgoto(*entryptr);

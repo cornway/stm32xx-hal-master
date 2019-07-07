@@ -61,6 +61,9 @@ typedef struct cmd_keyval_s {
 #define CMD_KVI32_S(c, v) \
     {c, v, "%i", 0, NULL}
 
+#define CMD_KVX32_S(c, v) \
+    {c, v, "%x", 0, NULL}
+
 #define CMD_KVSTR_S(c, v) \
     {c, v, "%s", 0, NULL}
 

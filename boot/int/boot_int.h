@@ -6,21 +6,27 @@
 #define BOOT_MAX_NAME 24
 #define BOOT_MAX_PATH 128
 
+#define BOOT_INV_ADDR ((arch_word_t)-1)
+
 typedef enum {
     BIN_FILE,
     BIN_LINK,
     BIN_MAX,
 } bsp_exec_file_type_t;
 
+typedef struct boot_bin_parm_s {
+    arch_word_t size;
+    arch_word_t progaddr;
+    arch_word_t entrypoint;
+    arch_word_t spinitial;
+} boot_bin_parm_t;
+
 typedef struct boot_bin_s {
     struct boot_bin_s *next;
     bsp_exec_file_type_t filetype;
     exec_mem_type_t memtype;
 
-    arch_word_t size;
-    arch_word_t progaddr;
-    arch_word_t entrypoint;
-    arch_word_t spinitial;
+    boot_bin_parm_t parm;
     char name[BOOT_MAX_NAME];
     char path[BOOT_MAX_PATH];
 } bsp_bin_t;

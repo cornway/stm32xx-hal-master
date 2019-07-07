@@ -163,13 +163,18 @@ static void SystemClock_Config(void)
         clock_fault();
 }
 
-static void CPU_CACHE_Enable(void)
+void CPU_CACHE_Enable(void)
 {
-    /* Enable I-Cache */
     SCB_EnableICache();
-
-    /* Enable D-Cache */
     SCB_EnableDCache();
+}
+
+void CPU_CACHE_Disable (void)
+{
+    SCB_DisableDCache();
+    SCB_DisableICache();
+    SCB_CleanInvalidateDCache();
+    SCB_InvalidateICache();
 }
 
 void dev_deinit (void)
@@ -187,9 +192,7 @@ void dev_deinit (void)
     heap_leak_check();
     serial_deinit();
 
-    irq_save(&irq);
     irq_destroy();
-    //HAL_DeInit();
 }
 
 #endif /*!BSP_INDIR_API*/
@@ -198,6 +201,7 @@ void dev_deinit (void)
 
 int dev_hal_init (void)
 {
+    CPU_CACHE_Enable();
     SystemClock_Config();
     HAL_Init();
     serial_init();
@@ -246,9 +250,6 @@ int dev_main (void)
     char **argv;
     int argc;
     g_bspapi = bsp_api_attach();
-#if defined(BSP_DRIVER)
-    CPU_CACHE_Enable();
-#endif /*BSP_DRIVER*/
     dev_hal_init();
     mpu_init();
     heap_init();
