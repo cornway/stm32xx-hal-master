@@ -2,11 +2,11 @@
 #include <stddef.h>
 #include "heap.h"
 #include "audio_main.h"
-#include "audio_int.h"
+#include "int/audio_int.h"
 
 #if AUDIO_MODULE_PRESENT
 
-#if !defined(APPLICATION) || defined(BSP_DRIVER)
+#if defined(BSP_DRIVER)
 
 typedef struct {
     snd_sample_t *buf;

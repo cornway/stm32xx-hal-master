@@ -1,7 +1,9 @@
 
+#include <debug.h>
+#include "int/boot_int.h"
 #include <misc_utils.h>
 #include <audio_main.h>
-#include <boot_int.h>
+#include <heap.h>
 
 #define BSFX_POOLMAX 16
 
@@ -50,7 +52,7 @@ static bsfx_t *__boot_check_sfx_exist (int num)
     return NULL;
 }
 
-int boot_audio_open_wave (const char *name)
+int bsp_open_wave_sfx (const char *name)
 {
     int cachenum, cachesize, sfxidx;
     bsfx_t *sfx;
@@ -71,7 +73,7 @@ int boot_audio_open_wave (const char *name)
     if (sfxidx < 0) {
         return -1;
     }
-    sfx = Sys_Malloc(sizeof(*sfx) + cachesize + 1);
+    sfx = heap_alloc_shared(sizeof(*sfx) + cachesize + 1);
     if (!sfx) {
         return -1;
     }
@@ -83,7 +85,7 @@ int boot_audio_open_wave (const char *name)
     return sfxidx;
 }
 
-int boot_audio_play_wave (int hdl, uint8_t volume)
+int bsp_play_wave_sfx (int hdl, uint8_t volume)
 {
     int chanum;
     Mix_Chunk chunk;
@@ -114,22 +116,23 @@ int boot_audio_play_wave (int hdl, uint8_t volume)
     return 0;
 }
 
-int boot_audio_stop_wave (int hdl)
+int bsp_stop_wave_sfx (int hdl)
 {
     bsfx_t *sfx = __get_sfx(hdl);
     if (!audio_is_playing(sfx->channel)) {
         return -1;
     }
     audio_stop_channel(hdl);
+    return 0;
 }
 
-void boot_audio_release_wave (int hdl)
+void bsp_release_wave_sfx (int hdl)
 {
     bsfx_t *sfx = __get_sfx(hdl);
 
-    boot_audio_stop_wave(hdl);
+    bsp_stop_wave_sfx(hdl);
     __set_sfx(hdl, NULL);
     audio_wave_close(sfx->wavenum);
-    Sys_Free(sfx);
+    heap_free(sfx);
 }
 

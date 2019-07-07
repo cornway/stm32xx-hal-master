@@ -5,13 +5,13 @@
 #error "uint32_t -> uint64_t"
 #else
 typedef uint32_t irqmask_t;
+#define NVIC_IRQ_MASK (0xffffffff)
 #endif
-
-#define NVIC_IRQ_MASK ((1 << NVIC_IRQ_MAX) - 1)
 
 void irq_save (irqmask_t *flags);
 void irq_restore (irqmask_t flags);
 void irq_bmap (irqmask_t *flags);
 void NVIC_dump (void);
+void irq_destroy (void);
 
 #endif /*__NVIC_H__*/

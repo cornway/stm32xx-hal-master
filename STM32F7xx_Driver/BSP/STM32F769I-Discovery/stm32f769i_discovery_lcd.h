@@ -324,6 +324,7 @@ typedef enum
 int BSP_LCD_UseHDMI (void);
 uint8_t  BSP_LCD_Init(void);
 uint8_t  BSP_LCD_InitEx(LCD_OrientationTypeDef orientation);
+void BSP_LCD_DeInitEx (void);
 uint8_t  BSP_LCD_HDMIInitEx(void);
 
 void     BSP_LCD_MspDeInit(void);
@@ -360,8 +361,8 @@ uint32_t BSP_LCD_ReadPixel(uint16_t Xpos, uint16_t Ypos);
 void     BSP_LCD_DrawPixel(uint16_t Xpos, uint16_t Ypos, uint32_t pixel);
 void     BSP_LCD_Clear(uint32_t Color);
 void     BSP_LCD_ClearStringLine(uint32_t Line);
-void     BSP_LCD_DisplayStringAtLine(uint16_t Line, uint8_t *ptr);
-void     BSP_LCD_DisplayStringAt(uint16_t Xpos, uint16_t Ypos, uint16_t w, uint16_t h, uint8_t *Text, Text_AlignModeTypdef Mode);
+int      BSP_LCD_DisplayStringAtLine(uint16_t Line, uint8_t *ptr);
+int      BSP_LCD_DisplayStringAt(uint16_t Xpos, uint16_t Ypos, uint16_t w, uint16_t h, uint8_t *Text, Text_AlignModeTypdef Mode);
 void     BSP_LCD_DisplayChar(uint16_t Xpos, uint16_t Ypos, uint8_t Ascii);
 
 void     BSP_LCD_DrawHLine(uint16_t Xpos, uint16_t Ypos, uint16_t Length);

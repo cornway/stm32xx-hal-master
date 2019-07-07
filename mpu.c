@@ -2,7 +2,8 @@
 #include "misc_utils.h"
 #include "arch.h"
 #include "mpu.h"
-#include <string.h> 
+#include <string.h>
+#include <bsp_sys.h>
 
 #define MPU_REG_POOL_MAX (MPU_REGION_NUMBER7 + 1)
 

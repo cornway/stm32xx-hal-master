@@ -25,5 +25,6 @@ typedef struct timer_desc_s {
 } timer_desc_t;
 
 int hal_tim_init (timer_desc_t *desc);
+int hal_tim_deinit (timer_desc_t *desc);
 
 #endif /*__TIM_H__*/

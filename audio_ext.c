@@ -1,10 +1,10 @@
 #include "string.h"
 #include "stdio.h"
 #include "audio_main.h"
-#include "audio_int.h"
+#include "int/audio_int.h"
 #include "dev_io.h"
 
-#if !defined(APPLICATION) || defined(BSP_DRIVER)
+#if defined(BSP_DRIVER)
 
 #define A_MAXNAME 9
 #define A_MAXPATH 128
@@ -67,13 +67,15 @@ __set_name (int slot, const char *name)
 
 d_bool a_check_wave_sup (wave_t *wave)
 {
-    if (readShort(&wave->BitPerSample) != AUDIO_OUT_BITS) {
+    a_intcfg_t *cfg = a_get_conf();
+
+    if (readShort(&wave->BitPerSample) != cfg->samplebits) {
         return d_false;
     }
-    if (readShort(&wave->NbrChannels) != AUDIO_OUT_CHANNELS) {
+    if (readShort(&wave->NbrChannels) != cfg->channels) {
         return d_false;
     }
-    if (readLong(&wave->SampleRate) != AUDIO_SAMPLE_RATE) {
+    if (readLong(&wave->SampleRate) != cfg->samplerate) {
         return d_false;
     }
     return d_true;

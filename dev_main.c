@@ -3,6 +3,7 @@
 #include <stdarg.h>
 #include "main.h"
 #include <stm32f769i_discovery.h>
+#include <bsp_cmd.h>
 #include "lcd_main.h"
 #include "audio_main.h"
 #include "input_main.h"
@@ -11,14 +12,15 @@
 #include "misc_utils.h"
 #include "nvic.h"
 #include <mpu.h>
+#include <heap.h>
+#include <bsp_sys.h>
 
-extern void bsp_api_attach (bspapi_t *api);
+#if !defined(MODULE)
+
 extern void VID_PreConfig (void);
-extern bspapi_t bspapi;
 
 static void SystemClock_Config(void);
 static void CPU_CACHE_Enable(void);
-static void SystemDump (void);
 
 int g_dev_debug_level = DBG_ERR;
 
@@ -56,11 +58,12 @@ void fatal_error (char *message, ...)
     va_end (argptr);
 
     serial_flush();
-    bug();
+    for(;;) {}
 }
 
 /* Private function prototypes -----------------------------------------------*/
 
+/*TODO : move to gpio.c/gpio.h*/
 void hdd_led_on (void)
 {
     BSP_LED_On(LED2);
@@ -81,33 +84,21 @@ void serial_led_off (void)
     BSP_LED_Off(LED1);
 }
 
-static int con_echo (const char *buf, int len)
+static int con_echo (int argc, const char **argv)
 {
-    dprintf("@: %s\n", buf);
-    return 0; /*let it be processed by others*/
+    int i;
+    char buf[128];
+
+    dprintf("@> ");
+
+    for (i = 0; i < argc; i++) {
+        snprintf(buf, sizeof(buf), "%s", argv[i]);
+        dprintf(" %s", buf);
+    }
+    dprintf("\n");
+
+    return argc; /*let it be processed by others*/
 }
-
-void dev_deinit (void)
-{
-extern void screen_release (void);
-    irqmask_t irq = NVIC_IRQ_MASK;
-    dprintf("%s() :\n", __func__);
-    term_unregister_handler(con_echo);
-
-    screen_release();
-    screen_deinit();
-    dev_io_deinit();
-    audio_deinit();
-    profiler_deinit();
-    input_bsp_deinit();
-    serial_deinit();
-
-    irq_save(&irq);
-    assert(!irq);
-    HAL_DeInit();
-}
-
-#endif
 
 static void SystemClock_Config(void)
 {
@@ -172,75 +163,111 @@ static void SystemClock_Config(void)
         clock_fault();
 }
 
-static void CPU_CACHE_Enable(void)
+void CPU_CACHE_Enable(void)
 {
-    /* Enable I-Cache */
     SCB_EnableICache();
-
-    /* Enable D-Cache */
     SCB_EnableDCache();
 }
 
-static void SystemDump (void)
+void CPU_CACHE_Disable (void)
 {
-    NVIC_dump();
+    SCB_DisableDCache();
+    SCB_DisableICache();
+    SCB_CleanInvalidateDCache();
+    SCB_InvalidateICache();
 }
 
-
-#if defined(BOOT)
-
-int dev_init (void (*userinit) (void))
+void dev_deinit (void)
 {
+    irqmask_t irq = NVIC_IRQ_MASK;
+    dprintf("%s() :\n", __func__);
+    bsp_stdin_unreg_if(con_echo);
+
+    cmd_deinit();
+    dev_io_deinit();
+    audio_deinit();
+    profiler_deinit();
+    input_bsp_deinit();
+    vid_deinit();
+    heap_leak_check();
+    serial_deinit();
+
+    irq_destroy();
+}
+
+#endif /*!BSP_INDIR_API*/
+
+#if defined(BSP_DRIVER)
+
+int dev_hal_init (void)
+{
+    CPU_CACHE_Enable();
     SystemClock_Config();
     HAL_Init();
     serial_init();
-    userinit();
-    
+    return 0;
+}
+
+extern void boot_gui_preinit (void);
+
+int dev_init (void)
+{
     dev_io_init();
 
     BSP_LED_Init(LED1);
     BSP_LED_Init(LED2);
 
-    term_register_handler(con_echo);
+    bsp_stdin_register_if(con_echo);
+    cmd_init();
 
     audio_init();
     input_bsp_init();
     profiler_init();
-    screen_init();
-    SystemDump();
-    d_dvar_int32(&g_dev_debug_level, "dbglvl");
+    vid_init();
+    cmd_register_i32(&g_dev_debug_level, "dbglvl");
+    cmd_register_i32(&g_serial_rx_eof, "set_rxeof");
     return 0;
 }
 
-void __dev_init (void)
+
+#else /*BSP_DRIVER*/
+
+#define dev_init BSP_SYS_API(dev.init)
+
+static bsp_user_api_t user_api =
 {
-    Sys_AllocInit();
-    mpu_init();
-}
+    .heap =
+    {
+        .malloc = heap_malloc,
+        .free = heap_free
+    },
+};
 
-#else /*BOOT*/
-
-#define dev_init(user) g_bspapi->sys.init(user)
-
-void __dev_init (void)
-{
-    Sys_AllocInit();
-}
-
-#endif /*BOOT*/
+#endif /*BSP_DRIVER*/
 
 int dev_main (void)
 {
-    bsp_api_attach(&bspapi);
-#if defined(BSP_DRIVER) || defined(BOOT)
-    CPU_CACHE_Enable();
-#endif /*BSP_DRIVER*/
-    dev_init(__dev_init);
+    char **argv;
+    int argc;
+    g_bspapi = bsp_api_attach();
+    dev_hal_init();
+    mpu_init();
+    heap_init();
+    dev_init();
 
     VID_PreConfig();
-    mainloop(0, NULL);
+#if defined(BOOT)
+    boot_gui_preinit();
+#endif
+#if BSP_INDIR_API
+extern char **bsp_argc_argv_get (int *argc);
+    sys_user_attach(&user_api);
+    argv = bsp_argc_argv_get(&argc);
+#endif /*BSP_INDIR_API*/
+    mainloop(argc, argv);
 
     return 0;
 }
 
+#endif /*MODULE*/
 

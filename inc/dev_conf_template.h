@@ -12,8 +12,6 @@
 #define AUDIO_MODULE_PRESENT        (1)
 #define MUSIC_MODULE_PRESENT        (1)
 
-#define AUDIO_SAMPLE_RATE           (11025U)
-
 #define DEVIO_READONLY              (0)
 #define MAX_HANDLES                 (4)
 

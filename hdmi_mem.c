@@ -28,7 +28,7 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#if !defined(APPLICATION) || defined(BSP_DRIVER)
+#if defined(BSP_DRIVER)
 
 #include "stm32f769i_discovery_lcd.h"
 #include "main.h"

@@ -1,27 +1,17 @@
 
-#if !defined(APPLICATION) || defined(BSP_DRIVER)
+#if defined(BSP_DRIVER)
 
 #include "string.h"
 #include "stm32f769i_discovery_audio.h"
+#include "int/audio_int.h"
+#include "int/term_int.h"
 #include "audio_main.h"
-#include "audio_int.h"
 #include "wm8994.h"
 #include "nvic.h"
 #include "debug.h"
 #include <dev_conf.h>
 
 #if AUDIO_MODULE_PRESENT
-
-A_COMPILE_TIME_ASSERT(samplerate,
-    (AUDIO_SAMPLE_RATE == I2S_AUDIOFREQ_8K) ||
-    (AUDIO_SAMPLE_RATE == I2S_AUDIOFREQ_11K) ||
-    (AUDIO_SAMPLE_RATE == I2S_AUDIOFREQ_16K) ||
-    (AUDIO_SAMPLE_RATE == I2S_AUDIOFREQ_22K) ||
-    (AUDIO_SAMPLE_RATE == I2S_AUDIOFREQ_44K) ||
-    (AUDIO_SAMPLE_RATE == I2S_AUDIOFREQ_48K) ||
-    (AUDIO_SAMPLE_RATE == I2S_AUDIOFREQ_96K) ||
-    (AUDIO_SAMPLE_RATE == I2S_AUDIOFREQ_192K));
-
 
 #define CHANNEL_NUM_VALID(num) \
     (((num) < AUDIO_MAX_VOICES) || ((num) == AUDIO_MUS_CHAN_START))
@@ -38,6 +28,8 @@ static irqmask_t audio_irq_mask;
 static void (*a_mixer_callback) (int chan, void *stream, int len, void *udata) = NULL;
 
 d_bool g_audio_proc_isr = d_true;
+
+static a_intcfg_t audio_config;
 
 void error_handle (void)
 {
@@ -176,12 +168,80 @@ DMA_on_tx_complete (isr_status_e status)
     }
 }
 
-static void AUDIO_InitApplication(void)
+static void a_check_cfg (a_intcfg_t *cfg)
+{
+    
+    if((cfg->samplerate == I2S_AUDIOFREQ_8K) ||
+        (cfg->samplerate == I2S_AUDIOFREQ_11K) ||
+        (cfg->samplerate == I2S_AUDIOFREQ_16K) ||
+        (cfg->samplerate == I2S_AUDIOFREQ_22K) ||
+        (cfg->samplerate == I2S_AUDIOFREQ_44K) ||
+        (cfg->samplerate == I2S_AUDIOFREQ_48K) ||
+        (cfg->samplerate == I2S_AUDIOFREQ_96K) ||
+        (cfg->samplerate == I2S_AUDIOFREQ_192K)) {
+
+    } else {
+        dprintf("%s() : incompat. samplerate= %u\n", __func__, cfg->samplerate);
+        cfg->samplerate = AUDIO_RATE_DEFAULT;
+    }
+    if (cfg->channels != AUDIO_CHANNELS_NUM_DEFAULT) {
+        dprintf("%s() : incompat. channels num= %u\n", __func__, cfg->channels);
+        cfg->channels = AUDIO_CHANNELS_NUM_DEFAULT;
+    }
+    if (cfg->samplebits != AUDIO_SAMPLEBITS_DEFAULT) {
+        dprintf("%s() : incompat. bits per sample= %u\n", __func__, cfg->samplebits);
+        cfg->samplebits = AUDIO_SAMPLEBITS_DEFAULT;
+    }
+    cfg->volume = cfg->volume & MAX_VOL;
+}
+
+static void AUDIO_ParseCfgString (a_intcfg_t *cfg, const char *str)
+{
+    char *tok;
+    int fails = 0;
+
+    assert(str);
+
+    dprintf("Audio config : [%s]\n", str);
+    tok = "samplerate";
+    if (str_parse_tok(str, tok, &cfg->samplerate) <= 0) {
+        cfg->samplerate = AUDIO_RATE_DEFAULT;
+        fails++;
+    } else {
+        dprintf("%s :ok\n", tok);
+    }
+    tok = "volume";
+    if (str_parse_tok(str, tok, &cfg->volume) <= 0) {
+        cfg->volume = AUDIO_VOLUME_DEFAULT;
+        fails++;
+    } else {
+        dprintf("%s :ok\n", tok);
+    }
+    tok = "samplebits";
+    if (str_parse_tok(str, tok, &cfg->samplebits) <= 0) {
+        cfg->samplebits = AUDIO_SAMPLEBITS_DEFAULT;
+        fails++;
+    } else {
+        dprintf("%s :ok\n", tok);
+    }
+    tok = "cnannels";
+    if (str_parse_tok(str, tok, &cfg->channels) <= 0) {
+        cfg->channels = AUDIO_CHANNELS_NUM_DEFAULT;
+        fails++;
+    } else {
+        dprintf("%s :ok\n", tok);
+    }
+    a_check_cfg(cfg);
+    dprintf("done\n");
+}
+
+
+static void AUDIO_Config (a_intcfg_t *cfg)
 {
   a_buf_t master;
   irqmask_t irq_flags;
   irq_bmap(&irq_flags);
-  BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, A_NITIAL_VOL, AUDIO_SAMPLE_RATE);
+  BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, cfg->volume, cfg->samplerate);
   BSP_AUDIO_OUT_SetAudioFrameSlot(CODEC_AUDIOFRAME_SLOT_02);
 
   a_get_master_base(&master);
@@ -229,7 +289,7 @@ void audio_update_isr (void)
         a_clear_master();
         a_force_stop = d_false;
     }
-    music_tickle();
+    cd_tickle();
     irq_restore(irq_flags);
 }
 
@@ -248,7 +308,7 @@ void audio_update_dsr (void)
         a_clear_master();
         a_force_stop = d_false;
     }
-    music_tickle();
+    cd_tickle();
 }
 
 void audio_update (void)
@@ -271,7 +331,7 @@ void audio_irq_restore (irqmask_t flags)
     irq_restore(flags);
 }
 
-void audio_init (void)
+int audio_init (void)
 {
     memset(&chan_llist_ready, 0, sizeof(chan_llist_ready));
     memset(channels, 0, sizeof(channels));
@@ -279,18 +339,31 @@ void audio_init (void)
     chan_llist_ready.first_link_handle = a_chanlist_first_node_clbk;
     chan_llist_ready.remove_handle = a_chanlist_node_remove_clbk;
     a_mem_init();
-    AUDIO_InitApplication();
+    cd_init();
 #if (USE_REVERB)
     a_rev_init();
 #endif
-    cd_init();
+    return 0;
+}
+
+int audio_conf (const char *str)
+{
+    AUDIO_ParseCfgString(&audio_config, str);
+    AUDIO_Config(&audio_config);
+    return 0;
+}
+
+a_intcfg_t *a_get_conf (void)
+{
+    return &audio_config;
 }
 
 void audio_deinit (void)
 {
     dprintf("%s() :\n", __func__);
-    AUDIO_DeInitApplication();
     audio_stop_all();
+    AUDIO_DeInitApplication();
+    /*TODO : use deinit..*/
     cd_init();
 }
 
@@ -318,6 +391,7 @@ void audio_stop_all (void)
         a_channel_remove(cur);
     }
     irq_restore(irq_flags);
+    a_clear_master();
 }
 
 void audio_mixer_ext (void (*mixer_callback) (int, void *, int, void *))
@@ -328,13 +402,12 @@ void audio_mixer_ext (void (*mixer_callback) (int, void *, int, void *))
     irq_restore(irq_flags);
 }
 
-audio_channel_t *audio_stop_channel (int channel)
+void audio_stop_channel (int channel)
 {
     irqmask_t irq_flags = audio_irq_mask;
     irq_save(&irq_flags);
     audio_pause(channel);
     irq_restore(irq_flags);
-    return NULL;
 }
 
 void audio_pause (int channel)
@@ -412,7 +485,7 @@ void audio_set_pan (int handle, int l, int r)
     irq_restore(irq_flags);
 }
 
-void audio_change_sample_volume (audio_channel_t *achannel, uint8_t volume)
+void audio_sample_vol (audio_channel_t *achannel, uint8_t volume)
 {
     irqmask_t irq_flags = audio_irq_mask;
 

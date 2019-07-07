@@ -1,5 +1,5 @@
 
-#if !defined(APPLICATION) || defined(BSP_DRIVER)
+#if defined(BSP_DRIVER)
 
 #include "main.h"
 #include "ff.h"
@@ -24,8 +24,6 @@
 #define MAX_HANDLES    3
 #endif
 
-#define FLAG_EXPORT (1 << 0)
-
 FATFS SDFatFs ALIGN(8);  /* File system object for SD card logical drive */
 char SDPath[4] = {0}; /* SD card logical drive path */
 
@@ -48,29 +46,6 @@ typedef struct {
     DIR dir;
     FILINFO fn;
 } dirhandle_t;
-
-#define DEVIO_PRINTENV_CMD "print"
-#define DEVIO_REGISTER_CMD "register"
-#define DEVIO_UNREGISTER_CMD "unreg"
-#define DEVIO_CTRL_CMD "devio"
-
-const char *devio_deprecated_names[] =
-{
-    DEVIO_PRINTENV_CMD,
-    DEVIO_REGISTER_CMD,
-    DEVIO_UNREGISTER_CMD,
-    DEVIO_CTRL_CMD,
-};
-
-static int devio_con_clbk (const char *text, int len);
-static int _d_dvar_reg (dvar_t *var, const char *name);
-
-static int devio_print_env (void *p1, void *p2);
-static int devio_dvar_register (void *p1, void *p2);
-static int devio_dvar_unregister (void *p1, void *p2);
-static int devio_ctrl (void *p1, void *p2);
-
-static int devio_dvar_deprecated (const char *name);
 
 static fhandle_t __file_handles[MAX_HANDLES] ALIGN(8);
 static dirhandle_t __dir_handles[MAX_HANDLES] ALIGN(8);
@@ -158,30 +133,12 @@ const char *str;
 
 static int _devio_mount (void *p1, void *p2);
 static void _devio_unmount (void);
-void d_dvar_rm_all (void);
+void cmd_unregister_all (void);
 
 
 int dev_io_init (void)
 {
-    dvar_t dvar;
-
-    term_register_handler(devio_con_clbk);
-
-    dvar.ptr = devio_print_env;
-    dvar.ptrsize = sizeof(&devio_print_env);
-    dvar.type = DVAR_FUNC;
-
-    _d_dvar_reg(&dvar, DEVIO_PRINTENV_CMD);
-    dvar.ptr = devio_dvar_register;
-    _d_dvar_reg(&dvar, DEVIO_REGISTER_CMD);
-    dvar.ptr = devio_dvar_unregister;
-    _d_dvar_reg(&dvar, DEVIO_UNREGISTER_CMD);
-    dvar.ptr = devio_ctrl;
-    _d_dvar_reg(&dvar, DEVIO_CTRL_CMD);
-
-    _devio_mount(SDPath, NULL);
-    
-    return 0;
+    return _devio_mount(SDPath, NULL);
 }
 
 void dev_io_deinit (void)
@@ -190,8 +147,6 @@ extern void SD_Deinitialize(void);
 
     dprintf("%s() :\n", __func__);
     _devio_unmount();
-    d_dvar_rm_all();
-    term_unregister_handler(devio_con_clbk);
     SD_Deinitialize();
 }
 
@@ -285,11 +240,28 @@ int d_unlink (const char *path)
 /*TODO : handle mode arg*/
 int d_seek (int handle, int position, uint32_t mode)
 {
+    FRESULT res;
+
     if (handle < 0) {
         return -1;
     }
-    assert(mode == DSEEK_SET);
-    return f_lseek(getfile(handle), position) == FR_OK ? position : -1;
+    switch (mode) {
+        case DSEEK_SET:
+            res = f_lseek(getfile(handle), position);
+        break;
+        case DSEEK_CUR:
+            res = d_tell(handle);
+        break;
+        case DSEEK_END:
+            position = d_size(handle);
+            res = f_lseek(getfile(handle), position);
+        break;
+        default:
+            dprintf("Unknown SEEK mode : %u\n", mode);
+            return -1;
+        break;
+    }
+    return res == FR_OK ? position : -1;
 }
 
 int d_eof (int handle)
@@ -358,19 +330,26 @@ int d_write (int handle, PACKED const void *src, int count)
 #endif
 }
 
-int d_printf (int handle, char *fmt, ...)
+int d_printf (int handle, const char *fmt, ...)
 {
     va_list args;
-    char buf[1024];
     int size;
 
     va_start(args, fmt);
-    size = vsnprintf(buf, sizeof(buf), fmt, args);
+    size = _d_vprintf(handle, fmt, args);
     va_end(args);
 
-    return d_write(handle, buf, size);
+    return size;
 }
 
+int _d_vprintf (int h, const char *fmt, va_list argptr)
+{
+    char            string[1024];
+    int size = 0;
+    size = vsnprintf(string, sizeof(string), fmt, argptr);
+    size = d_write(h, string, size);
+    return size;
+}
 
 int d_mkdir (const char *path)
 {
@@ -389,11 +368,14 @@ int d_opendir (const char *path)
     FRESULT res;
     alloc_dir(&h);
     if (h < 0) {
+        dprintf("%s() : too many open files\n", __func__);
         return -1;
     }
     res = f_opendir(getdir(h), path);
     if (res != FR_OK) {
-        dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
+        if (res != FR_NO_PATH) {
+            dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
+        }
         freedir(h);
         return -1;
     }
@@ -427,6 +409,10 @@ int d_readdir (int dir, fobj_t *fobj)
     } else {
         fobj->type = FTYPE_DIR;
     }
+    fobj->com.attrib = dh->fn.fattrib;
+    fobj->com.time = dh->fn.ftime;
+    fobj->com.date = dh->fn.fdate;
+    fobj->com.size = dh->fn.fsize;
     return dir;
 }
 
@@ -462,322 +448,6 @@ int d_dirlist (const char *path, flist_t *flist)
         f_closedir(&dir);
     } else {
         return -1;
-    }
-    return 0;
-}
-
-
-#define DEV_MAX_NAME (1 << 4)
-
-typedef struct dvar_int_s {
-    struct dvar_int_s *next;
-    dvar_t dvar;
-    char name[DEV_MAX_NAME];
-    uint16_t namelen;
-} dvar_int_t;
-
-dvar_int_t *dvar_head = NULL;
-
-static int devio_dvar_exist (PACKED const char *name, dvar_int_t **_prev, dvar_int_t **_dvar)
-{
-    dvar_int_t *v = dvar_head;
-    dvar_int_t *prev = NULL;
-
-    while (v) {
-
-        if (strcmp(v->name, name) == 0) {
-            *_prev = prev;
-            *_dvar = v;
-            return 1;
-        }
-
-        prev = v;
-        v = v->next;
-    }
-    return 0;
-}
-
-static int _d_dvar_reg (dvar_t *var, const char *name)
-{
-    dvar_int_t *v;
-
-    if (devio_dvar_exist(name, &v, &v)) {
-        dprintf("Variable with name \'%s\' already exist !\n", name);
-        return -1;
-    }
-
-    v = (dvar_int_t *)Sys_Malloc(sizeof(dvar_int_t));
-    if (!v) {
-        return -1;
-    }
-
-    v->namelen = snprintf(v->name, sizeof(v->name), "%s", name);
-    memcpy(&v->dvar, var, sizeof(v->dvar));
-
-    if (dvar_head == NULL) {
-        dvar_head = v;
-        v->next = NULL;
-    } else {
-        v->next = dvar_head;
-        dvar_head = v;
-    }
-    return 0;
-}
-
-int d_dvar_reg (dvar_t *var, const char *name)
-{
-    if (devio_dvar_deprecated(name)) {
-        dprintf("Deprecated name \'%s\'\n", name);
-        return -1;
-    }
-    return _d_dvar_reg(var, name);
-}
-
-int d_dvar_int32 (int32_t *var, const char *name)
-{
-    dvar_t v;
-    v.ptr = var;
-    v.ptrsize = sizeof(int32_t);
-    v.type = DVAR_INT32;
-    return d_dvar_reg(&v, name);
-}
-
-int d_dvar_float (float *var, const char *name)
-{
-    dvar_t v;
-    v.ptr = var;
-    v.ptrsize = sizeof(float);
-    v.type = DVAR_FLOAT;
-    return d_dvar_reg(&v, name);
-}
-
-int d_dvar_str (char *str, int len, const char *name)
-{
-    dvar_t v;
-    v.ptr = str;
-    v.ptrsize = len;
-    v.type = DVAR_STR;
-    return d_dvar_reg(&v, name);
-}
-
-
-int d_dvar_rm (const char *name)
-{
-    dvar_int_t *v = NULL;
-    dvar_int_t *prev = NULL;
-
-    if (devio_dvar_deprecated(name)) {
-        dprintf("Cannot be removed : \'%s\'\n", name);
-        return -1;
-    }
-
-    if (!devio_dvar_exist(name, &prev, &v)) {
-        dprintf("Variable with name \'%s\' missing!", name);
-        return -1;
-    }
-
-    if (prev) {
-        prev->next = v->next;
-    } else {
-        dvar_head = v->next;
-    }
-    return 0;
-}
-
-void d_dvar_rm_all (void)
-{
-    dvar_int_t *next = NULL;
-    dvar_int_t *v = dvar_head;
-    while (v) {
-        next = v->next;
-        Sys_Free(v);
-        v = next;
-    }
-    dvar_head = NULL;
-}
-
-static const char *_next_token (const char *buf)
-{
-    while (*buf) {
-        if (!isspace(*buf)) {
-            return buf;
-        }
-        buf++;
-    }
-    return NULL;
-}
-
-static const char *_next_space (const char *buf)
-{
-    while (*buf) {
-        if (isspace(*buf)) {
-            return buf;
-        }
-        buf++;
-    }
-    return NULL;
-}
-
-static const char *_next_arg (const char *text, const char *fmt, void *buf)
-{
-    const char *p = _next_token(text);
-    if (!p) return NULL;
-    if (!sscanf(p, fmt, buf)) return NULL;
-    return _next_space(p);
-}
-
-/*Deffered routine, to register/unregister dvar's, etc..*/
-
-static dvar_int_t devio_defered_dvar;
-static dvar_int_t *devio_defered_ptr = NULL;
-
-static int _devio_con_handle (dvar_int_t *v, const char *text, int len)
-{
-    int ret = 0;
-    switch (v->dvar.type) {
-        case DVAR_INT32:
-        {
-            const char *p;
-            int32_t i;
-
-            p = _next_token(text);
-            if (!p || !sscanf(p, "%i", &i)) {
-                /*nothing ?, print current*/
-                dprintf("%s = %i\n", v->name, readLong(v->dvar.ptr));
-                return 0;
-            }
-            writeLong(v->dvar.ptr, i);
-            p = _next_space(p);
-            if (!p) {
-                return len;
-            }
-            ret = (int)(p - text);
-        }
-        case DVAR_FLOAT:
-        {
-            const char *p;
-            float i;
-
-            p = _next_token(text);
-            if (!p || !sscanf(p, "%f", &i)) {
-                i = (float)readLong(v->dvar.ptr);
-                dprintf("%s = %10f\n", v->name, i);
-                return 0;
-            }
-            writeLong(v->dvar.ptr, i);
-            p = _next_space(p);
-            if (!p) {
-                return len;
-            }
-            ret = (int)(p - text);
-        }
-        break;
-        case DVAR_STR:
-        {
-            const char *p;
-
-            p = _next_token(text);
-            if (!p) {
-                dprintf("%s = %s\n", v->name, (char *)(v->dvar.ptr));
-                return 0;
-            }
-            p += snprintf(v->dvar.ptr, v->dvar.ptrsize, "%s", p);
-            ret = (int)(p - text);
-        }
-        break;
-        case DVAR_FUNC:
-        {
-            const char *p;
-            dvar_func_t func = (dvar_func_t)v->dvar.ptr;
-            p = _next_token(text);
-            ret = func((void *)p, &len);
-        }
-        break;
-    }
-    if (v->dvar.flags & FLAG_EXPORT) {
-        /*Exported function completes all*/
-        return len;
-    }
-    return ret;
-}
-
-static int devio_con_clbk (const char *_text, int len)
-{
-    dvar_int_t *v = dvar_head;
-    const char *text;
-    int hret;
-
-    text = _next_token(_text);
-    hret = (int)(text - _text);
-
-    while (v) {
-
-        if (strncmp(text, v->name, v->namelen) == 0) {
-            /*TODO : Add command/line terminator, e.g. - ';' or '&&'..*/
-            hret += _devio_con_handle(v, text + v->namelen, len - v->namelen);
-            if (devio_defered_ptr) {
-                hret += len - (hret + v->namelen);
-                break;
-            }
-            return hret + v->namelen;
-        }
-        v = v->next;
-    }
-    if (devio_defered_ptr) {
-        dvar_func_t func;
-
-        v = devio_defered_ptr;
-        func = (dvar_func_t)v->dvar.ptr;
-
-        func(v->name, &v->namelen);
-
-        devio_defered_ptr = NULL;
-        if (hret != 0) {
-            dprintf("Warning! trying to execute \'%s\'\n", text + len);
-            dprintf("after : \'%s\' was executed\n", v->name);
-        }
-        return len;
-    }
-    return 0;
-}
-
-static int devio_dvar_register (void *p1, void *p2)
-{
-    char *name = (char *)p1;
-
-    dprintf("%s() : Not implemented yet, \'%s\' skipped\n", __func__, name);
-    return strlen(name);
-}
-
-static int _devio_dvar_unregister (void *p1, void *p2)
-{
-    d_dvar_rm((char *)p1);
-
-    return strlen((char *)p1);
-}
-
-#define DEVIO_MAX_PATH 64
-
-typedef struct {
-    int (*h) (void *p1, void *p2);
-    const char *name;
-} devio_hdlr_t;
-
-static int __devio_export (devio_hdlr_t *hdlrs, int len)
-{
-    int i;
-    dvar_t dvar;
-
-    dvar.ptrsize = sizeof(hdlrs[0].h);
-    dvar.type = DVAR_FUNC;
-    dvar.flags = FLAG_EXPORT;
-
-    for (i = 0; i < len; i++) {
-        dvar.ptr = hdlrs[i].h;
-        dbg_eval(DBG_INFO) {
-            dprintf("export : \'%s\'\n", hdlrs[i].name);
-        }
-        d_dvar_reg(&dvar, hdlrs[i].name);
     }
     return 0;
 }
@@ -818,205 +488,6 @@ static void _devio_unmount (void)
 {
     /*TODO : !!!*/
     FATFS_UnLinkDriver("0");
-}
-
-static int _devio_export (void *p1, void *p2);
-
-static int _devio_test (void *p1, void *p2)
-{
-    const char *fname = "test.txt";
-
-    char buf[128], name[DEVIO_MAX_PATH] = {0}, *namep = (char *)fname;
-    const char *str = (const char *)p1;
-    int f, errors = 0;
-
-    _next_arg(str, "%16s", name);
-    if (name[0]) {
-        namep = name;
-    }
-    dprintf("file name : %s\n", name);
-
-    d_open(namep, &f, "+w");
-    if (f < 0) {
-        goto failopen;
-    }
-    dprintf("file write :\n");
-    dprintf("%s()\n", __func__);
-
-    if (!d_printf(f, "%s()\n", __func__)) {
-        errors++;
-    }
-    d_close(f);
-
-    d_open(namep, &f, "r");
-    if (f < 0) {
-        goto failopen;
-    }
-    dprintf("file read :\n");
-    while (!d_eof(f)) {
-        if (!d_gets(f, buf, sizeof(buf))) {
-            errors++;
-        }
-        dprintf("\'%s\'\n", buf);
-    }
-    d_close(f);
-    d_unlink(namep);
-    dprintf("errors : %d\n", errors);
-    return 0;
-failopen:
-    dprintf("%s() : failed to open \'%s\'\n", __func__, namep);
-    return 0;
-}
-
-static int _devio_mkdir (void *p1, void *p2)
-{
-    char *str = p1;
-    char path[DEVIO_MAX_PATH] = {0}, *ppath = ".";
-
-    _next_arg(str, "%s", path);
-    if (path[0]) {
-        ppath = path;
-    }
-    if (d_mkdir(ppath) < 0) {
-        dprintf("%s() : fail\n", __func__);
-    }
-    return 0;
-}
-
-static int _devio_reset (void *p1, void *p2)
-{
-extern void SystemSoftReset (void);
-    dprintf("Resetting...\n");
-    serial_flush();
-    SystemSoftReset();
-    exit(0);
-    return -1;
-}
-
-static int __dir_list (char *pathbuf, int recursion, const char *path);
-
-static int _devio_list (void *p1, void *p2)
-{
-    char path[DEVIO_MAX_PATH] = {0}, *ppath;
-    char pathbuf[128];
-
-    ppath = ".";
-    _next_arg((char *)p1, "%16s", path);
-    if (path[0]) {
-        ppath = path;
-    }
-    return __dir_list(pathbuf, 0, ppath);
-}
-
-const char *treedeep[] =
-{
-"--",
-"----",
-"------",
-"--------"
-};
-
-static int __dir_list (char *pathbuf, int recursion, const char *path)
-{
-    int h;
-    fobj_t obj;
-
-    if (recursion > arrlen(treedeep)) {
-        dprintf("Too deep recursion : %i\n", recursion);
-    }
-    h = d_opendir(path);
-    if (h < 0) {
-        dprintf("cannot open path : %s\n", path);
-        return -1;
-    }
-    while(d_readdir(h, &obj) >= 0) {
-
-        dprintf("%s|%s %s \n",
-            treedeep[recursion], obj.name, obj.type == FTYPE_FILE ? "f" : "d");
-        if (obj.type == FTYPE_DIR) {
-            sprintf(pathbuf, "%s/%s", path, obj.name);
-            __dir_list(pathbuf, recursion + 1, pathbuf);
-        }
-    }
-    d_closedir(h);
-    return 0;
-}
-
-
-devio_hdlr_t devio_hdlrs[] =
-{
-    {_devio_export, "export"}, /*Must be first*/
-    {_devio_test, "test"},
-    {_devio_reset, "reset"},
-    {_devio_list, "list"},
-    {_devio_mkdir, "mkdir"},
-    {_devio_mount, "mount"},
-};
-
-static int _devio_export (void *p1, void *p2)
-{
-    return __devio_export(devio_hdlrs + 1, arrlen(devio_hdlrs) - 1);
-}
-
-static int devio_ctrl (void *p1, void *p2)
-{
-    const char *str = p1, *p;
-    int len = (int)p2, i;
-    char tok[16] = {0};
-
-    p = _next_arg(str, "%16s", tok);
-    for (i = 0; i < arrlen(devio_hdlrs); i++) {
-        if (strcmp(tok, devio_hdlrs[i].name) == 0) {
-            devio_hdlrs[i].h((void *)p, NULL);
-        }
-    }
-    return len;
-}
-
-
-static int devio_dvar_unregister (void *p1, void *p2)
-{
-    devio_defered_ptr = &devio_defered_dvar;
-    /*TODO : remove explicit size : %16*/
-    sscanf((const char *)p1, "%16s", devio_defered_ptr->name);
-    devio_defered_ptr->namelen = strlen(devio_defered_ptr->name);
-    devio_defered_ptr->dvar.ptr = _devio_dvar_unregister;
-    devio_defered_ptr->dvar.ptrsize = sizeof(&_devio_dvar_unregister);
-    devio_defered_ptr->dvar.type = DVAR_FUNC;
-
-    return devio_defered_ptr->namelen;
-}
-
-static int devio_dvar_deprecated (const char *name)
-{
-    int i;
-
-    for (i = 0; i < arrlen(devio_deprecated_names); i++) {
-        if (strcmp(devio_deprecated_names[i], name) == 0) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
-static int devio_print_env (void *p1, void *p2)
-{
-    dvar_int_t *v = dvar_head;
-    const char *border = "========================================\n";
-    const char *type_text[] = {"function", "integer", "float", "string"};
-    int i = 0;
-
-    dprintf("%s", border);
-
-    while (v) {
-        dprintf("%3i : \'%s\'  \'%s\'  <0x%08x>  <0x%04x>\n",
-                i, v->name, type_text[v->dvar.type], (unsigned)v->dvar.ptr, v->dvar.ptrsize);
-        v = v->next;
-    }
-
-    dprintf("%s", border);
-
-    return 0;
 }
 
 #endif

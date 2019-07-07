@@ -172,6 +172,7 @@ extern char * ts_gesture_id_string_tab[GEST_ID_NB_MAX];
   * @{
   */
 uint8_t BSP_TS_Init(uint16_t ts_SizeX, uint16_t ts_SizeY);
+void BSP_TS_DeInit (void);
 uint8_t BSP_TS_GetState(TS_StateTypeDef *TS_State);
 
 #if (TS_MULTI_TOUCH_SUPPORTED == 1)

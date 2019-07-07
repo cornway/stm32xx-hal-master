@@ -1,9 +1,9 @@
-#if !defined(APPLICATION) || defined(BSP_DRIVER)
+#if defined(BSP_DRIVER)
 
 #include <stdint.h>
 #include <stddef.h>
+#include "int/audio_int.h"
 #include "audio_main.h"
-#include "audio_int.h"
 
 #define GAIN(x, vol, comp) (((int16_t)x * vol) / comp)
 #define GAIN_FLOAT(x, vol) (int16_t)((float)(x) * (float)vol)

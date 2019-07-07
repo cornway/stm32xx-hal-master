@@ -521,7 +521,7 @@ int BSP_HDMI_QerryTiming (hdmi_timing_t *timing)
     if (size < 0) {
         return -1;
     }
-#if !defined(APPLICATION) || defined(BSP_DRIVER)
+#if defined(BSP_DRIVER)
     return hdmi_parse_edid(timing, &edid, size);
 #else
     return 0;
@@ -1191,11 +1191,12 @@ void BSP_LCD_DisplayChar(uint16_t Xpos, uint16_t Ypos, uint8_t Ascii)
   *            @arg  RIGHT_MODE
   *            @arg  LEFT_MODE
   */
-void BSP_LCD_DisplayStringAt(uint16_t Xpos, uint16_t Ypos, uint16_t w, uint16_t h, uint8_t *Text, Text_AlignModeTypdef Mode)
+int BSP_LCD_DisplayStringAt(uint16_t Xpos, uint16_t Ypos, uint16_t w, uint16_t h, uint8_t *Text, Text_AlignModeTypdef Mode)
 {
   uint16_t refcolumn = 1, i = 0;
   uint32_t size = 0, xsize = 0;
   uint8_t  *ptr = Text;
+  uint8_t *textref = Text;
 
   /* Get the text size */
   while (*ptr++) size ++ ;
@@ -1236,6 +1237,13 @@ void BSP_LCD_DisplayStringAt(uint16_t Xpos, uint16_t Ypos, uint16_t w, uint16_t 
   /* Send the string character by character on LCD */
   while ((*Text != 0) & (((w - (i*DrawProp[ActiveLayer].pFont->Width)) & 0xFFFF) >= DrawProp[ActiveLayer].pFont->Width))
   {
+    if (*Text == '\n') {
+        Text++;
+        break;
+    } else if (*Text == '\r') {
+        Text++;
+        continue;
+    }
     /* Display one character on LCD */
     BSP_LCD_DisplayChar(refcolumn, Ypos, *Text);
     /* Decrement the column position by 16 */
@@ -1245,7 +1253,7 @@ void BSP_LCD_DisplayStringAt(uint16_t Xpos, uint16_t Ypos, uint16_t w, uint16_t 
     Text++;
     i++;
   }
-
+    return Text - textref;
 }
 
 /**
@@ -1253,10 +1261,16 @@ void BSP_LCD_DisplayStringAt(uint16_t Xpos, uint16_t Ypos, uint16_t w, uint16_t 
   * @param  Line: Line where to display the character shape
   * @param  ptr: Pointer to string to display on LCD
   */
-void BSP_LCD_DisplayStringAtLine(uint16_t Line, uint8_t *ptr)
+int BSP_LCD_DisplayStringAtLine(uint16_t Line, uint8_t *ptr)
 {
-  BSP_LCD_DisplayStringAt(0, LINE(Line), lcd_x_size_var, lcd_y_size_var, ptr, LEFT_MODE);
+  return BSP_LCD_DisplayStringAt(0, LINE(Line), lcd_x_size_var, lcd_y_size_var - LINE(Line), ptr, LEFT_MODE);
 }
+
+int BSP_LCD_DisplayMaxLineCount(void)
+{
+    return lcd_y_size_var / ((sFONT *)BSP_LCD_GetFont())->Height;
+}
+
 
 /**
   * @brief  Draws an horizontal line in currently active layer.

@@ -34,6 +34,7 @@
 #include "usbh_hid_mouse.h"
 #include "usbh_hid_parser.h"
 
+#if defined(BSP_DRIVER)
 
 /** @addtogroup USBH_LIB
   * @{
@@ -248,6 +249,8 @@ static USBH_StatusTypeDef USBH_HID_MouseDecode(USBH_HandleTypeDef *phost)
   }
   return   USBH_FAIL;
 }
+
+#endif /*BSP_DRIVER*/
 
 /**
   * @}

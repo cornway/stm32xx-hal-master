@@ -1,13 +1,14 @@
-#if !defined(APPLICATION) || defined(BSP_DRIVER)
+#if defined(BSP_DRIVER)
 
 #include "stdint.h"
 #include "string.h"
-#include "debug.h"
-#include "main.h"
+#include <main.h>
+#include "int/tim_int.h"
+#include <bsp_cmd.h>
+#include <debug.h>
 #include <misc_utils.h>
 #include <debug.h>
 #include <dev_io.h>
-#include <tim_int.h>
 
 #define P_RECORDS_MAX 1024
 #define P_MAX_DEEPTH 36
@@ -230,7 +231,7 @@ static void profiler_timer_deinit (void)
 
 void profiler_init (void)
 {
-    dvar_t dvar;
+    cmdvar_t dvar;
     DWT->CTRL |= 1 ; // enable the counter
     DWT->CYCCNT = 0; // reset the counter
     delay_us(1);
@@ -245,9 +246,9 @@ void profiler_init (void)
     dvar.ptr = profiler_print_dvar;
     dvar.ptrsize = sizeof(&profiler_print_dvar);
     dvar.type = DVAR_FUNC;
-    d_dvar_reg(&dvar, "profile");
-    d_dvar_int32(&g_profile_deep_level, "proflvl");
-    d_dvar_int32(&g_profile_timer_tsf, "proftsf");
+    cmd_register_var(&dvar, "profile");
+    cmd_register_i32(&g_profile_deep_level, "proflvl");
+    cmd_register_i32(&g_profile_timer_tsf, "proftsf");
 }
 
 void profiler_deinit (void)
