@@ -11,31 +11,40 @@
 #define DSEEK_CUR 1
 #define DSEEK_END 2
 
-typedef enum {
-    FTYPE_FILE,
-    FTYPE_DIR,
-} ftype_t;
+#define D_MAX_NAME 16
+#define D_MAX_PATH 128
 
 typedef struct {
-    size_t  size;
-    uint32_t date;
-    uint32_t time;
-    uint8_t attrib;
-} fcom_t;
+    uint16_t year;
+    uint8_t month;
+    uint8_t day;
+} d_date_t;
 
 typedef struct {
-    fcom_t com;
-    ftype_t type;
-    int h;
-    char name[128];
+    uint8_t h, m, s;
+} d_time_t;
+
+typedef struct {
+    d_date_t date;
+    d_time_t time;
+    uint32_t size;
+    struct {
+        uint16_t rdonly: 1,
+                 hidden: 1,
+                 system: 1,
+                 archive: 1,
+                 dir:     1,
+                 reserved: 12;
+    } attr;
+    char name[D_MAX_NAME];
 } fobj_t;
 
-typedef int (*list_clbk_t)(char *name, ftype_t type);
+typedef int (*fiter_clbk_t)(char *, d_bool);
 
 typedef struct {
-    list_clbk_t clbk;
+    fiter_clbk_t clbk;
     void *user;
-} flist_t;
+} fiter_t;
 
 typedef struct bsp_io_api_s {
     bspdev_t dev;
@@ -56,7 +65,7 @@ typedef struct bsp_io_api_s {
     int (*closedir) (int );
     int (*readdir) (int , fobj_t *);
     uint32_t (*time) (void);
-    int (*dirlist) (const char *, flist_t *);
+    int (*dirlist) (const char *, fiter_t *);
 } bsp_io_api_t;
 
 #define BSP_IO_API(func) ((bsp_io_api_t *)(g_bspapi->io))->func
@@ -109,7 +118,7 @@ int d_opendir (const char *path);
 int d_closedir (int dir);
 int d_readdir (int dir, fobj_t *fobj);
 uint32_t d_time (void);
-int d_dirlist (const char *path, flist_t *flist);
+int d_dirlist (const char *path, fiter_t *flist);
 
 #endif
 

@@ -169,7 +169,7 @@ void boot_read_path (const char *path)
     }
     while (d_readdir(dir, &fobj) >= 0) {
 
-        if (fobj.type == FTYPE_DIR) {
+        if (fobj.attr.dir) {
             fobj_t binobj;
             snprintf(buf, sizeof(buf), "%s/%s/"BOOT_BIN_DIR_NAME, path, fobj.name);
 
@@ -178,7 +178,7 @@ void boot_read_path (const char *path)
                 continue;
             }
             while (d_readdir(bindir, &binobj) >= 0) {
-                if (binobj.type == FTYPE_FILE) {
+                if (binobj.attr.dir == 0) {
                     bsp_exec_file_type_t type = bsp_bin_file_compat(binobj.name);
 
                     if (type != BIN_MAX) {

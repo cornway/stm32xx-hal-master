@@ -628,8 +628,8 @@ static int __dir_list (int verbose, char *pathbuf, int recursion,
     while(d_readdir(h, &obj) >= 0) {
 
         dprintf("%*s|%s %s ",
-            recursion * 2, "-", obj.name, obj.type == FTYPE_FILE ? "F" : "D");
-        if (obj.type == FTYPE_DIR) {
+            recursion * 2, "-", obj.name, obj.attr.dir ? "D" : "F");
+        if (obj.attr.dir) {
             sprintf(pathbuf, "%s/%s", path, obj.name);
             if (__dir_list(verbose, pathbuf, recursion + 1, maxrecursion, pathbuf) < 0) {
                 break;
@@ -637,11 +637,11 @@ static int __dir_list (int verbose, char *pathbuf, int recursion,
         } else {
             switch (verbose) {
                 case 3:
-                    dprintf("d[%u] ", obj.com.date);
+                    dprintf("%2u.%2u.%2u ", obj.date.year, obj.date.month, obj.date.day);
                 case 2:
-                    dprintf("t[%u] ", obj.com.time);
+                    dprintf("%2u:%2u:%2u ", obj.time.h, obj.time.m, obj.time.s);
                 case 1:
-                    dprintf("s[%u] ", obj.com.size);
+                    dprintf("%ub", obj.size);
             }
         }
         dprintf(" |\n");

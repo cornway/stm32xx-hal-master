@@ -1,16 +1,14 @@
 
 #if defined(BSP_DRIVER)
-
+#include <string.h>
+#include <ctype.h>
 #include "main.h"
 #include "ff.h"
 #include "ff_gen_drv.h"
 #include "sd_diskio.h"
-#include "dev_io.h"
-#include "dev_conf.h"
-#include "stdarg.h"
 #include <misc_utils.h>
-#include <string.h>
-#include <ctype.h>
+#include <dev_io.h>
+#include <dev_conf.h>
 #include <debug.h>
 #include <heap.h>
 
@@ -330,27 +328,6 @@ int d_write (int handle, PACKED const void *src, int count)
 #endif
 }
 
-int d_printf (int handle, const char *fmt, ...)
-{
-    va_list args;
-    int size;
-
-    va_start(args, fmt);
-    size = _d_vprintf(handle, fmt, args);
-    va_end(args);
-
-    return size;
-}
-
-int _d_vprintf (int h, const char *fmt, va_list argptr)
-{
-    char            string[1024];
-    int size = 0;
-    size = vsnprintf(string, sizeof(string), fmt, argptr);
-    size = d_write(h, string, size);
-    return size;
-}
-
 int d_mkdir (const char *path)
 {
 #if !DEVIO_READONLY
@@ -395,6 +372,59 @@ int d_closedir (int dir)
     return 0;
 }
 
+static void inline
+d_get_attr (fobj_t *obj, uint32_t data)
+{
+    memset(&obj->attr, 0, sizeof(obj->attr));
+    if (data & AM_RDO) {
+        obj->attr.rdonly = 1;
+    }
+    if (data & AM_HID) {
+        obj->attr.hidden = 1;
+    }
+    if (data & AM_SYS) {
+        obj->attr.system = 1;
+    }
+    if (data & AM_ARC) {
+        obj->attr.archive = 1;
+    }
+    if (data & AM_DIR) {
+        obj->attr.dir = 1;
+    }
+}
+
+/*
+bit15:9
+    Year origin from 1980 (0..127)
+bit8:5
+    Month (1..12)
+bit4:0
+    Day (1..31) 
+*/
+static inline void
+d_get_date (d_date_t *date, uint32_t data)
+{
+    date->year = (data >> 9) & 0x7f;
+    date->month = (data >> 5) & 0xf;
+    date->day = (data >> 0) & 0x1f;
+}
+
+/*
+bit15:11
+    Hour (0..23)
+bit10:5
+    Minute (0..59)
+bit4:0
+    Second / 2 (0..29) 
+*/
+static void inline
+d_get_time (d_time_t *time, uint32_t data)
+{
+    time->h = (data >> 11) & 0x1f;
+    time->m = (data >> 5) & 0x3f;
+    time->s = (data >> 0) & 0x1f;
+}
+
 int d_readdir (int dir, fobj_t *fobj)
 {
     
@@ -404,52 +434,16 @@ int d_readdir (int dir, fobj_t *fobj)
         return -1;
     }
     snprintf(fobj->name, sizeof(fobj->name), "%s", dh->fn.fname);
-    if ((dh->fn.fattrib & AM_DIR) == 0) {
-        fobj->type = FTYPE_FILE;
-    } else {
-        fobj->type = FTYPE_DIR;
-    }
-    fobj->com.attrib = dh->fn.fattrib;
-    fobj->com.time = dh->fn.ftime;
-    fobj->com.date = dh->fn.fdate;
-    fobj->com.size = dh->fn.fsize;
+    fobj->size = dh->fn.fsize;
+    d_get_attr(fobj, dh->fn.fattrib);
+    d_get_date(&fobj->date, dh->fn.fdate);
+    d_get_time(&fobj->time, dh->fn.ftime);
     return dir;
 }
 
 uint32_t d_time (void)
 {
     return HAL_GetTick();
-}
-
-int d_dirlist (const char *path, flist_t *flist)
-{
-    FRESULT res;
-    DIR dir;
-    FILINFO fno;
-    ftype_t ftype;
-
-    res = f_opendir(&dir, path);
-    if (res == FR_OK) {
-        for (;;) {
-            res = f_readdir(&dir, &fno); 
-            if (res != FR_OK || fno.fname[0] == 0) {
-                break;
-            }
-
-            if ((fno.fattrib & AM_DIR) == 0) {
-                ftype = FTYPE_FILE;
-            } else {
-                ftype = FTYPE_DIR;
-            }
-            if (flist->clbk(fno.fname, ftype)) {
-                break;
-            }
-        }
-        f_closedir(&dir);
-    } else {
-        return -1;
-    }
-    return 0;
 }
 
 static int _devio_mount (void *p1, void *p2)
