@@ -63,9 +63,10 @@ static arch_word_t heap_user_size = 0;
 static inline void *
 __heap_malloc (int size, int freeable)
 {
-    size = size + sizeof(mchunk_t);
     mchunk_t *p;
 
+    size = size + sizeof(mchunk_t);
+    size = ROUND_UP(size, sizeof(arch_word_t));
     p = (mchunk_t *)malloc(size);
     if (!p) {
         return NULL;

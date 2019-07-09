@@ -125,7 +125,7 @@ static int cd_open_stream (track_t *song, const char *path)
     if (d_read(song->file, &song->stream, sizeof(song->stream)) < 0) {
         error_handle();
     }
-    if (!a_check_wave_sup(&song->stream)) {
+    if (!a_wave_supported(&song->stream)) {
         dprintf("%s() : trying to load unsupported wave\n", __func__);
         error_handle();
     }

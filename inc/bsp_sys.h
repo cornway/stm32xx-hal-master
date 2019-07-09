@@ -86,10 +86,16 @@ typedef enum {
 
 exec_mem_type_t bsp_get_exec_mem_type (arch_word_t addr);
 
+#if defined(BOOT)
 extern exec_region_t g_exec_region;
 
 #define EXEC_REGION_APP() (g_exec_region == EXEC_APPLICATION)
 #define EXEC_REGION_MODULE() (g_exec_region == EXEC_MODULE)
 #define EXEC_REGION_DRIVER() (g_exec_region == EXEC_DRIVER)
+#endif /*BOOT*/
+
+#ifndef DIR_SEPARATOR
+#define DIR_SEPARATOR "/"
+#endif
 
 #endif /*__BSP_SYS_H__*/

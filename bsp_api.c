@@ -82,6 +82,7 @@ int dev_priv_stub (int c, void *v)
 
 bspapi_t *bsp_api_attach (void)
 {
+#if defined(BOOT)
     arch_word_t *ptr, size;
     bsp_api_int_t *api;
     tlv_t *tlv;
@@ -137,7 +138,7 @@ bspapi_t *bsp_api_attach (void)
     BSP_CMD_API(var_float)  = cmd_register_float;
     BSP_CMD_API(var_str)    = cmd_register_str;
     BSP_CMD_API(var_func)   = cmd_register_func;
-    BSP_CMD_API(exec)       = cmd_txt_exec;
+    BSP_CMD_API(exec)       = cmd_execute;
     BSP_CMD_API(tickle)     = cmd_tickle;
 
     BSP_VID_API(dev.init)   = vid_init;
@@ -172,9 +173,9 @@ bspapi_t *bsp_api_attach (void)
     BSP_SFX_API(irq_save)   = audio_irq_save;
     BSP_SFX_API(irq_restore) = audio_irq_restore;
 
-    BSP_SFX_API(wave_open)  = audio_open_wave;
+    BSP_SFX_API(wave_open)  = audio_wave_open;
     BSP_SFX_API(wave_size)  = audio_wave_size;
-    BSP_SFX_API(wave_cache) = audio_cache_wave;
+    BSP_SFX_API(wave_cache) = audio_wave_cache;
     BSP_SFX_API(wave_close) = audio_wave_close;
 
     BSP_CD_API(dev.init)    = dev_init_stub;
@@ -245,6 +246,9 @@ bspapi_t *bsp_api_attach (void)
     BSP_MOD_API(get_api)    = bspmod_get_api;
 
     return &api->api;
+#else
+    return NULL;
+#endif
 }
 
 #else /*BSP_INDIR_API*/
@@ -381,6 +385,7 @@ void bsp_argc_argv_set (const char *arg)
     __set_next_tlv(tlv, size);
 }
 
+#if defined(BOOT)
 void *sys_user_alloc (int size)
 {
     if (!user_api.attached) {
@@ -404,5 +409,6 @@ int sys_user_attach (bsp_user_api_t *api)
     user_api.attached = d_true;
     return 0;
 }
+#endif /*BOOT*/
 
 #endif /*BSP_DRIVER*/
