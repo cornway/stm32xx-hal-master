@@ -587,7 +587,7 @@ void serial_flush (void)
     irq_restore(irq_flags);
 }
 
-int dvprintf (const char *fmt, va_list argptr)
+int __dvprintf (const char *fmt, va_list argptr)
 {
     char            string[1024];
     int size = 0;
@@ -605,7 +605,7 @@ int dprintf (const char *fmt, ...)
     int size;
 
     va_start (argptr, fmt);
-    size = dvprintf(fmt, argptr);
+    size = __dvprintf(fmt, argptr);
     va_end (argptr);
     return size;
 }

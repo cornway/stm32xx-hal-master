@@ -42,9 +42,11 @@ static int cmd_bsp_sys_reset (int argc, const char **argv);
 static int __cmd_fs_mkdir (int argc, const char **argv);
 static int __cmd_fs_mkdir (int argc, const char **argv);
 static void cmd_exec_pending (cmd_handler_t hdlr);
+#if defined(BOOT)
 static int cmd_mod_insert (int argc, const char **argv);
 static int cmd_mod_rm (int argc, const char **argv);
 static int cmd_mod_probe (int argc, const char **argv);
+#endif /*BOOT*/
 static int cmd_stdin_ctrl (int argc, const char **argv);
 static int cmd_util_serial (int argc, const char **argv);
 static int cmd_intutil_cat (int argc, const char **argv);
@@ -67,12 +69,15 @@ static char __eof_sequence[16] = "...............";
 static const cmd_func_map_t cmd_func_tbl[] =
 {
     {"print",       __cmd_print_env},
+    {"reset",       cmd_bsp_sys_reset},
     {"register",    __cmd_register_var},
     {"unreg",       __cmd_unregister_var},
     {"bsp",         __cmd_exec_internal},
     {"list",        __cmd_fs_print_dir},
     {"cat",         cmd_intutil_cat},
+#if defined(BOOT)
     {"bin",         boot_cmd_handle},
+#endif
     {"nop",         cmd_util_nop},
 };
 
@@ -80,11 +85,12 @@ static const cmd_func_map_t cmd_priv_func_tbl[] =
 {
     {"export",  _cmd_export_all}, /*Must be first*/
     {"testfs",  __cmd_fs_touch},
-    {"reset",   cmd_bsp_sys_reset},
     {"mkdir",   __cmd_fs_mkdir},
+#if defined(BOOT)
     {"insmod",  cmd_mod_insert},
     {"rmmod",   cmd_mod_rm},
     {"modprobe",cmd_mod_probe},
+#endif
     {"stdin",   cmd_stdin_ctrl},
     {"serial",  cmd_util_serial},
     {"runcmd",  cmd_exec_cmdfile},
@@ -527,7 +533,7 @@ static int __cmd_print_env (int argc, const char **argv)
 
 void cmd_tickle (void)
 {
-    cmd_exec_pending(cmd_txt_exec);
+    cmd_exec_pending(cmd_execute);
     if (g_stdin_eof_timeout_var && g_stdin_eof_timeout_var < d_time()) {
         dprintf("wait for stdin : timeout\n");
         dprintf("flushing..\n");
@@ -660,13 +666,24 @@ extern void SystemSoftReset (void);
     return -CMDERR_UNKNOWN;
 }
 
-int cmd_txt_exec (const char *cmd, int len)
+int cmd_execute (const char *cmd, int len)
 {
+    char buf[CMD_MAX_BUF];
 
-    char buf[256];
-    len = snprintf(buf, sizeof(buf), "%s", cmd);
+    if (len > 0) {
+        if (len > sizeof(buf)) {
+            dprintf("%s() : too many characters\n", __func__);
+            return -1;
+        }
+        d_memcpy(buf, cmd, len);
+    } else {
+        len = snprintf(buf, sizeof(buf), "%s", cmd);
+    }
     return bsp_inout_forward(buf, len, '<');
 }
+
+
+#if defined(BOOT)
 
 static int cmd_mod_insert (int argc, const char **argv)
 {
@@ -715,6 +732,8 @@ static int cmd_mod_rm (int argc, const char **argv)
 
     return argc - 1;
 }
+
+#endif /*BOOT*/
 
 static int cmd_intutil_cat (int argc, const char **argv)
 {
@@ -842,7 +861,7 @@ static int cmd_exec_cmdline (const char *cmd, int argc, const char **argv)
         dprintf("%s(): required user args for [%s]\n", __func__, cmdptr);
         return -CMDERR_NOARGS;
     }
-    return cmd_txt_exec(cmdptr, -1);
+    return cmd_execute(cmdptr, -1);
 }
 
 /*Here - each line within file represents separate command*/

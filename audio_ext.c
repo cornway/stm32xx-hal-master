@@ -1,71 +1,250 @@
-#include "string.h"
-#include "stdio.h"
-#include "audio_main.h"
+#include <string.h>
+#include <stdio.h>
 #include "int/audio_int.h"
-#include "dev_io.h"
+#include <bsp_sys.h>
+#include <audio_main.h>
+#include <dev_io.h>
+#include <debug.h>
 
 #if defined(BSP_DRIVER)
 
-#define A_MAXNAME 9
+#define A_MAX_SLOTNUM 100
 #define A_MAXPATH 128
-#define A_MAXCACHE 128
 #define A_MAX_REFCNT 255
 
-typedef struct {
+typedef struct sfx_cache_s {
+    struct sfx_cache_s *next;
     int size;
     int16_t dataoff;
-    int16_t lumpnum;
+    int16_t slotnum;
     uint8_t ref; /*TODO : make atomic*/
-    char name[A_MAXNAME];
-} snd_cache_t;
+    char path[1];
+} sfx_cache_t;
 
-static snd_cache_t snd_num_cache[A_MAXCACHE] = {0};
+#define a_refcnt(sfx) ((sfx)->ref++)
+#define a_unrefcnt(sfx) ((sfx)->ref--)
+#define a_refcheck(sfx) ((sfx)->ref)
 
-extern const char *snd_dir_path;
+static sfx_cache_t *wave_cache_head = NULL;
+static sfx_cache_t *wave_cache_slot[A_MAX_SLOTNUM] = {NULL};
+static int wave_cache_slots_used = 0;
 
-static inline char *
-__get_full_path (char *buf, int bufsize, const char *base, const char *name)
+static inline sfx_cache_t **
+__next_slot_avail (int *idx)
 {
-    snprintf(buf, bufsize, "%s/%s.WAV", base, name);
-    return buf;
-}
+    int i;
 
-static int
-__alloc_slot ()
-{
-    for (int i = 0; i < arrlen(snd_num_cache); i++) {
-        if (snd_num_cache[i].size == 0) {
-            return i;
+    *idx = -1;
+    for (i = 0; i < A_MAX_SLOTNUM; i++) {
+        if (wave_cache_slot[i] == NULL) {
+            *idx = i;
+            return &wave_cache_slot[i];
         }
     }
-    return -1;
-}
-
-static void __release_slot (int num)
-{
-    assert(num < arrlen(snd_num_cache));
-    memset(&snd_num_cache[num], 0, sizeof(snd_num_cache[num]));
-}
-
-static int
-__get_slot (int lumnum)
-{
-    for (int i = 0; i < arrlen(snd_num_cache); i++) {
-        if (snd_num_cache[i].lumpnum == lumnum) {
-            return i;
-        }
-    }
-    return -1;
+    return NULL;
 }
 
 static void
-__set_name (int slot, const char *name)
+__link_desc (sfx_cache_t *sfx)
 {
-    snd_cache_t *pslot = &snd_num_cache[slot];
-    snprintf(pslot->name, sizeof(pslot->name), name);
+    sfx_cache_t **slot;
+    int num;
+
+    sfx->next = wave_cache_head;
+    wave_cache_head = sfx;
+
+    slot = __next_slot_avail(&num);
+    assert(slot);
+    *slot = sfx;
+    sfx->slotnum = num;
 }
 
-d_bool a_check_wave_sup (wave_t *wave)
+static void
+__unlink_desc (sfx_cache_t *sfx)
+{
+    sfx_cache_t *cur = wave_cache_head, *prev = NULL;
+
+    while (cur) {
+        if (cur == sfx) {
+            if (prev) {
+                prev->next = cur->next;
+            } else {
+                wave_cache_head = cur->next;
+            }
+            wave_cache_slot[sfx->slotnum] = NULL;
+            break;
+        }
+        prev = cur;
+        cur = cur->next;
+    }
+    assert(0);
+}
+
+static sfx_cache_t *
+__new_cache_desc (const char *path)
+{
+    sfx_cache_t *sfx;
+    int pathlen = strlen(path) + 1;
+    int memsize = sizeof(sfx_cache_t) + pathlen;
+
+    if (wave_cache_slots_used >= A_MAX_SLOTNUM) {
+        dprintf("%s() : No more slots available\n", __func__);
+        return NULL;
+    }
+
+    wave_cache_slots_used++;
+    sfx = (sfx_cache_t *)heap_malloc(memsize);
+    if (!sfx) {
+        dprintf("%s() : fail\n", __func__);
+        return NULL;
+    }
+    memset(sfx, 0, memsize);
+
+    __link_desc(sfx);
+    wave_cache_slots_used++;
+
+    return sfx;
+}
+
+static sfx_cache_t *
+a_wave_cached (const char *path, int num)
+{
+    sfx_cache_t *sfx = wave_cache_head;
+
+    if (num >= 0 && num < A_MAX_SLOTNUM) {
+        if (wave_cache_slot[num] == NULL) {
+            dprintf("%s() : unallocated\n", __func__);
+        }
+        return wave_cache_slot[num];
+    }
+
+    if (!path) {
+        return NULL;
+    }
+    while (sfx) {
+        if (strcmp(sfx->path, path) == 0) {
+            return sfx;
+        }
+        sfx = sfx->next;
+    }
+    return NULL;
+}
+
+static sfx_cache_t *
+a_wave_cache_alloc (const char *path, int *num)
+{
+    sfx_cache_t *sfx;
+
+    sfx = a_wave_cached(path, *num);
+    if (sfx) {
+        /*TODO : overflow ???*/
+        a_refcnt(sfx);
+        return sfx;
+    }
+    *num = -1;
+    sfx = __new_cache_desc(path);
+    if (!sfx) {
+        return NULL;
+    }
+    a_refcnt(sfx);
+    return sfx;
+}
+
+static void
+a_wave_cache_free (sfx_cache_t *sfx)
+{
+    a_unrefcnt(sfx);
+
+    if (a_refcheck(sfx) > 0) {
+        return;
+    }
+    __unlink_desc(sfx);
+    heap_free(sfx);
+    wave_cache_slots_used--;
+}
+
+int
+audio_wave_open (const char *path, int num)
+{
+    int cache_num = -1;
+    int file, size;
+    wave_t wave;
+    sfx_cache_t *sfx;
+
+    sfx = a_wave_cache_alloc(path, &num);
+    if (num >= 0) {
+        return num;
+    }
+
+    size = d_open(path, &file, "r");
+
+    if (file < 0) {
+        a_wave_cache_free(sfx);
+        return -1;
+    }
+
+    if (d_read(file, &wave, sizeof(wave)) <= 0) {
+        goto fail;
+    }
+    if (!a_wave_supported(&wave)) {
+        goto fail;
+    }
+
+    sfx->dataoff =  wave.SubChunk1Size;
+    sfx->size = size - wave.SubChunk1Size;
+    d_close(file);
+    return sfx->slotnum;
+fail:
+    a_wave_cache_free(sfx);
+    d_close(file);
+    return cache_num;
+}
+
+int
+audio_wave_size (int num)
+{
+    sfx_cache_t *sfx = a_wave_cached(NULL, num);
+    if (!sfx) {
+        return -1;
+    }
+    return sfx->size;
+}
+
+int
+audio_wave_cache (int num, uint8_t *dest, int size)
+{
+    sfx_cache_t *sfx;
+    int file;
+
+    sfx = a_wave_cached(NULL, num);
+
+    assert(sfx);
+
+    d_open(sfx->path, &file, "r");
+    if (file < 0) {
+        return -1;
+    }
+    d_seek(file, sfx->dataoff, DSEEK_SET);
+    if (d_read(file, dest, size) < 0) {
+        error_handle();
+        return -1;
+    }
+    d_close(file);
+    return size;
+}
+
+void
+audio_wave_close (int num)
+{
+    sfx_cache_t *sfx = a_wave_cached(NULL, num);
+
+    assert(sfx);
+    a_wave_cache_free(sfx);
+}
+
+
+/*internal*/
+d_bool a_wave_supported (wave_t *wave)
 {
     a_intcfg_t *cfg = a_get_conf();
 
@@ -79,106 +258,6 @@ d_bool a_check_wave_sup (wave_t *wave)
         return d_false;
     }
     return d_true;
-}
-
-static int
-a_check_wave_exist (const char *name)
-{
-    int i;
-
-    for (i = 0; i < arrlen(snd_num_cache); i++) {
-        if (strcmp(snd_num_cache[i].name, name) == 0) {
-            return i;
-        }
-    }
-    return -1;
-}
-
-int
-audio_open_wave (const char *name, int num)
-{
-    int cache_num = -1;
-    int file, size;
-    wave_t wave;
-
-    char path[A_MAXPATH], *ppath;
-
-    cache_num = __get_slot(num);
-    if (cache_num >= 0) {
-        return cache_num;
-    }
-    cache_num = a_check_wave_exist(name);
-    if (cache_num >= 0) {
-        return cache_num;
-    }
-
-    ppath = __get_full_path(path, sizeof(path), snd_dir_path, name);
-
-    size = d_open(ppath, &file, "r");
-
-    if (file < 0) {
-        return cache_num;
-    }
-    assert(size >= 0);
-
-    if (d_read(file, &wave, sizeof(wave)) <= 0) {
-        goto closefile;
-    }
-    if (!a_check_wave_sup(&wave)) {
-        goto closefile;
-    }
-
-    cache_num = __alloc_slot();
-    if (cache_num < 0) {
-        return -1;
-    }
-    __set_name(cache_num, name);
-    snd_num_cache[cache_num].lumpnum = cache_num;
-    snd_num_cache[cache_num].size = size - wave.SubChunk1Size;
-    /*TODO : fix for SubChunk2Size*/
-    snd_num_cache[cache_num].dataoff = wave.SubChunk1Size;
-closefile:
-    d_close(file);
-    return cache_num;
-}
-
-int
-audio_wave_size (int num)
-{
-    if (num >= arrlen(snd_num_cache)) {
-        return -1;
-    }
-    if (snd_num_cache[num].size > 0) {
-        return snd_num_cache[num].size;
-    }
-    error_handle();
-    return 0;
-}
-
-int
-audio_cache_wave (int num, uint8_t *dest, int size)
-{
-    char path[A_MAXPATH], *ppath;
-    int file;
-
-    ppath = __get_full_path(path, sizeof(path), snd_dir_path, snd_num_cache[num].name);
-    d_open(ppath, &file, "r");
-    if (file < 0) {
-        return -1;
-    }
-    d_seek(file, snd_num_cache[num].dataoff, DSEEK_SET);
-    if (d_read(file, dest, size) < 0) {
-        error_handle();
-        return -1;
-    }
-    d_close(file);
-    return size;
-}
-
-void
-audio_wave_close (int num)
-{
-    __release_slot(num);
 }
 
 #endif
