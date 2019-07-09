@@ -80,7 +80,7 @@ int cmd_parm_collect (cmd_keyval_t **, cmd_keyval_t **, int,
 int cmd_init (void);
 void cmd_deinit (void);
 int cmd_unregister (const char *);
-int cmd_txt_exec (const char *, int);
+int cmd_execute (const char *, int);
 void cmd_exec_dsr (const char *, const char *,
                         void *, void *);
 

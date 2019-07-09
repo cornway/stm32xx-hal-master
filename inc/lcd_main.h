@@ -48,7 +48,7 @@ typedef struct bsp_video_api_s {
 
 #define vid_init            BSP_VID_API(dev.init)
 #define vid_deinit          BSP_VID_API(dev.deinit)
-#define vid_conf            BSP_VID_API(dev.conf)
+#define vid_config          BSP_VID_API(dev.conf)
 #define vid_info            BSP_VID_API(dev.info)
 #define vid_priv            BSP_VID_API(dev.priv)
 #define vid_wh              BSP_VID_API(get_wh)
