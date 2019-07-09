@@ -235,7 +235,6 @@ int d_unlink (const char *path)
     return 0;
 }
 
-/*TODO : handle mode arg*/
 int d_seek (int handle, int position, uint32_t mode)
 {
     FRESULT res;

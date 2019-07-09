@@ -243,7 +243,6 @@ void input_proc_keys (i_event_t *evts)
 
         memset(joy_pads, -1, sizeof(joy_pads));
         keys_cnt = joypad_read(joy_pads);
-        /*TODO : (keys_cnt <= N(joy_pads))*/
         if (keys_cnt <= 0 || joypad_freezed()) {
             return;
         }
