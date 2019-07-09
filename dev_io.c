@@ -229,7 +229,7 @@ int d_unlink (const char *path)
     FRESULT res;
     res = f_unlink(path);
     if (res != FR_OK) {
-        dbg_eval(DBG_ERR) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
+        dbg_eval(DBG_WARN) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
         return -1;
     }
     return 0;

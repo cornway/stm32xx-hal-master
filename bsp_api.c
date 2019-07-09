@@ -412,3 +412,15 @@ int sys_user_attach (bsp_user_api_t *api)
 #endif /*BOOT*/
 
 #endif /*BSP_DRIVER*/
+
+
+
+/*Common for both:*/
+
+int dvprintf (const char *fmt, va_list argptr)
+{
+    char string[1024];
+    vsnprintf(string, sizeof(string), fmt, argptr);
+    return dprintf(string);
+}
+
