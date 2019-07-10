@@ -7,9 +7,9 @@
 #include "lcd_main.h"
 #include "audio_main.h"
 #include "input_main.h"
+#include "misc_utils.h"
 #include "dev_io.h"
 #include "debug.h"
-#include "misc_utils.h"
 #include "nvic.h"
 #include <mpu.h>
 #include <heap.h>

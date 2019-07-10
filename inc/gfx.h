@@ -6,7 +6,6 @@
 #define GFX_COLOR_MODE_RGBA8888 3
 
 #include "dev_conf.h"
-#include <misc_utils.h>
 #include "stdint.h"
 
 #ifdef GFX_COLOR_MODE

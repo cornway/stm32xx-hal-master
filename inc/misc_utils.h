@@ -74,13 +74,9 @@ extern int g_dev_debug_level;
 
 #define ATTR_UNUSED __attribute__((unused))
 
-static inline void d_memcpy(void *_dst, const void *_src, int cnt)
-{
-    uint8_t *src = (uint8_t *)_src, *dst = (uint8_t *)_dst;
-    while (cnt--) {
-        *dst++ = *src++;
-    }
-}
+void d_memcpy (void *_dst, const void *_src, int cnt);
+void d_memset (void *_dst, int v, int cnt);
+
 
 #ifdef __LITTLE_ENDIAN__
 

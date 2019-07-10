@@ -3,7 +3,6 @@
 
 #include "stdint.h"
 #include "touch.h"
-#include <misc_utils.h>
 
 #define GAMEPAD_USE_FLYLOOK 1
 
