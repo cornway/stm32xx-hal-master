@@ -34,10 +34,6 @@ static uint8_t ts_prev_state = TS_IDLE;
 static uint8_t ts_state_cooldown_cnt = 0;
 static uint8_t ts_freeze_ticks = 0;
 
-#if !BSP_INDIR_API
-int *joy_extrafreeze = NULL;
-#endif
-
 static uint32_t joypad_timestamp = 0;
 
 
@@ -184,8 +180,7 @@ joypad_freezed ()
 static inline void
 joypad_freeze (uint8_t flags)
 {
-    if ((flags & PAD_FREQ_LOW) ||
-        (joy_extrafreeze && *joy_extrafreeze)) {
+    if (flags & PAD_FREQ_LOW) {
 
         joypad_timestamp = HAL_GetTick() + JOY_FREEZE_TIME;
     }
