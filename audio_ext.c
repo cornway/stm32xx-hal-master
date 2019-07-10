@@ -92,13 +92,14 @@ __new_cache_desc (const char *path)
         return NULL;
     }
 
-    wave_cache_slots_used++;
     sfx = (sfx_cache_t *)heap_malloc(memsize);
     if (!sfx) {
         dprintf("%s() : fail\n", __func__);
         return NULL;
     }
+    wave_cache_slots_used++;
     memset(sfx, 0, memsize);
+    d_memcpy(sfx->path, path, pathlen);
 
     __link_desc(sfx);
     wave_cache_slots_used++;
@@ -166,7 +167,6 @@ a_wave_cache_free (sfx_cache_t *sfx)
 int
 audio_wave_open (const char *path, int num)
 {
-    int cache_num = -1;
     int file, size;
     wave_t wave;
     sfx_cache_t *sfx;
@@ -178,7 +178,7 @@ audio_wave_open (const char *path, int num)
 
     size = d_open(path, &file, "r");
 
-    if (file < 0) {
+    if (file < 0 || size < 0) {
         a_wave_cache_free(sfx);
         return -1;
     }
@@ -197,7 +197,7 @@ audio_wave_open (const char *path, int num)
 fail:
     a_wave_cache_free(sfx);
     d_close(file);
-    return cache_num;
+    return -1;
 }
 
 int
@@ -226,7 +226,6 @@ audio_wave_cache (int num, uint8_t *dest, int size)
     }
     d_seek(file, sfx->dataoff, DSEEK_SET);
     if (d_read(file, dest, size) < 0) {
-        error_handle();
         return -1;
     }
     d_close(file);

@@ -57,7 +57,7 @@ int bsp_open_wave_sfx (const char *name)
     int cachenum, cachesize, sfxidx;
     bsfx_t *sfx;
 
-    cachenum = audio_open_wave(name, -1);
+    cachenum = audio_wave_open(name, -1);
     if (cachenum < 0) {
         return -1;
     }
@@ -80,7 +80,7 @@ int bsp_open_wave_sfx (const char *name)
     sfx->wavenum = cachenum;
     sfx->channel = -1;
     __set_sfx(sfxidx, sfx);
-    audio_cache_wave(cachenum, sfx->cache, cachesize);
+    audio_wave_cache(cachenum, sfx->cache, cachesize);
 
     return sfxidx;
 }
