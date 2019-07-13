@@ -88,17 +88,17 @@ static void d_memzero (void *_dst, int cnt)
     } else if (!(wdest  & u32_ms)) {
         uint32_t setlen = ROUND_DOWN_BIN(cnt, u32_binsize);
 
-        d_memzero_32(_dst, setlen >> u32_binsize, 0);
-        d_memzero_8(_dst, cnt, setlen);
+        d_memzero_32(_dst, setlen, 0);
+        d_memzero_8(_dst, cnt - setlen, setlen);
     } else {
-        uint32_t padlen = CALC_PAD_BIN(wdest, u32_binsize), copylen;
+        uint32_t padlen = CALC_PAD_BIN(wdest, u32_binsize), setlen;
 
         cnt = cnt - padlen;
-        copylen = ROUND_DOWN_BIN(cnt, u32_binsize);
+        setlen = ROUND_DOWN_BIN(cnt, u32_binsize);
 
         d_memzero_8(_dst, padlen, 0);
-        d_memzero_32(_dst, copylen, padlen);
-        d_memzero_8(_dst, cnt - copylen, copylen);
+        d_memzero_32(_dst, setlen, padlen);
+        d_memzero_8(_dst, cnt - setlen, setlen);
     }
 }
 
@@ -113,10 +113,10 @@ void d_memset (void *_dst, int v, int cnt)
     }
 }
 
-static inline char __d_isalpha (char c)
+static inline char __d_toalpha (char c)
 {
     if (c < 0x20 || c >= 0x7f) {
-        return 0;
+        return '\0';
     }
     return c;
 }
@@ -124,7 +124,7 @@ static inline char __d_isalpha (char c)
 void d_stoalpha (char *str)
 {
     while (*str) {
-        *str = __d_isalpha(*str);
+        *str = __d_toalpha(*str);
         str++;
     }
 }
@@ -133,12 +133,18 @@ int d_astrtok (const char **tok, int tokcnt, char *str)
 {
     char *p = str;
     int toktotal = tokcnt;
-    *tok = p;
+    
+    if (*p) {
+        tokcnt--;
+        *tok = p;
+    }
     p = strtok(str, " ");
+    d_stoalpha(p);
+
     while (p && tokcnt > 0) {
-        d_stoalpha(p);
         p = strtok(NULL, " ");
         if (*p) {
+            d_stoalpha(p);
             tokcnt--;
             tok++;
             *tok = p;
