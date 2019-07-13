@@ -185,9 +185,11 @@ char *d_strdup (const char *str)
 static inline int
 __d_astrnmatch (const char *a, const char *b, int n)
 {
+    char ca, cb;
     while (*a && *b && n) {
-        if (*a == '*' || *b == '*') {
-        } else if (*a != *b) {
+        ca = *a; cb = *b;
+        if (ca == '*' || cb == '*') {
+        } else if (toupper(ca) != toupper(cb)) {
             return -1;
         }
         a++; b++; n--;
