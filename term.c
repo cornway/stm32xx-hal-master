@@ -101,18 +101,18 @@ str_tkn_continue (const char **dest, const char **src, tknmatch_t tkncmp,
     int i;
     int tmp, total = 0;
 
-    for (i = 0; i < argc; i++) {
+    for (i = 0; i < argc && maxargc > 0; i++) {
         tmp = 0;
         if (flags[i] == SQUASH) {
             /*Split into*/
-            maxargc = d_astrtok(dest, maxargc, (char *)src[i]);
-            tmp = maxargc;
+            tmp = d_astrtok(dest, maxargc, (char *)src[i]);
         } else {
             dest[0] = src[i];
             tmp = 1;
         }
         dest += tmp;
         total += tmp;
+        maxargc -= tmp;
     }
     return total;
 }
@@ -138,6 +138,7 @@ static int str_tkn_clean (const char **dest, const char **src, tkntype_t *flags,
             argc--;
         }
     }
+    dest[0] = NULL;
     return argc;
 }
 
@@ -153,9 +154,12 @@ int quotematch (char c, int *state)
 /*argc - in argc*/
 /*argv - output buffer*/
 /*ret - result argc*/
-static int str_tokenize_string (char *buf, int argc, const char **argv)
+static int str_tokenize_string (char *str, int argc, const char **argv)
 {
-    const char *tempbuf[MAX_TOKENS], **tempptr = &tempbuf[0];
+    const char *tempbuf[MAX_TOKENS] = {0},
+               *splitbuf[MAX_TOKENS] = {0},
+               **tempptr = &tempbuf[0],
+               **splitptr = &splitbuf[0];
     tkntype_t flags[MAX_TOKENS];
 
     int totalcnt;
@@ -165,13 +169,13 @@ static int str_tokenize_string (char *buf, int argc, const char **argv)
     }
 
     totalcnt = MAX_TOKENS;
-    str_tkn_split(tempptr, quotematch, &totalcnt, buf);
+    str_tkn_split(splitptr, quotematch, &totalcnt, str);
 
-    totalcnt = str_tkn_clean(argv, tempptr, flags, totalcnt);
+    totalcnt = str_tkn_clean(tempptr, splitptr, flags, totalcnt);
 
-    totalcnt = str_tkn_continue(tempptr, argv, quotematch, flags, totalcnt, MAX_TOKENS);
+    totalcnt = str_tkn_continue(splitptr, tempptr, quotematch, flags, totalcnt, MAX_TOKENS);
 
-    totalcnt = str_tkn_clean(argv, tempptr, flags, totalcnt);
+    totalcnt = str_tkn_clean(argv, splitptr, flags, totalcnt);
     return totalcnt;
 }
 

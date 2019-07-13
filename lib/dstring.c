@@ -129,27 +129,37 @@ void d_stoalpha (char *str)
     }
 }
 
+static char *__d_strtok (char *str)
+{
+    d_bool p_isspace = d_false;
+
+    while (*str) {
+        if (isspace(*str)) {
+            *str = 0;
+            p_isspace = d_true;
+        } else if (p_isspace) {
+            /*token begins*/
+            return str;
+        }
+        str++;
+    }
+    return NULL;
+}
+
 int d_astrtok (const char **tok, int tokcnt, char *str)
 {
-    char *p = str;
+    char *p = str, *pp = str;
     int toktotal = tokcnt;
-    
-    if (*p) {
-        tokcnt--;
-        *tok = p;
-    }
-    p = strtok(str, " ");
-    d_stoalpha(p);
 
-    while (p && tokcnt > 0) {
-        p = strtok(NULL, " ");
-        if (*p) {
-            d_stoalpha(p);
+    do {
+        p = __d_strtok(p);
+        if (pp && *pp) {
             tokcnt--;
+            *tok = pp;
             tok++;
-            *tok = p;
         }
-    }
+        pp = p;
+    } while (p && tokcnt > 0);
     return toktotal - tokcnt;
 }
 
