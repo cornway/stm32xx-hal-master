@@ -29,26 +29,10 @@ static cmd_func_t *last_tx_clbk = &serial_tx_clbk[0];
 
 inout_clbk_t inout_early_clbk = NULL;
 
-static inline char str_char_printable (char c)
-{
-    if (c < 0x20 || c >= 0x7f) {
-        return 0;
-    }
-    return c;
-}
-
-void str_collect_ascii (char *str)
-{
-    while (*str) {
-        *str = str_char_printable(*str);
-        str++;
-    }
-}
-
 void str_replace_2_ascii (char *str)
 {
     while (*str) {
-        *str = str_char_printable(*str);
+        *str = __d_isalpha(*str);
         str++;
     }
 }
@@ -129,7 +113,7 @@ str_tkn_continue (const char **dest, const char **src, tknmatch_t tkncmp,
         tmp = 0;
         if (flags[i] == SQUASH) {
             /*Split into*/
-            maxargc = str_tokenize(dest, maxargc, (char *)src[i]);
+            maxargc = d_astrtok(dest, maxargc, (char *)src[i]);
             tmp = maxargc;
         } else {
             dest[0] = src[i];
@@ -202,24 +186,6 @@ static int str_tokenize_string (char *buf, int argc, const char **argv)
 static inline int str_tokenize_parms (char *buf, int argc, const char **argv)
 {
     return str_tokenize_string(buf, argc, argv);
-}
-
-int str_tokenize (const char **tok, int tokcnt, char *str)
-{
-    char *p = str;
-    int toktotal = tokcnt;
-    *tok = p;
-    p = strtok(str, " ");
-    while (p && tokcnt > 0) {
-        str_collect_ascii(p);
-        p = strtok(NULL, " ");
-        if (*p) {
-            tokcnt--;
-            tok++;
-            *tok = p;
-        }
-    }
-    return toktotal - tokcnt;
 }
 
 #define STR_MAXARGS     9

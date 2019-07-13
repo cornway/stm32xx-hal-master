@@ -119,7 +119,7 @@ typedef struct bsp_cd_api_s {
 #define audio_irq_save          BSP_SFX_API(irq_save)
 #define audio_irq_restore       BSP_SFX_API(irq_restore)
 
-#define audio_open_wave         BSP_SFX_API(wave_open)
+#define audio_wave_open         BSP_SFX_API(wave_open)
 #define audio_wave_size         BSP_SFX_API(wave_size)
 #define audio_cache_wave        BSP_SFX_API(wave_cache)
 #define audio_wave_close        BSP_SFX_API(wave_close)

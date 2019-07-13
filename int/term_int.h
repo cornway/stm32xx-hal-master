@@ -2,8 +2,8 @@
 #include "bsp_cmd_int.h"
 
 int str_parse_tok (const char *str, const char *tok, uint32_t *val);
-int str_tokenize (const char **tok, int tokcnt, char *str);
-void str_collect_ascii (char *str);
+int d_astrtok (const char **tok, int tokcnt, char *str);
+void d_stoalpha (char *str);
 void str_replace_2_ascii (char *str);
 int str_insert_args (char *dest, const char *src, int argc, const char **argv);
 int str_check_args_present (const char *str);

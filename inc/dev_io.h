@@ -13,6 +13,7 @@
 
 #define D_MAX_NAME 16
 #define D_MAX_PATH 128
+#define D_MAX_STRBUF 256
 
 typedef struct {
     uint16_t year;

@@ -329,7 +329,7 @@ int bsp_argc_argv_check (const char *arg)
         dprintf("too large cmd line\n");
         return -1;
     } 
-    argc = str_tokenize(argv, MAX_ARGC, charbuf);
+    argc = d_astrtok(argv, MAX_ARGC, charbuf);
 
     __argv = bsp_argc_argv_get(&__argc);
     if (argc != __argc) {
@@ -380,7 +380,7 @@ void bsp_argc_argv_set (const char *arg)
     assert(maxsize > 0);
 
     _argv = (const char **)(&tlv->data[1]);
-    tlv->data[0] = str_tokenize(_argv, MAX_ARGC, tempptr);
+    tlv->data[0] = d_astrtok(_argv, MAX_ARGC, tempptr);
 
     __set_next_tlv(tlv, size);
 }
@@ -422,5 +422,17 @@ int dvprintf (const char *fmt, va_list argptr)
     char string[1024];
     vsnprintf(string, sizeof(string), fmt, argptr);
     return dprintf(string);
+}
+
+int d_rlimit_wrap (uint32_t *tsf, uint32_t period,
+                        void (*h) (void *), void *arg)
+{
+    if (*tsf && *tsf > d_time()) {
+        return 0;
+    } else {
+        *tsf = d_time() + period;
+    }
+    h(arg);
+    return 1;
 }
 
