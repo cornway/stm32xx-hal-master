@@ -1,15 +1,19 @@
 #include "stdint.h"
 #include "string.h"
 #include "stdarg.h"
-#include "debug.h"
-#include "main.h"
-#include "dev_conf.h"
-#include "nvic.h"
-#include "heap.h"
-#include "misc_utils.h"
+
+#include <stm32f7xx_it.h>
+
 #include "int/tim_int.h"
+#include "int/term_int.h"
+
+#include <misc_utils.h>
+#include <debug.h>
+#include <main.h>
+#include <dev_conf.h>
+#include <nvic.h>
+#include <heap.h>
 #include <dev_io.h>
-#include "stm32f7xx_it.h"
 
 #if defined(BSP_DRIVER)
 
@@ -544,22 +548,22 @@ dbgstream_submit (uart_desc_t *uart_desc, const void *data, size_t size, d_bool 
 
 #endif /*DEBUG_SERIAL_BUFERIZED*/
 
-int bsp_serial_send (const void *data, size_t cnt)
+int bsp_serial_send (char *buf, size_t cnt)
 {
     irqmask_t irq_flags = serial_timer.irqmask;
     uart_desc_t *uart_desc = debug_port();
     int ret = 0;
 
     if (inout_early_clbk) {
-        inout_early_clbk(data, cnt, '>');
+        inout_early_clbk(buf, cnt, '>');
     }
-    bsp_inout_forward(data, cnt, '>');
+    bsp_inout_forward(buf, cnt, '>');
 
     irq_save(&irq_flags);
 
-    ret = dbgstream_submit(uart_desc, data, cnt, d_false);
+    ret = dbgstream_submit(uart_desc, buf, cnt, d_false);
     if (ret <= 0) {
-        ret = dbgstream_submit(uart_desc, data, cnt, d_true);
+        ret = dbgstream_submit(uart_desc, buf, cnt, d_true);
     }
 
     irq_restore(irq_flags);

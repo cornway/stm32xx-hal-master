@@ -1,16 +1,16 @@
 /* Includes ------------------------------------------------------------------*/
 #include <bsp_api.h>
 #include <stdarg.h>
-#include "main.h"
+#include <main.h>
 #include <stm32f769i_discovery.h>
+#include <misc_utils.h>
 #include <bsp_cmd.h>
-#include "lcd_main.h"
-#include "audio_main.h"
-#include "input_main.h"
-#include "misc_utils.h"
-#include "dev_io.h"
-#include "debug.h"
-#include "nvic.h"
+#include <lcd_main.h>
+#include <audio_main.h>
+#include <input_main.h>
+#include <dev_io.h>
+#include <debug.h>
+#include <nvic.h>
 #include <mpu.h>
 #include <heap.h>
 #include <bsp_sys.h>

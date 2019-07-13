@@ -5,8 +5,8 @@
 #include <bsp_cmd.h>
 #include <bsp_api.h>
 #include <audio_main.h>
-#include <input_main.h>
 #include <misc_utils.h>
+#include <input_main.h>
 #include <dev_io.h>
 #include <lcd_main.h>
 #include <heap.h>

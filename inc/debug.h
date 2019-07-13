@@ -22,7 +22,7 @@ typedef struct bsp_debug_api_s {
     bspdev_t dev;
     void (*putc) (char);
     char (*getc) (void);
-    int (*send) (const void *, size_t);
+    int (*send) (char *, size_t);
     void (*flush) (void);
     void (*reg_clbk) (int (*) (int , const char **));
     void (*unreg_clbk) (int (*) (int , const char **));
@@ -64,7 +64,7 @@ typedef struct bsp_debug_api_s {
 int serial_init (void);
 void serial_putc (char c);
 char serial_getc (void);
-int bsp_serial_send (const void *data, size_t cnt);
+int bsp_serial_send (char *data, size_t cnt);
 void serial_flush (void);
 void bsp_stdin_register_if (int (*) (int , const char **));
 void bsp_stdin_unreg_if (int (*) (int , const  char **));

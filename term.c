@@ -29,14 +29,6 @@ static cmd_func_t *last_tx_clbk = &serial_tx_clbk[0];
 
 inout_clbk_t inout_early_clbk = NULL;
 
-void str_replace_2_ascii (char *str)
-{
-    while (*str) {
-        *str = __d_isalpha(*str);
-        str++;
-    }
-}
-
 int str_remove_spaces (char *str)
 {
     char *dest = str, *src = str;
