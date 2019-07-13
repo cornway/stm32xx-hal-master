@@ -15,6 +15,16 @@
 #define D_MAX_PATH 128
 #define D_MAX_STRBUF 256
 
+enum {
+    DERR_OK = 0,
+    DERR_NOPATH,
+    DERR_NORES,
+    DERR_INVPARAM,
+    DERR_INT,
+    DERR_NOFS,
+    DERR_MAX,
+};
+
 typedef struct {
     uint16_t year;
     uint8_t month;

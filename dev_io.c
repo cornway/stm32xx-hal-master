@@ -100,6 +100,44 @@ static inline void releasehandle (fobjhdl_t **hdls, int handle)
     hdls[handle]->is_owned = 0;
 }
 
+/*
+DERR_NOPATH,
+    DERR_NORES,
+    DERR_INVPARAM,
+    DERR_NOFS,
+*/
+const int _fres_to_derrno (FRESULT res)
+{
+    switch(res) {
+        case FR_OK: return DERR_OK;
+        case FR_DISK_ERR:
+        case FR_INT_ERR:
+        case FR_NOT_READY:
+            return DERR_INT;
+        case FR_NO_FILE:
+        case FR_NO_PATH:
+            return DERR_NOPATH;
+        case FR_INVALID_NAME:
+        case FR_DENIED:
+        case FR_EXIST:
+        case FR_INVALID_OBJECT:
+        case FR_WRITE_PROTECTED:
+        case FR_INVALID_DRIVE:
+            return DERR_INVPARAM;
+        case FR_NOT_ENABLED:
+        case FR_NO_FILESYSTEM:
+            return DERR_NOFS;
+        case FR_MKFS_ABORTED:
+        case FR_TIMEOUT:
+        case FR_LOCKED:
+        case FR_NOT_ENOUGH_CORE:
+        case FR_TOO_MANY_OPEN_FILES:
+        case FR_INVALID_PARAMETER:
+            return DERR_NORES;
+    }
+    return DERR_INT;
+}
+
 const char *_fres_to_string (FRESULT res)
 {
 #define caseres(res) case res: str = #res ; break
@@ -198,7 +236,7 @@ int d_open (const char *path, int *hndl, char const * att)
         dbg_eval(DBG_WARN) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
         freefile(*hndl);
         *hndl = -1;
-        return -1;
+        return -_fres_to_derrno(res);
     }
     return f_size((FIL *)getfile(*hndl));
 }
@@ -230,7 +268,7 @@ int d_unlink (const char *path)
     res = f_unlink(path);
     if (res != FR_OK) {
         dbg_eval(DBG_WARN) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
-        return -1;
+        return -_fres_to_derrno(res);
     }
     return 0;
 }
@@ -258,7 +296,7 @@ int d_seek (int handle, int position, uint32_t mode)
             return -1;
         break;
     }
-    return res == FR_OK ? position : -1;
+    return -_fres_to_derrno(res);
 }
 
 int d_eof (int handle)
@@ -281,7 +319,7 @@ int d_read (int handle, PACKED void *dst, int count)
     }
     if (res != FR_OK) {
         dbg_eval(DBG_WARN) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
-        return -1;
+        return -_fres_to_derrno(res);
     }
     return done;
 }
@@ -302,6 +340,7 @@ char d_getc (int h)
     res = f_read(getfile(h), &c, 1, &btr);
     if (res != FR_OK) {
         dbg_eval(DBG_WARN) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
+        return 0xff;
     }
     return c;
 }
@@ -319,7 +358,7 @@ int d_write (int handle, PACKED const void *src, int count)
     }
     if (res != FR_OK) {
         dbg_eval(DBG_ERR) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
-        return -1;
+        return -_fres_to_derrno(res);
     }
     return done;
 #else
@@ -332,7 +371,7 @@ int d_mkdir (const char *path)
 #if !DEVIO_READONLY
     FRESULT res = f_mkdir(path);
     if ((res != FR_OK) && (res != FR_EXIST)) {
-        return -1;
+        return -_fres_to_derrno(res);
     }
 #endif
     return 0;
@@ -353,7 +392,7 @@ int d_opendir (const char *path)
             dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
         }
         freedir(h);
-        return -1;
+        return -_fres_to_derrno(res);
     }
     return h;
 }
