@@ -228,7 +228,7 @@ int bin_install (int argc, const char **argv)
         argc--;
     }
     argc--;
-    bsp_install_exec(progptr, path);
+    progptr = bsp_install_exec(progptr, path);
 
     return argc;
 }
@@ -281,10 +281,16 @@ int bin_execute (int argc, const char **argv)
         type = bsp_bin_file_compat(binpath);
         switch (type) {
             case BIN_FILE:
-                err = bsp_install_exec(progptr, binpath);
+                progptr = bsp_install_exec(progptr, binpath);
+                if (progptr) {
+                    err = CMDERR_OK;
+                }
             break;
             case BIN_LINK:
                 return bsp_exec_link(NULL, binpath);
+            break;
+            case BIN_CMD:
+                return bsp_exec_cmd(NULL, binpath);
             break;
             default:
                 assert(0);

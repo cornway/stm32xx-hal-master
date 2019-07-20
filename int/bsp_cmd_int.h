@@ -17,6 +17,7 @@ typedef enum {
     CMDERR_GENERIC,
     CMDERR_NOARGS,
     CMDERR_NOPATH,
+    CMDERR_NOCORE,
     CMDERR_INVPARM,
     CMDERR_PERMISS,
     CMDERR_UNKNOWN,
@@ -81,7 +82,7 @@ int cmd_init (void);
 void cmd_deinit (void);
 int cmd_unregister (const char *);
 int cmd_execute (const char *, int);
-void cmd_exec_dsr (const char *, const char *,
+int cmd_exec_dsr (const char *, const char *,
                         void *, void *);
 
 void __print_cmd_map (const cmd_func_map_t *map, int cnt);

@@ -140,31 +140,31 @@ const int _fres_to_derrno (FRESULT res)
 
 const char *_fres_to_string (FRESULT res)
 {
-#define caseres(res) case res: str = #res ; break
+#define errorcase(res) case res: str = #res ; break
 const char *str;
     switch (res) {
-        caseres(FR_DISK_ERR);
-        caseres(FR_INT_ERR);
-        caseres(FR_NOT_READY);
-        caseres(FR_NO_FILE);
-        caseres(FR_NO_PATH);
-        caseres(FR_INVALID_NAME);
-        caseres(FR_DENIED);
-        caseres(FR_EXIST);
-        caseres(FR_INVALID_OBJECT);
-        caseres(FR_WRITE_PROTECTED);
-        caseres(FR_INVALID_DRIVE);
-        caseres(FR_NOT_ENABLED);
-        caseres(FR_NO_FILESYSTEM);
-        caseres(FR_MKFS_ABORTED);
-        caseres(FR_TIMEOUT);
-        caseres(FR_LOCKED);
-        caseres(FR_NOT_ENOUGH_CORE);
-        caseres(FR_TOO_MANY_OPEN_FILES);
-        caseres(FR_INVALID_PARAMETER);
+        errorcase(FR_DISK_ERR);
+        errorcase(FR_INT_ERR);
+        errorcase(FR_NOT_READY);
+        errorcase(FR_NO_FILE);
+        errorcase(FR_NO_PATH);
+        errorcase(FR_INVALID_NAME);
+        errorcase(FR_DENIED);
+        errorcase(FR_EXIST);
+        errorcase(FR_INVALID_OBJECT);
+        errorcase(FR_WRITE_PROTECTED);
+        errorcase(FR_INVALID_DRIVE);
+        errorcase(FR_NOT_ENABLED);
+        errorcase(FR_NO_FILESYSTEM);
+        errorcase(FR_MKFS_ABORTED);
+        errorcase(FR_TIMEOUT);
+        errorcase(FR_LOCKED);
+        errorcase(FR_NOT_ENOUGH_CORE);
+        errorcase(FR_TOO_MANY_OPEN_FILES);
+        errorcase(FR_INVALID_PARAMETER);
     }
     return str;
-#undef caseres
+#undef errorcase
 }
 
 static int _devio_mount (void *p1, void *p2);
@@ -189,22 +189,24 @@ extern void SD_Deinitialize(void);
 
 int d_open (const char *path, int *hndl, char const * att)
 {
-    int ret = -1;
+    int ret = DERR_OK;
     BYTE mode = 0;
+    d_bool extend = d_true;
     FRESULT res;
 
     if (!att) {
-        return ret;
+        return -DERR_INVPARAM;
     }
 
     alloc_file(hndl);
     if (*hndl < 0) {
-        return ret;
+        return -DERR_NORES;
     }
     while (att)
     switch (*att) {
         case 'r':
             mode |= FA_READ | FA_OPEN_EXISTING;
+            extend = d_false;
             att = NULL;
         break;
 #if !DEVIO_READONLY
@@ -215,6 +217,7 @@ int d_open (const char *path, int *hndl, char const * att)
 #endif
         case '+':
             att++;
+            extend = d_false;
             mode |= FA_CREATE_ALWAYS;
         break;
         default:
@@ -222,13 +225,9 @@ int d_open (const char *path, int *hndl, char const * att)
         break;
     }
     if (mode & FA_CREATE_ALWAYS) {
-        res = f_open(getfile(*hndl), path, FA_READ);
-        if (res == FR_OK) {
-            f_close(getfile(*hndl));
-            res = f_unlink(path);
-            if (res != FR_OK) {
-                dbg_eval(DBG_ERR) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
-            }
+        res = f_unlink(path);
+        if (res != FR_OK) {
+            dbg_eval(DBG_WARN) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
         }
     }
     res = f_open(getfile(*hndl), path, mode);
@@ -238,7 +237,10 @@ int d_open (const char *path, int *hndl, char const * att)
         *hndl = -1;
         return -_fres_to_derrno(res);
     }
-    return f_size((FIL *)getfile(*hndl));
+    if (extend) {
+        ret = d_seek(*hndl, 0, DSEEK_END);
+    }
+    return ret < 0 ? ret : d_size(*hndl);
 }
 
 int d_size (int hndl)
@@ -285,11 +287,10 @@ int d_seek (int handle, int position, uint32_t mode)
             res = f_lseek(getfile(handle), position);
         break;
         case DSEEK_CUR:
-            res = d_tell(handle);
+            res = f_lseek(getfile(handle), d_tell(handle) + position);
         break;
         case DSEEK_END:
-            position = d_size(handle);
-            res = f_lseek(getfile(handle), position);
+            res = f_lseek(getfile(handle), d_size(handle) + position);
         break;
         default:
             dprintf("Unknown SEEK mode : %u\n", mode);

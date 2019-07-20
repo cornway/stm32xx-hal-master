@@ -44,6 +44,7 @@
 #include "misc_utils.h"
 #include <debug.h>
 #include <heap.h>
+#include <bsp_sys.h>
 
 typedef struct {
     void *fb_mem;
@@ -143,6 +144,7 @@ static void vid_release (void)
 void vid_deinit (void)
 {
     dprintf("%s() :\n", __func__);
+    BSP_LCD_SetBrightness(0);
     vid_release();
     BSP_LCD_DeInitEx();
 }
@@ -305,11 +307,12 @@ uint32_t vid_mem_avail (void)
 static inline void lcd_set_layer (lcd_layers_t layer)
 {
     BSP_LCD_SetTransparency(LCD_FOREGROUND, layer_transparency[layer]);
+    BSP_LCD_SelectLayer(layer_switch[layer]);
 }
 
 static inline void lcd_wait_ready ()
 {
-    while (!(LTDC->CDSR & LTDC_CDSR_VSYNCS));
+    while ((LTDC->CDSR & LTDC_CDSR_VSYNCS)) {}
 }
 
 static void vid_sync (int wait)
@@ -317,7 +320,8 @@ static void vid_sync (int wait)
     assert(lcd_active_cfg);
     if (wait) {
         lcd_wait_ready();
-    } else {
+    }
+    if (lcd_active_cfg->lay_cnt > 1) {
         lcd_set_layer(lcd_active_cfg->active_lay_idx);
         lcd_active_cfg->active_lay_idx = layer_switch[lcd_active_cfg->active_lay_idx];
     }
@@ -325,7 +329,9 @@ static void vid_sync (int wait)
 
 void vid_vsync (void)
 {
+    profiler_enter();
     vid_sync(1);
+    profiler_exit();
 }
 
 static void screen_get_invis_screen (screen_t *screen)

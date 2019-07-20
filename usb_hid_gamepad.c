@@ -36,6 +36,8 @@ enum {
     __MODE = 7,
     __MODE_ANALOG = 0x40,
     __MODE_STD = 0xc0,
+
+    __KSTART_SHIFT = 4,
 };
 
 #define ACT_IDLE        ((KEYS_IDLE | SHIFT_IDLE | CTL_IDLE) << 32)
@@ -94,12 +96,9 @@ int _joypad_read_std (usb_data_t *data, int8_t *pads)
     uint32_t keys;
     uint8_t temp;
 
-    pads[JOY_MAX] = -128;
-
-    keys = (*(uint32_t *)&data->data[__KSTART] >> 4);
+    keys = readLong(&data->data[__KSTART]) >> __KSTART_SHIFT;
 
     for (bit = 0, i = JOY_KEY_OFFSET; i < JOY_KMAX; i++, bit++) {
-
         set_key_state(i, (keys >> bit) & 0x1);
     }
 
@@ -111,7 +110,7 @@ int _joypad_read_std (usb_data_t *data, int8_t *pads)
     set_key_state(JOY_LEFTARROW, temp == M_LEFT);
     set_key_state(JOY_RIGHTARROW, temp == M_RIGHT);
     pads[JOY_ANALOG] = data->data[__ANALOG_BK];
-    memcpy(pads, keypads, JOY_MAX);
+    d_memcpy(pads, keypads, JOY_MAX);
     return JOY_STD_MAX;
 }
 

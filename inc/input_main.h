@@ -61,7 +61,7 @@ enum {
     JOY_DOWNARROW   = JOY_UPARROW + 1,
     JOY_LEFTARROW   = JOY_DOWNARROW + 1,
     JOY_RIGHTARROW  = JOY_LEFTARROW + 1,
-    JOY_STD_MAX         = JOY_RIGHTARROW + 1,
+    JOY_STD_MAX     = JOY_RIGHTARROW + 1,
     JOY_ANALOG      = JOY_STD_MAX,
     JOY_MAX         = JOY_ANALOG + 1,
 }; /*regular keys*/

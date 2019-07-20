@@ -470,6 +470,18 @@ int bhal_set_mem (bhal_cplth_t cplth, arch_word_t *progaddr,
     return -1;
 }
 
+int
+b_setup_bin_param (boot_bin_parm_t *parm, void *ptr, int size)
+{
+extern arch_word_t __Vectors_Size;
+    arch_word_t *bindata = (arch_word_t *)ptr;
+    parm->entrypoint = bindata[1];
+    parm->progaddr = ROUND_DOWN(parm->entrypoint, 0x1000);
+    parm->spinitial = bindata[0];
+    parm->size = size;
+    return 0;
+}
+
 /**
   * @brief  Gets the sector of a given address
   * @param  None

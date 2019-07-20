@@ -23,7 +23,6 @@ typedef struct dvar_int_s {
 } dvar_int_t;
 
 static const char *cmd_errno_text (void);
-static void cmd_set_errno (int err);
 static const char *cmd_check_errno (cmd_errno_t *err);
 static int _cmd_register_var (cmdvar_t *var, const char *name);
 static int cmd_stdin_ascii_forward (int argc, const char **argv);
@@ -448,11 +447,7 @@ static int __cmd_stdin_ascii_fwd (int argc, const char **argv)
 
 static int cmd_stdin_ascii_forward (int argc, const char **argv)
 {
-    argc = __cmd_stdin_ascii_fwd(argc, argv);
-    if (argc < 0) {
-        cmd_set_errno(argc);
-    }
-    return argc;
+    return __cmd_stdin_ascii_fwd(argc, argv);
 }
 
 static int __cmd_handle_ascii (dvar_int_t *v, int argc, const char **argv)
@@ -936,23 +931,17 @@ static void cmd_set_errno (int err)
     }
 }
 
-static const char *smd_check_errno (cmd_errno_t *err)
-{
-    *err = cmd_errno;
-    return cmd_errno_text();
-}
-
 #define CMD_EXEC_MAX 6
 cmdexec_t cmd_exec_pool[CMD_EXEC_MAX];
 cmdexec_t *boot_cmd_top = &cmd_exec_pool[0];
 
-void cmd_exec_dsr (const char *cmd, const char *text, void *user1, void *user2)
+int cmd_exec_dsr (const char *cmd, const char *text, void *user1, void *user2)
 {
     int i;
     char buf[CMD_MAX_BUF];
 
     if (boot_cmd_top == &cmd_exec_pool[arrlen(cmd_exec_pool)]) {
-        return;
+        return -CMDERR_NOCORE;
     }
     i = snprintf(buf, sizeof(buf), "%s %s", cmd, text);
     boot_cmd_top->text = heap_malloc(i + 1);
@@ -963,6 +952,7 @@ void cmd_exec_dsr (const char *cmd, const char *text, void *user1, void *user2)
     boot_cmd_top->len = i;
     boot_cmd_top++;
     dprintf("%s() : \'%s\' [%s]\n", __func__, cmd, text);
+    return CMDERR_OK;
 }
 
 static cmdexec_t *__cmd_iter_next (char *text, cmdexec_t *cmd)

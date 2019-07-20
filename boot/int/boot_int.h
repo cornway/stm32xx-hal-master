@@ -11,6 +11,7 @@
 typedef enum {
     BIN_FILE,
     BIN_LINK,
+    BIN_CMD,
     BIN_MAX,
 } bsp_exec_file_type_t;
 
@@ -29,11 +30,12 @@ typedef struct boot_bin_s {
     boot_bin_parm_t parm;
     char name[BOOT_MAX_NAME];
     char path[BOOT_MAX_PATH];
+    uint8_t id;
 } bsp_bin_t;
 
 typedef void (*bhal_cplth_t) (const char *, int);
 
-int bsp_install_exec (arch_word_t *progaddr, const char *path);
+arch_word_t *bsp_install_exec (arch_word_t *progaddr, const char *path);
 int bsp_start_exec (arch_word_t *progaddr, int argc, const char **argv);
 
 void *bsp_cache_bin_file (const bsp_heap_api_t *heapapi, const char *path, int *binsize);

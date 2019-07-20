@@ -5,6 +5,14 @@
 typedef uint32_t rgba_t;
 
 #define GUI_MAX_NAME 16
+#define GUI_MAX_STRBUF 256
+
+typedef enum {
+    GUIX_INVTYPE,
+    GUIX_COMP,
+    GUIX_PANE,
+    GUIX_MAXTYPE,
+} gui_obj_type_t;
 
 typedef struct {
     int sfx_open, sfx_close;

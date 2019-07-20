@@ -1971,10 +1971,6 @@ static void DrawChar(uint16_t Xpos, uint16_t Ypos, const uint8_t *c)
       {
         BSP_LCD_DrawPixel((Xpos + j), Ypos, DrawProp[ActiveLayer].TextColor);
       }
-      else
-      {
-        BSP_LCD_DrawPixel((Xpos + j), Ypos, DrawProp[ActiveLayer].BackColor);
-      }
     }
     Ypos++;
   }

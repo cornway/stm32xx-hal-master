@@ -424,15 +424,12 @@ int dvprintf (const char *fmt, va_list argptr)
     return dprintf(string);
 }
 
-int d_rlimit_wrap (uint32_t *tsf, uint32_t period,
-                        void (*h) (void *), void *arg)
+int d_rlimit_wrap (uint32_t *tsf, uint32_t period)
 {
     if (*tsf && *tsf > d_time()) {
         return 0;
-    } else {
-        *tsf = d_time() + period;
     }
-    h(arg);
+    *tsf = d_time() + period;
     return 1;
 }
 

@@ -10,6 +10,7 @@
 typedef struct bsfx_s {
     int channel;
     int wavenum;
+    uint16_t id;
     uint8_t cache[1];
 } bsfx_t;
 
@@ -32,6 +33,7 @@ __set_sfx (int i, bsfx_t *sfx)
 {
     assert(i < BSFX_POOLMAX);
     bsfx_pool[i] = sfx;
+    sfx->id = i;
 }
 
 static inline bsfx_t *
@@ -63,7 +65,7 @@ int bsp_open_wave_sfx (const char *name)
     }
     sfx = __boot_check_sfx_exist(cachenum);
     if (sfx) {
-        return 0;
+        return sfx->id;
     }
     cachesize = audio_wave_size(cachenum);
     if (cachesize < 0) {
@@ -82,7 +84,7 @@ int bsp_open_wave_sfx (const char *name)
     __set_sfx(sfxidx, sfx);
     audio_wave_cache(cachenum, sfx->cache, cachesize);
 
-    return sfxidx;
+    return sfx->id;
 }
 
 int bsp_play_wave_sfx (int hdl, uint8_t volume)
