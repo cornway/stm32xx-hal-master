@@ -76,7 +76,8 @@ extern int g_dev_debug_level;
 
 void d_memcpy (void *_dst, const void *_src, int cnt);
 void d_memset (void *_dst, int v, int cnt);
-int d_astrtok (const char **tok, int tokcnt, char *str);
+int d_wstrtok (const char **tok, int tokcnt, char *str);
+int d_vstrtok (const char **tok, int tokcnt, char *str, const char c);
 
 #ifdef __LITTLE_ENDIAN__
 

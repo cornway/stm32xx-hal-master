@@ -108,7 +108,7 @@ str_tkn_continue (const char **dest, const char **src, tknmatch_t tkncmp,
         tmp = 0;
         if (flags[i] == SQUASH) {
             /*Split into*/
-            tmp = d_astrtok(dest, maxargc, (char *)src[i]);
+            tmp = d_wstrtok(dest, maxargc, (char *)src[i]);
         } else {
             dest[0] = src[i];
             tmp = 1;

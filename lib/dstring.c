@@ -1,11 +1,12 @@
 #include <string.h>
+#include <ctype.h>
 #include <main.h>
 #include <misc_utils.h>
 #include <heap.h>
 
-#define _BIN2MS(a) ((1 << (a)) - 1)
-#define ROUND_DOWN_BIN(x, a)    ((x) & ~ _BIN2MS(a))
-#define CALC_PAD_BIN(x, a)      ((a) - ((x) & _BIN2MS(a)))
+#define BIN2MS(a)               ((1 << (a)) - 1)
+#define ROUND_DOWN_BIN(x, a)    ((x) & ~BIN2MS(a))
+#define CALC_PAD_BIN(x, a)      ((1 << (a)) - ((x) & BIN2MS(a)))
 
 #define D_DECL_MEMCPY(type, twidth)                                   \
                 static inline void                                    \
@@ -129,7 +130,7 @@ void d_stoalpha (char *str)
     }
 }
 
-static char *__d_strtok (char *str)
+static char *__d_strtok_space (char *str)
 {
     d_bool p_isspace = d_false;
 
@@ -146,13 +147,34 @@ static char *__d_strtok (char *str)
     return NULL;
 }
 
-int d_astrtok (const char **tok, int tokcnt, char *str)
+static char *__d_strtok_chr (char *str, const int c)
+{
+    d_bool p_istok = d_false;
+
+    if (c < 0) {
+        return __d_strtok_space(str);
+    }
+
+    while (*str) {
+        if (*str == (char)c) {
+            *str = 0;
+            p_istok = d_true;
+        } else if (p_istok) {
+            /*token begins*/
+            return str;
+        }
+        str++;
+    }
+    return NULL;
+}
+
+int __d_strtok (const char **tok, int tokcnt, char *str, const int c)
 {
     char *p = str, *pp = str;
     int toktotal = tokcnt;
 
     do {
-        p = __d_strtok(p);
+        p = __d_strtok_chr(p, c);
         if (pp && *pp) {
             tokcnt--;
             *tok = pp;
@@ -161,6 +183,16 @@ int d_astrtok (const char **tok, int tokcnt, char *str)
         pp = p;
     } while (p && tokcnt > 0);
     return toktotal - tokcnt;
+}
+
+int d_wstrtok (const char **tok, int tokcnt, char *str)
+{
+    return __d_strtok(tok, tokcnt, str, -1);
+}
+
+int d_vstrtok (const char **tok, int tokcnt, char *str, const char c)
+{
+    return __d_strtok(tok, tokcnt, str, (int)c);
 }
 
 char *d_strupr(char *str)

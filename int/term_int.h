@@ -2,7 +2,7 @@
 #include "bsp_cmd_int.h"
 
 int str_parse_tok (const char *str, const char *tok, uint32_t *val);
-int d_astrtok (const char **tok, int tokcnt, char *str);
+int d_wstrtok (const char **tok, int tokcnt, char *str);
 void d_stoalpha (char *str);
 #define str_replace_2_ascii(str) d_stoalpha(str)
 int str_insert_args (char *dest, const char *src, int argc, const char **argv);
