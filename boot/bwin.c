@@ -32,115 +32,225 @@ static component_t *
 win_new_border (gui_t *gui)
 {
     component_t *com = gui_get_comp(gui, "pad", "");
-    com->bcolor = COLOR_GREY;
-    com->fcolor = COLOR_GREY;
+    com->bcolor = COLOR_LGREY;
+    com->fcolor = COLOR_LGREY;
     com->ispad = 1;
     return com;
 }
 
-static void win_setup_frame (dim_t *dim, pane_t *pane, int border, int x, int y, int w, int h)
+static inline win_t *WIN_HANDLE (void *_pane)
 {
-    gui_t *gui = pane->parent;
-    component_t *com;
+    pane_t *pane = _pane;
+    win_t *win;
 
-    if (dim) {
-        dim->x = x + border;
-        dim->y = y + border;
-
-        dim->w = w - border * 2;
-        dim->h = h - border * 2;
-    }
-    com = win_new_border(gui);
-    gui_set_comp(pane, com, x, y, border, h);
-
-    com = win_new_border(gui);
-    gui_set_comp(pane, com, border, y, w - border, border);
-
-    com = win_new_border(gui);
-    gui_set_comp(pane, com, w - border, y + border, border, h - border);
-
-    com = win_new_border(gui);
-    gui_set_comp(pane, com, border, h - border, w - border, border);
+    win = (win_t *)(pane + 1);
+    assert(win->pane == pane);
+    return win;
 }
 
-pane_t *win_new_allert
-    (gui_t *gui, int w, int h,
-     comp_handler_t close, comp_handler_t accept, comp_handler_t decline)
+component_t *win_get_user_component (pane_t *pane)
 {
-    const int bordersize = 8;
+    return gui_search_com(pane, "user");
+}
+
+static void win_trunc_frame (dim_t *dim, const point_t *border, int x, int y, int w, int h)
+{
+    dim->x = x + border->x;
+    dim->y = y + border->y;
+
+    dim->w = w - border->w * 2;
+    dim->h = h - border->h * 2;
+}
+
+static void win_setup_frame (pane_t *pane, const point_t *border, dim_t *dim)
+{
+    typedef void (*dim_set_func_t)(dim_t *, dim_t *);
+
+    gui_t *gui = pane->parent;
+    component_t *com;
+    int i;
+    dim_t wdim = {0, 0, dim->w + border->w * 2, border->y};
+    dim_t hdim = {0, 0, border->w, dim->h + border->h * 2};
+    dim_set_func_t func[] =
+    {
+        dim_set_top,
+        dim_set_bottom,
+        dim_set_left,
+        dim_set_right,
+    };
+    dim_t *dimptr[] = {&wdim, &wdim, &hdim, &hdim};
+
+    for (i = 0; i < arrlen(func); i++) {
+        func[i](dimptr[i], dim);
+        com = win_new_border(gui);
+        gui_set_comp(pane, com, dimptr[i]->x, dimptr[i]->y, dimptr[i]->w, dimptr[i]->h);
+    }
+}
+
+enum {
+    WALERT_ACT_NONE = 0x0,
+    WALERT_ACT_CLOSE = 0x1,
+    WALERT_ACT_ACCEPT = 0x2,
+    WALERT_ACT_DECLINE = 0x4,
+    WALERT_ACT_MS = 0x7,
+};
+
+typedef struct {
+    win_t win;
+    win_handler_t yes, no, close;
+} win_alert_t;
+
+static inline win_alert_t *
+WALERT_HANDLE (pane_t *pane)
+{
+    return (win_alert_t *)(pane + 1);
+}
+
+static int inline
+__win_close_allert (gui_t *gui, pane_t *pane)
+{
+    gui_release_pane(gui, pane);
+    return 0;
+}
+
+static int win_alert_handler (pane_t *pane, component_t *c, void *user)
+{
+    win_handler_t h = NULL;
+    win_alert_t *alert = WALERT_HANDLE(pane);
+    int needsclose = 1;
+
+    if ((c->userflags & WALERT_ACT_MS) == 0) {
+        return 0;
+    }
+    switch (c->userflags & WALERT_ACT_MS) {
+        case WALERT_ACT_CLOSE: h = alert->close;
+        break;
+        case WALERT_ACT_ACCEPT: h = alert->yes;
+        break;
+        case WALERT_ACT_DECLINE: h = alert->no;
+        break;
+        default: needsclose = 0;
+    }
+    if (needsclose) {
+        win_close_allert(pane->parent, pane);
+    }
+    if (h) {
+        h(pane, NULL, 0);
+    }
+    return 1;
+}
+
+static win_alert_t *win_alert_alloc (gui_t *gui)
+{
+    pane_t *pane;
+    win_alert_t *win;
+    int memsize = sizeof(win_alert_t);
+
+    pane = gui_get_pane(gui, "allert", memsize);
+    win = (win_alert_t *)(pane + 1);
+    win->win.pane = pane;
+    win->win.type = WIN_ALERT;
+    return win;
+}
+
+pane_t *win_new_allert (gui_t *gui, int w, int h)
+{
+    const point_t border = {16, 8};
     const int btnsize = 40;
     int sfxclose = -1;
     dim_t dim;
     point_t p;
     pane_t *pane;
     component_t *com;
+    win_alert_t *alert;
+    prop_t prop = {0};
 
-    pane = gui_get_pane(gui, "allert", 0);
-    if (gui_bsp_sfxalloc(gui)) {
-        sfxclose = gui_bsp_sfxalloc(gui)("guiclose");
-    }
+    alert = win_alert_alloc(gui);
+    pane = alert->win.pane;
 
+    gui_set_panexy(gui, pane, 0, 0, w, h);
     dim_get_origin(&p, &gui->dim);
-    gui_set_panexy(gui, pane, p.x, p.y, w, h);
+    dim_set_origin(&pane->dim, &p);
 
-    com = gui_get_comp(gui, "a_close", "");
-    com->bcolor = COLOR_BLACK;
-    com->fcolor = COLOR_RED;
-    com->ispad = 1;
-    com->release = close;
-    com->sfx.sfx_close = sfxclose;
+    pane->selectable = 0;
+
+    com = gui_get_comp(gui, "close", "X");
+    com->act = win_alert_handler;
+    com->userflags = WALERT_ACT_CLOSE;
+    com->glow = 0x1f;
+    com->selectable = 1;
     gui_set_comp(pane, com, 0, 0, btnsize, btnsize);
 
-    com = gui_get_comp(gui, "a_title", NULL);
-    com->bcolor = COLOR_BLUE;
-    com->fcolor = COLOR_WHITE;
+    prop.bcolor = COLOR_RED;
+    prop.fcolor = COLOR_BLACK;
+    prop.sfx.sfx_close = sfxclose;
+    gui_set_prop(com, &prop);
+
+    com = gui_get_comp(gui, "title", "/_\\ Warning");
+    com->userflags = WALERT_ACT_NONE;
     gui_set_comp(pane, com, btnsize, 0, w - btnsize, btnsize);
 
-    com = gui_get_comp(gui, "a_accept", "YES");
-    com->bcolor = COLOR_GREY;
-    com->fcolor = COLOR_BLACK;
-    com->release = accept;
-    com->sfx.sfx_close = sfxclose;
-    gui_set_comp(pane, com, 0, h - btnsize, w / 2, btnsize);
-    com->sfx.sfx_close = sfxclose;
+    prop.bcolor = COLOR_LBLUE;
+    prop.fcolor = COLOR_WHITE;
+    prop.sfx.sfx_close = -1;
+    gui_set_prop(com, &prop);
 
-    com = gui_get_comp(gui, "a_decline", "NO");
-    com->bcolor = COLOR_GREY;
-    com->fcolor = COLOR_BLACK;
-    com->release = decline;
-    com->sfx.sfx_close = sfxclose;
-    gui_set_comp(pane, com, w / 2, h - btnsize, w / 2, btnsize);
+    com = gui_get_comp(gui, "accept", "YES");
+    com->act = win_alert_handler;
+    com->userflags = WALERT_ACT_ACCEPT;
+    com->glow = 0x1f;
+    com->selectable = 1;
+    gui_set_comp(pane, com, 0, h - btnsize, w / 2 - border.w / 2, btnsize);
 
-    dim.x = 0;
-    dim.y = btnsize;
-    dim.w = w;
-    dim.h = h - btnsize;
-    dim_get_origin(&p, &dim);
-    dim.w = dim.w - 2 * bordersize;
-    dim.h = dim.h - 2 * bordersize;
-    dim_set_origin(&dim, &p);
+    prop.bcolor = COLOR_DGREY;
+    prop.fcolor = COLOR_WHITE;
+    gui_set_prop(com, &prop);
 
-    com = gui_get_comp(gui, "a_message", NULL);
-    com->bcolor = COLOR_BLACK;
-    com->fcolor = COLOR_WHITE;
+    com = gui_get_comp(gui, "decline", "NO");
+    com->act = win_alert_handler;
+    com->userflags = WALERT_ACT_DECLINE;
+    com->glow = 0x1f;
+    com->selectable = 1;
+    gui_set_comp(pane, com, w / 2 + border.w / 2, h - btnsize, w / 2 - border.w / 2, btnsize);
+    pane->onfocus = com;
+
+    prop.sfx.sfx_close = sfxclose;
+    gui_set_prop(com, &prop);
+    prop.sfx.sfx_close = -1;
+
+    com = win_new_border(gui);
+    gui_set_comp(pane, com, w / 2 - border.w / 2, h - btnsize, border.w, btnsize);
+
+    win_trunc_frame(&dim, &border, 0, btnsize, w, h - btnsize * 2);
+    win_setup_frame(pane, &border, &dim);
+
+    com = gui_get_comp(gui, "message", NULL);
     gui_set_comp(pane, com, dim.x, dim.y, dim.w, dim.h);
 
-    win_setup_frame(NULL, pane, bordersize, 0, btnsize, w, h - btnsize);
+    prop.bcolor = COLOR_WHITE;
+    prop.fcolor = COLOR_BLACK;
+    gui_set_prop(com, &prop);
 
     pane->repaint = 0;
 
     return pane;
 }
 
-int win_alert (gui_t *gui, const char *text)
+int win_alert (gui_t *gui, const char *text,
+                   win_handler_t close, win_handler_t accept, win_handler_t decline)
 {
+    win_alert_t *alert;
     pane_t *pane = gui_search_pane(gui, "allert");
     component_t *com;
     if (!pane) {
         return -1;
     }
-    com = gui_search_com(pane, "a_message");
+    com = gui_search_com(pane, "message");
     assert(com);
+    alert = WALERT_HANDLE(pane);
+    alert->close = close;
+    alert->yes = accept;
+    alert->no = decline;
     gui_print(com, "%s", text);
     gui_select_pane(gui, pane);
     return 0;
@@ -154,7 +264,7 @@ int win_close_allert (gui_t *gui, pane_t *pane)
     if (!pane) {
         return -1;
     }
-    gui_release_pane(gui, pane);
+    __win_close_allert(gui, pane);
     return 0;
 }
 
@@ -168,6 +278,7 @@ typedef struct con_line_s {
 
 typedef struct {
     win_t win;
+    comp_handler_t useract;
     component_t *com;
 
     uint16_t wmax, hmax;
@@ -180,18 +291,18 @@ typedef struct {
 
 static int win_con_repaint (pane_t *pane, component_t *com, void *user);
 
-static win_con_t *WCON_HANDLE (void *_pane)
+static inline win_con_t *WCON_HANDLE (void *_pane)
 {
-    pane_t *pane = _pane;
-    win_con_t *con;
-    win_t *win;
-
-    win = (win_t *)(pane + 1);
+    win_t *win = WIN_HANDLE(_pane);
     assert(win->type == WIN_CONSOLE);
-    assert(win->pane == pane);
 
-    con = container_of(win, win_con_t, win);
-    return con;
+    return container_of(win, win_con_t, win);
+}
+
+void win_set_act_clbk (void *_pane, comp_handler_t h)
+{
+    win_con_t *win = WCON_HANDLE(_pane);
+    win->useract = h;
 }
 
 static int wcon_print_line (int *nextline, char *dest, const char *src, int len)
@@ -261,27 +372,31 @@ static void wcon_lsetup_lines (win_con_t *con, rgba_t textcolor)
     con->lastline = con->linehead;
 }
 
-static win_con_t *wcon_alloc (gui_t *gui, int x, int y, int w, int h)
+static win_con_t *
+wcon_alloc (gui_t *gui, const char *name,
+                const void *font, int x, int y, int w, int h)
 {
     uint32_t wmax, hmax;
     int textsize, textoff;
     pane_t *pane;
     win_con_t *win;
-
+    fontprop_t fprop;
     int winmemsize = sizeof(win_con_t);
 
-    wmax = w / gui->fontw;
-    hmax = h / gui->fonth;
+    gui_get_font_prop(&fprop, font);
+
+    wmax = w / fprop.w;
+    hmax = h / fprop.h;
 
     textsize = hmax * wmax;
     winmemsize += hmax * sizeof(con_line_t);
     winmemsize += textsize;
     textoff = winmemsize - textsize;
 
-    pane = gui_get_pane(gui, "console", winmemsize);
+    pane = gui_get_pane(gui, name ? name : "noname", winmemsize);
 
     win = (win_con_t *)(pane + 1);
-    memset(win, 0, winmemsize);
+    d_memset(win, 0, winmemsize);
     win->win.pane = pane;
     win->win.type = WIN_CONSOLE;
     win->wmax = wmax;
@@ -293,25 +408,45 @@ static win_con_t *wcon_alloc (gui_t *gui, int x, int y, int w, int h)
     return win;
 }
 
+static int win_act_handler (pane_t *pane, component_t *c, void *user)
+{
+    int ret = 0;
+    win_con_t *win = WCON_HANDLE(pane);
+
+    if (win->useract) {
+        ret = win->useract(pane, c, user);
+    }
+    return ret;
+}
+
 pane_t *win_new_console (gui_t *gui, prop_t *prop, int x, int y, int w, int h)
 {
-    uint8_t bordersize = 8;
+    const point_t border = {16, 2};
     component_t *com;
     win_con_t *win;
     dim_t dim;
+    const void *font = prop->fontprop.font;
 
-    win = wcon_alloc(gui, x, y, w, h);
+    if (font == NULL) {
+        font = gui->font;
+        prop->fontprop.font = font;
+    }
+    win_trunc_frame(&dim, &border, 0, 0, w, h);
+
+    win = wcon_alloc(gui, prop->name, font, dim.x, dim.y, dim.w, dim.h);
     wcon_lsetup_lines(win, prop->fcolor);
 
-    win_setup_frame(&dim, win->win.pane, bordersize, 0, 0, w, h);
+    win_setup_frame(win->win.pane, &border, &dim);
 
     prop->user_draw = 1;
-    com = gui_get_comp(gui, "textarea", "");
+    com = gui_get_comp(gui, "user", "");
     com->draw = win_con_repaint;
-    gui_set_prop(com, prop);
+    com->act = win_act_handler;
     gui_set_comp(win->win.pane, com, dim.x, dim.y, dim.w, dim.h);
-
+    gui_set_prop(com, prop);
     win->com = com;
+
+    win->win.pane->onfocus = com;
 
     return win->win.pane;
 }
@@ -334,8 +469,93 @@ static int wcon_append_line (int *nextline, win_con_t *con, con_line_t *line, co
 }
 
 static void wcom_wakeup (win_con_t *con)
-{
+{
     gui_wakeup_pane(con->win.pane);
+}
+
+int win_con_get_dim (pane_t *pane, int *w, int *h)
+{
+    win_con_t *con;
+
+    con = WCON_HANDLE(pane);
+    *w = con->wmax;
+    *h = con->hmax;
+    return 0;
+}
+
+static inline con_line_t *
+__get_line (win_con_t *con, int y)
+{
+    return &con->line[y];
+}
+
+static char *__get_buf (win_con_t *con, con_line_t *line, int x, int *size)
+{
+    char *buf;
+
+    assert(x < con->wmax);
+    buf = line->ptr + x;
+    *size = con->wmax - x;
+    line->pos = *size;
+    return buf;
+}
+
+static inline int
+__win_con_print_at (win_con_t *con, int x, int y, const char *str, rgba_t textcolor)
+{
+    fontprop_t fprop;
+    con_line_t *line;
+    char *buf;
+    int max;
+
+    line = __get_line(con, y);
+    line->color = textcolor;
+    buf = __get_buf(con, line, x, &max);
+    d_memset(buf, ' ', max);
+    max = sprintf(buf, "%s", str);
+    return max;
+}
+
+int win_con_print_at (pane_t *pane, int x, int y, const char *str, rgba_t textcolor)
+{
+    return __win_con_print_at(WCON_HANDLE(pane), x, y, str, textcolor);
+}
+
+int win_con_printline (pane_t *pane, int y,
+                                    const char *str, rgba_t textcolor)
+{
+    return __win_con_print_at(WCON_HANDLE(pane), 0, y, str, textcolor);
+}
+
+int win_con_printline_c (pane_t *pane, int y,
+                                const char *str, rgba_t textcolor)
+{
+    win_con_t *con = WCON_HANDLE(pane);
+    int len = strlen(str);
+    int x = 0;
+
+    if (len > con->wmax) {
+        len = con->wmax;
+    } else {
+        x = (con->wmax - len) / 2;
+    }
+    return win_con_print_at(pane, x, y, str, textcolor);
+}
+
+void win_con_clear (pane_t *pane)
+{
+    win_con_t *con;
+    con_line_t *line;
+
+    con = WCON_HANDLE(pane);
+    line = con->linehead;
+
+    while (line) {
+        d_memset(line->ptr, ' ', con->wmax);
+        line->pos = 0;
+        line = line->next;
+    }
+    gui_wakeup_pane(pane);
 }
 
 int win_con_append (pane_t *pane, const char *str, rgba_t textcolor)
@@ -370,21 +590,32 @@ int win_con_append (pane_t *pane, const char *str, rgba_t textcolor)
     return charcnt;
 }
 
+static inline void
+win_con_clean_line (component_t *com, fontprop_t *fprop, con_line_t *line, int linenum)
+{
+    if (line->pos) {
+        dim_t dim = {0, linenum * fprop->h, line->pos * fprop->w, fprop->h};
+        gui_rect_fill(com, &dim, com->bcolor);
+    }
+}
+
 static int win_con_repaint (pane_t *pane, component_t *com, void *user)
 {
+    fontprop_t fprop;
     win_con_t *con;
     con_line_t *line;
     int linecnt = 0;
 
     con = WCON_HANDLE(pane);
     assert(com == con->com);
-    gui_com_clear(con->com);
 
+    gui_get_font_prop(&fprop, com->font);
     line = con->linehead;
 
     while (line) {
         if (line->pos) {
-            gui_string_direct(con->com, linecnt, line->color, line->ptr);
+            win_con_clean_line(com, &fprop, line, linecnt);
+            gui_draw_string(con->com, linecnt, line->color, line->ptr);
             linecnt++;
         }
         line = line->next;

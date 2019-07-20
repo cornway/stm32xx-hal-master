@@ -286,69 +286,146 @@ int bsp_start_exec (arch_word_t *progaddr, int argc, const char **argv)
 static int b_handle_lnk (const char *path)
 {
     int f;
-    char strbuf[256];
+    char strbuf[CMD_MAX_BUF];
 
     d_open(path, &f, "r");
     if (f < 0) {
         dprintf("%s() : fail\n", __func__);
-        return -1;
+        return -CMDERR_NOPATH;
     }
     if (!d_gets(f, strbuf, sizeof(strbuf))) {
-        return -1;
+        return -CMDERR_NOCORE;
     }
     d_close(f);
-    cmd_exec_dsr("bsp", strbuf, NULL, NULL);
-    return 0;
+    cmd_exec_dsr("bin", strbuf, NULL, NULL);
+    return CMDERR_OK;
+}
+
+static int b_handle_cmd (const char *path)
+{
+    cmd_exec_dsr("runcmd", path, NULL, NULL);
+    return CMDERR_OK;
+}
+
+static int __b_exec_selected (bsp_bin_t *bin)
+{
+    int ret = -CMDERR_INVPARM;
+    switch (bin->filetype) {
+        case BIN_FILE: ret = cmd_exec_dsr("boot", bin->path, NULL, NULL);
+                       
+        break;
+        case BIN_LINK: ret = b_handle_lnk(bin->path);
+        break;
+        case BIN_CMD: ret = b_handle_cmd(bin->path);
+        break;
+        default:
+        assert(0);
+    }
+    return ret;
+}
+
+static int b_gui_print_bin_list (pane_t *pane)
+{
+    const int prsize = 20;
+    const bsp_bin_t *binarray[32];
+    int start, selected, maxy, size, i, dummy;
+    char str[CMD_MAX_BUF];
+
+    win_con_clear(pane);
+    win_con_get_dim(pane, &dummy, &maxy);
+
+    assert(arrlen(binarray) > maxy);
+    boot_bin_get_visible(binarray, &start, &size, maxy);
+
+    selected = maxy / 2;
+    assert(selected >= start);
+
+    for (i = 0; i < start; i++) {
+        win_con_printline(pane, i, ".", COLOR_WHITE);
+    }
+    for (i = start + size; i < maxy; i++) {
+        win_con_printline(pane, i, ".", COLOR_WHITE);
+    }
+    for (i = start; i < start + size; i++) {
+        if (i == selected) {
+            snprintf(str, sizeof(str), "%*.*s <<<", -prsize, -prsize, binarray[i - start]->name);
+            win_con_printline(pane, i, str, COLOR_YELLOW);
+        } else {
+            snprintf(str, sizeof(str), "%*.*s", -prsize, -prsize, binarray[i - start]->name);
+            win_con_printline(pane, i, str, COLOR_WHITE);
+        }
+    }
+    return CMDERR_OK;
+}
+
+static int b_exec_selected (pane_t *pane, void *data, int size)
+{
+    return __b_exec_selected(boot_bin_packed_array[boot_bin_selected]);
 }
 
 static int b_handle_selected (pane_t *pane, component_t *com, void *user)
 {
-    bsp_bin_t *bindesc = *((bsp_bin_t **)com->user);
+    gevt_t *evt = (gevt_t *)user;
+    d_bool refresh = d_false, wakeup = d_true;
 
-    if (bindesc == NULL) {
-        gui_print(com_title, "Search result empty\n");
-        return 0;
-    }
+    switch (evt->sym) {
+        case 'u': boot_bin_select_next(1);
+                  refresh = d_true;
+        break;
+        case 'd': boot_bin_select_next(-1);
+                  refresh = d_true;
+        break;
+        case 'e':
+        {
+            char buf[CMD_MAX_BUF];
 
-    if (bindesc->filetype == BIN_FILE) {
-        cmd_exec_dsr("boot", bindesc->path, NULL, NULL);
-    } else if (bindesc->filetype == BIN_LINK) {
-        assert(b_handle_lnk(bindesc->path));
+            snprintf(buf, sizeof(buf), "Open :\n\'%s\'\nApplicarion?",
+                     boot_bin_packed_array[boot_bin_selected]->name);
+            WIN_ALERT_ACCEPT(&gui, buf, b_exec_selected);
+        }
+        break;
+        case '1': /*Alert*/
+        break;
+        default: wakeup = d_false;
     }
-    boot_destr_exec_list();
-    com->user = NULL;
+    if (wakeup) {
+        gui_wakeup_pane(pane);
+    }
+    if (refresh) {
+        b_gui_print_bin_list(pane);
+    }
     return 1;
-}
-
-static int b_draw_exec_list (pane_t *pane, component_t *com, void *user)
-{
-    bsp_bin_t *bin = boot_bin_head;
-    uint8_t maxbin = 8;
-    uint8_t texty = 0;
-
-    gui_com_clear(com);
-    while (bin && maxbin) {
-
-        gui_text(com, bin->name, 16, texty);
-        bin = bin->next;
-        texty += (com->dim.h - 64) / maxbin;
-        maxbin--;
-    }
-    return 0;
 }
 
 static void boot_handle_input (gevt_t *evt)
 {
+    if (evt->e != GUIACT) {
+        return;
+    }
 
     switch (evt->sym) {
-        case 'e':
-            gui_resp(&gui, com_browser, evt);
+        case 'x':
+            gui_select_next_pane(&gui);
         break;
-
-        default :
+        case 'u':
+        case 'd':
+        case 'l':
+        case 'r':
+            if (gui.selected == pane_alert) {
+                gui_set_next_focus(&gui);
+                break;
+            }
+        case 'e':
+            if (gui.selected == pane_alert) {
+                gui_resp(&gui, NULL, evt);
+                break;
+            }
+        default:
+            if (gui.selected != pane_alert) {
+                gui_resp(&gui, NULL, evt);
+            }
         break;
     }
-    
 }
 
 static int gui_stdout_hook (int argc, const char **argv)
@@ -360,40 +437,27 @@ static int gui_stdout_hook (int argc, const char **argv)
 
 void boot_gui_preinit (void)
 {
-    
-    prop_t prop;
-    component_t *com;
+    prop_t prop = {0};
 
     boot_gui_bsp_init(&gui);
 
-    prop.bcolor = COLOR_BLUE;
     prop.fcolor = COLOR_WHITE;
-    prop.ispad = d_true;
+    prop.ispad = d_false;
     prop.user_draw = d_false;
 
-    pane = gui_get_pane(&gui, "pane", 0);
-    gui_set_pane(&gui, pane);
-
-    prop.ispad = d_false;
-    prop.bcolor = COLOR_GREY;
-    com = gui_get_comp(&gui, "title", NULL);
-    gui_set_prop(com, &prop);
-    gui_set_comp(pane, com, 0, 0, gui.dim.w, 120);
-    com_title = com;
-
-    prop.bcolor = COLOR_GREEN;
-    com = gui_get_comp(&gui, "browser", NULL);
-    gui_set_prop(com, &prop);
-    gui_set_comp(pane, com, 0, 120, gui.dim.w, gui.dim.h - 120);
-    com->draw = b_draw_exec_list;
-    com->act = b_handle_selected;
-    com->user = &boot_bin_selected;
-    com_browser = com;
-
     prop.bcolor = COLOR_BLACK;
+    prop.name = "console";
+    prop.fontprop.font = gui_get_font_4_size(&gui, 16, 1);
     pane_console = win_new_console(&gui, &prop, 0, 0, gui.dim.w, gui.dim.h);
-
     gui_select_pane(&gui, pane_console);
+
+    prop.fontprop.font = NULL;
+    prop.bcolor = COLOR_BLACK;
+    prop.name = "binselect";
+    pane_selector = win_new_console(&gui, &prop, 0, 0, gui.dim.w, gui.dim.h);
+    win_set_act_clbk(pane_selector, b_handle_selected);
+
+    pane_alert = win_new_allert(&gui, 400, 300);
 
     bsp_stdout_register_if(gui_stdout_hook);
 }
@@ -417,9 +481,17 @@ int boot_main (int argc, const char **argv)
     return 0;
 }
 
+static uint32_t inpost_tsf = 0;
+
 static i_event_t *__post_key (i_event_t  *evts, i_event_t *event)
 {
     gevt_t evt;
+
+    if (event->state == keydown) {
+        if (d_rlimit_wrap(&inpost_tsf, 300) == 0) {
+            return NULL;
+        }
+    }
 
     evt.p.x = event->x;
     evt.p.y = event->y;
@@ -444,15 +516,15 @@ static void boot_gui_bsp_init (gui_t *gui)
     {  
         [JOY_UPARROW]       = {'u', 0},
         [JOY_DOWNARROW]     = {'d', 0},
-        [JOY_LEFTARROW]     = {'l',0},
+        [JOY_LEFTARROW]     = {'l', 0},
         [JOY_RIGHTARROW]    = {'r', 0},
         [JOY_K1]            = {'1', PAD_FREQ_LOW},
-        [JOY_K4]            = {'2',  0},
+        [JOY_K4]            = {'2', 0},
         [JOY_K3]            = {'3', 0},
-        [JOY_K2]            = {'4',PAD_FREQ_LOW},
-        [JOY_K5]            = {'5',    0},
-        [JOY_K6]            = {'6',    0},
-        [JOY_K7]            = {'7',  0},
+        [JOY_K2]            = {'4', PAD_FREQ_LOW},
+        [JOY_K5]            = {'5', 0},
+        [JOY_K6]            = {'6', 0},
+        [JOY_K7]            = {'7', 0},
         [JOY_K8]            = {'8', 0},
         [JOY_K9]            = {'e', 0},
         [JOY_K10]           = {'x', PAD_FREQ_LOW},

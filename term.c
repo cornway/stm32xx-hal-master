@@ -1,8 +1,11 @@
 #if defined(BSP_DRIVER)
 
 #include <string.h>
+#include <ctype.h>
+
 #include "int/term_int.h"
 #include "int/bsp_cmd_int.h"
+
 #include <bsp_cmd.h>
 #include <misc_utils.h>
 #include <debug.h>

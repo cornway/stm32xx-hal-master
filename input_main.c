@@ -259,6 +259,7 @@ void input_proc_keys (i_event_t *evts)
 void input_bsp_deinit (void)
 {
     dprintf("%s() :\n", __func__);
+    user_handler = NULL;
     BSP_TS_DeInit();
     joypad_bsp_deinit();
 }
