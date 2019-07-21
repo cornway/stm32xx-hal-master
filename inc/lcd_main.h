@@ -53,7 +53,7 @@ typedef struct bsp_video_api_s {
 #define vid_deinit          BSP_VID_API(dev.deinit)
 #define vid_config          BSP_VID_API(dev.conf)
 #define vid_info            BSP_VID_API(dev.info)
-#define vid_priv            BSP_VID_API(dev.priv)
+#define vid_priv_ctl        BSP_VID_API(dev.priv)
 #define vid_wh              BSP_VID_API(get_wh)
 #define vid_mem_avail       BSP_VID_API(mem_avail)
 #define vid_config          BSP_VID_API(win_cfg)
@@ -75,6 +75,14 @@ void vid_upate (screen_t *in);
 void vid_direct (screen_t *s);
 void vid_vsync (void);
 void vid_ptr_align (int *x, int *y);
+int vid_priv_ctl (int c, void *v);
 #endif
+
+enum {
+    VCTL_NOP,
+    VCTL_VRAM_ALLOC,
+    VCTL_VRAM_COPY,
+    VCTL_MAX,
+};
 
 #endif /*_LCD_MAIN_H*/

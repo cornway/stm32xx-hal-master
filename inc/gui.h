@@ -133,6 +133,7 @@ typedef struct gui_bsp_api_s {
     (gui)->bspapi.sfx.stop
 
 typedef struct gui_s {
+    void *directmem;
     void *dummy;
     dim_t dim;
     pane_t *head, *tail;

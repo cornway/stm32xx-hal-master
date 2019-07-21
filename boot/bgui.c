@@ -187,6 +187,20 @@ void gui_init (gui_t *gui, const char *name, uint8_t framerate,
     cmd_register_i32(&gui->dbglvl, temp);
 
     d_memcpy(&gui->bspapi, bspapi, sizeof(gui->bspapi));
+
+    {
+        int err;
+        arch_word_t argv[3] =
+        {
+            (arch_word_t)heap_alloc_shared,
+            0, 0
+        };
+        err = vid_priv_ctl(VCTL_VRAM_ALLOC, argv);
+        if (err < 0) {
+            return;
+        }
+        gui->directmem = (void *)argv[1];
+    }
 }
 
 void gui_destroy (gui_t *gui)
@@ -516,6 +530,7 @@ static void gui_pane_draw (gui_t *gui, pane_t *pane)
         }
         com = com->next;
     }
+    pane->repaint = 0;
 }
 
 static d_bool __gui_check_framerate (gui_t *gui)
@@ -524,6 +539,30 @@ static d_bool __gui_check_framerate (gui_t *gui)
         return d_false;
     }
     return d_true;
+}
+
+static void gui_hal_update (gui_t *gui)
+{
+    if (gui->needsupdate) {
+        if (gui->directmem) {
+            int err;
+            screen_t screen[] =
+            {
+                {NULL},
+                {gui->directmem, gui->dim.x, gui->dim.y, gui->dim.w, gui->dim.h, GFX_COLOR_MODE_RGBA8888},
+                {NULL},
+            };
+            err = vid_priv_ctl(VCTL_VRAM_COPY, &screen[1]);
+            if (err < 0) {
+                return;
+            }
+            vid_upate(NULL);
+            err = vid_priv_ctl(VCTL_VRAM_COPY, &screen[0]);
+        } else {
+            vid_upate(NULL);
+        }
+        gui->needsupdate = 0;
+    }
 }
 
 void gui_draw (gui_t *gui)
@@ -543,18 +582,13 @@ void gui_draw (gui_t *gui)
             if (!invis || !dim_check_invis(&pane->dim, invis)) {
                 gui_pane_draw(gui, pane);
             }
-            pane->repaint = 0;
         }
         pane = pane->next;
     }
     if (selected && selected->repaint) {
         gui_pane_draw(gui, selected);
-        selected->repaint = 0;
     }
-    if (gui->needsupdate) {
-        vid_upate(NULL);
-        gui->needsupdate = 0;
-    }
+    gui_hal_update(gui);
 }
 
 static void gui_act (gui_t *gui, component_t *com, gevt_t *evt)
