@@ -47,7 +47,7 @@ int bhal_load_program (bhal_cplth_t cplth, arch_word_t *progaddr,
 int bhal_set_mem (bhal_cplth_t cplth, arch_word_t *progaddr,
                         size_t progsize, arch_word_t value);
 bsp_exec_file_type_t bsp_bin_file_compat (const char *in);
-d_bool bhal_prog_exist (arch_word_t *progaddr, void *progdata, size_t progsize);
+d_bool bhal_prog_exist (bhal_cplth_t cplth, arch_word_t *progaddr, void *progdata, size_t progsize);
 void bhal_execute_app (void *addr);
 int bhal_execute_module (arch_word_t addr);
 

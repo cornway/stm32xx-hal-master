@@ -20,6 +20,7 @@ typedef enum {
     WIN_NONE,
     WIN_ALERT,
     WIN_CONSOLE,
+    WIN_PROGRESS,
     WIN_MAX,
 } WIN_TYPE;
 
@@ -623,6 +624,126 @@ static int win_con_repaint (pane_t *pane, component_t *com, void *user)
     return linecnt;
 }
 
+
+typedef struct {
+    win_t win;
+    int percent;
+    component_t *title, *bar;
+} win_progress_t;
+
+static inline win_progress_t *WPROG_HANDLE (void *_pane)
+{
+    win_t *win = WIN_HANDLE(_pane);
+    assert(win->type == WIN_PROGRESS);
+    return (win_progress_t *)win;
+}
+
+static int win_prog_act_resp (pane_t *pane, component_t *com, void *user);
+static int win_prog_repaint (pane_t *pane, component_t *com, void *user);
+
+static win_progress_t *win_prog_alloc (gui_t *gui, const char *name)
+{
+    win_progress_t *win;
+    pane_t *pane;
+    int memsize = sizeof(win_progress_t);
+
+    pane = gui_get_pane(gui, name, memsize);
+
+    win = (win_progress_t *)(pane + 1);
+    win->win.pane = pane;
+    win->win.type = WIN_PROGRESS;
+    return win;
+}
+
+pane_t *win_new_progress (gui_t *gui, prop_t *prop, int x, int y, int w, int h)
+{
+    const point_t border = {4, 4};
+    const int htitle = 32;
+    win_progress_t *win;
+    pane_t *pane;
+    component_t *com;
+    dim_t dim = {x, y, w, h};
+    const void *font = prop->fontprop.font;
+
+    if (font == NULL) {
+        font = gui->font;
+        prop->fontprop.font = font;
+    }
+    prop->ispad = 0;
+    prop->user_draw = 0;
+
+    win = win_prog_alloc(gui, prop->name);
+    pane = win->win.pane;
+    gui_set_panexy(gui, pane, x, y, w, h);
+
+    win_trunc_frame(&dim, &border, 0, htitle, w, h - htitle);
+
+    com = gui_get_comp(gui, "statusbar", "     ");
+    gui_set_comp(pane, com, dim.x, dim.y, dim.w, dim.h);
+    com->draw = win_prog_repaint;
+    com->act = win_prog_act_resp;
+    win->bar = com;
+
+    gui_set_prop(com, prop);
+
+    win_setup_frame(pane, &border, &dim);
+
+    com = gui_get_comp(gui, "title", NULL);
+    gui_set_comp(pane, com, 0, 0, w, htitle);
+    win->title = com;
+
+    prop->bcolor = COLOR_LBLUE;
+    prop->fcolor = COLOR_BLACK;
+    gui_set_prop(com, prop);
+    pane->selectable = 0;
+    return pane;
+}
+
+void win_prog_set (pane_t *pane, const char *text, int percent)
+{
+    win_progress_t *win = WPROG_HANDLE(pane);
+
+    if (percent > 100) {
+        percent = 100;
+    }
+
+    if (win->percent && win->percent == percent) {
+        return;
+    }
+
+    gui_print(win->title, "[%s]", text);
+    gui_print(win->bar, "%03i\%", percent);
+    gui_wakeup_pane(pane);
+    win->percent = percent;
+}
+
+static int win_prog_act_resp (pane_t *pane, component_t *com, void *user)
+{
+    return 0;
+}
+
+static int win_prog_repaint (pane_t *pane, component_t *com, void *user)
+{
+    win_progress_t *win = WPROG_HANDLE(pane);
+    dim_t dim = {0, 0, com->dim.w, com->dim.h};
+    int compl, left;
+
+    if (win->percent == 100) {
+        gui_com_fill(com, COLOR_BLUE);
+    } else if (win->percent >= 0) {
+        compl = (dim.w * win->percent) / 100;
+        left = dim.w - compl;
+
+        dim.w = compl;
+        gui_rect_fill(com, &dim, COLOR_BLUE);
+        dim.x = compl;
+        dim.w = left;
+        gui_rect_fill(com, &dim, COLOR_WHITE);
+    } else {
+        gui_com_fill(com, COLOR_RED);
+    }
+    return 1;
+}
 
 #endif /*BSP_DRIVER*/
 

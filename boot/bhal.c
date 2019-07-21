@@ -285,6 +285,7 @@ static int bhal_prog_handle_func
     int errors = 0, errors_total = 0;
     int blkcnt = 0, blktotal = size / RW_PORTION;
     char linebuf[B_MAX_LINEBUF];
+    const char statbar[] = "....";
 
     if (cplth) {
         cplth(func->entermsg, 0);
@@ -309,7 +310,7 @@ static int bhal_prog_handle_func
         blkcnt++;
         if (cplth) {
             int per = (blkcnt * PERCENT) / blktotal;
-            cplth("+", per);
+            cplth(statbar + GET_PAD(per, sizeof(statbar) - 1), per);
         }
     }
     size = size - (tmpaddr - addr);
@@ -378,13 +379,13 @@ typedef int (*exec_t) (void);
 }
 
 
-d_bool bhal_prog_exist (arch_word_t *progaddr, void *progdata, size_t progsize)
+d_bool bhal_prog_exist (bhal_cplth_t cplth, arch_word_t *progaddr, void *progdata, size_t progsize)
 {
     uint32_t pad = sizeof(arch_word_t) - 1;
 
     assert(!((arch_word_t)progdata & pad));
 
-    if (bhal_prog_handle_func(NULL, &func_compare, progaddr, progdata, progsize)) {
+    if (bhal_prog_handle_func(cplth, &func_compare, progaddr, progdata, progsize)) {
         return d_false;
     }
     return d_true;

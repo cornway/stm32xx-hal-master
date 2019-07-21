@@ -145,6 +145,7 @@ void vid_deinit (void)
 {
     dprintf("%s() :\n", __func__);
     BSP_LCD_SetBrightness(0);
+    HAL_Delay(1000);
     vid_release();
     BSP_LCD_DeInitEx();
 }
@@ -246,7 +247,6 @@ int vid_config (lcd_mem_malloc_t __malloc, void *_cfg, screen_t *screen, uint32_
     } else {
         switch (scale) {
             default:
-                dprintf("%s() : Only \'no scale\' mode present\n", __func__);
                 screen_update_handle = screen_update_no_scale;
             break;
         }

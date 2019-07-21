@@ -24,7 +24,7 @@ static int boot_program_bypas = 0;
 component_t *com_console = NULL;
 gui_t gui;
 pane_t *pane, *alert_pane;
-pane_t *pane_console, *pane_selector, *pane_alert;
+pane_t *pane_console, *pane_selector, *pane_alert, *pane_progress;
 
 bsp_bin_t *boot_bin_head = NULL;
 int bin_collected_cnt = 0;
@@ -313,6 +313,13 @@ int bsp_exec_cmd (arch_word_t *progaddr, const char *path)
     return b_handle_cmd(path);
 }
 
+static void __install_status_clbk (const char *msg, int percent)
+{
+    win_prog_set(pane_progress, msg, percent);
+    HAL_Delay(10);
+    gui_draw(&gui);
+}
+
 arch_word_t *bsp_install_exec (arch_word_t *progptr, const char *path)
 {
     void *bindata;
@@ -331,8 +338,8 @@ arch_word_t *bsp_install_exec (arch_word_t *progptr, const char *path)
         progptr = (arch_word_t *)parm.progaddr;
     }
 
-    if (!boot_program_bypas && !bhal_prog_exist(progptr, bindata, binsize / sizeof(arch_word_t))) {
-        err = bhal_load_program(NULL, progptr, bindata, binsize / sizeof(arch_word_t));
+    if (!boot_program_bypas && !bhal_prog_exist(__install_status_clbk, progptr, bindata, binsize / sizeof(arch_word_t))) {
+        err = bhal_load_program(__install_status_clbk, progptr, bindata, binsize / sizeof(arch_word_t));
     }
     if (err < 0) {
         return NULL;
@@ -435,6 +442,7 @@ static int b_gui_print_bin_list (pane_t *pane)
 
 static int b_exec_selected (pane_t *pane, void *data, int size)
 {
+    gui_select_pane(&gui, pane_progress);
     return __b_exec_selected(boot_bin_packed_array[boot_bin_selected]);
 }
 
@@ -512,6 +520,7 @@ static int gui_stdout_hook (int argc, const char **argv)
 
 void boot_gui_preinit (void)
 {
+    dim_t dim;
     prop_t prop = {0};
 
     boot_gui_bsp_init(&gui);
@@ -533,6 +542,16 @@ void boot_gui_preinit (void)
     win_set_act_clbk(pane_selector, b_handle_selected);
 
     pane_alert = win_new_allert(&gui, 400, 300);
+
+    dim = pane_alert->dim;
+    dim_set_top(&dim, &dim);
+    dim.h = 64;
+    dim.y += 10;
+    prop.name = "progbar1";
+    prop.fcolor = COLOR_BLACK;
+    prop.bcolor = COLOR_WHITE;
+    prop.fontprop.font = gui_get_font_4_size(&gui, 24, 1);
+    pane_progress = win_new_progress(&gui, &prop, dim.x, dim.y, dim.w, dim.h);
 
     bsp_stdout_register_if(gui_stdout_hook);
 }

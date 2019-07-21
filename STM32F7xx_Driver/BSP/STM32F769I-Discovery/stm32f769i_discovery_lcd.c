@@ -1199,7 +1199,10 @@ int BSP_LCD_DisplayStringAt(uint16_t Xpos, uint16_t Ypos, uint16_t w, uint16_t h
   uint8_t *textref = Text;
 
   /* Get the text size */
-  while (*ptr++) size ++ ;
+  while (*ptr && *ptr != '\n' && *ptr != '\r') {
+    ptr++;
+    size ++;
+  }
 
   /* Characters number per line */
   xsize = (w/DrawProp[ActiveLayer].pFont->Width);

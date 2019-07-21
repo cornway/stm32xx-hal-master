@@ -205,6 +205,7 @@ int gui_draw_string_c (component_t *com, int line, rgba_t textcolor, const char 
 void gui_rect_fill (component_t *com, dim_t *rect, rgba_t color);
 
 void gui_com_clear (component_t *com);
+void gui_com_fill (component_t *com, rgba_t color);
 void gui_draw (gui_t *gui);
 void gui_resp (gui_t *gui, component_t *com, gevt_t *evt);
 void gui_wakeup (gui_t *gui, const char *name);
@@ -254,4 +255,7 @@ int win_con_printline (pane_t *pane, int y,
 int win_con_printline_c (pane_t *pane, int y,
                                     const char *str, rgba_t textcolor);
 void win_con_clear (pane_t *pane);
+
+pane_t *win_new_progress (gui_t *gui, prop_t *prop, int x, int y, int w, int h);
+void win_prog_set (pane_t *pane, const char *text, int percent);
 

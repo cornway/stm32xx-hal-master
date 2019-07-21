@@ -375,12 +375,13 @@ gui_com_select_color (component_t *com)
 
 void gui_rect_fill (component_t *com, dim_t *rect, rgba_t color)
 {
-    dim_place(rect, &com->dim);
+    dim_t d = *rect;
+    dim_place(&d, &com->dim);
     BSP_LCD_SetTextColor(color);
-    BSP_LCD_FillRect(rect->x, rect->y, rect->w, rect->h);
+    BSP_LCD_FillRect(d.x, d.y, d.w, d.h);
 }
 
-static inline void
+void
 gui_com_fill (component_t *com, rgba_t color)
 {
     vid_vsync();
@@ -479,9 +480,11 @@ static void gui_comp_draw (pane_t *pane, component_t *com)
         uint8_t *text;
 
         color = gui_com_select_color(com);
-        gui_com_fill(com, color);
+
         if (com->draw) {
             com->draw(pane, com, NULL);
+        } else {
+            gui_com_fill(com, color);
         }
 
         if (com->showname) {
@@ -705,9 +708,9 @@ void gui_wakeup_pane (pane_t *pane)
     }
     while (com) {
         com->repaint = 1;
-        if (pane->repaint) {
-            gui_com_clear(com);
-        }
+        //if (pane->repaint) {
+        //    gui_com_clear(com);
+        //}
         com = com->next;
     }
 }

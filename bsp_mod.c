@@ -111,7 +111,7 @@ void *bspmod_insert (const bsp_heap_api_t *heap, const char *path, const char *n
 
     if (rawptr) {
         err = 0;
-        if (!bhal_prog_exist((arch_word_t *)bin->parm.progaddr, rawptr, bin->parm.size)) {
+        if (!bhal_prog_exist(NULL, (arch_word_t *)bin->parm.progaddr, rawptr, bin->parm.size)) {
             err = bhal_load_program(NULL, (arch_word_t *)bin->parm.progaddr,
                                      rawptr, bin->parm.size);
         }
