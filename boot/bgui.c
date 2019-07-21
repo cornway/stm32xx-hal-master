@@ -166,11 +166,11 @@ static component_t *gui_iterate_all (gui_t *gui, void *user, int (*h) (component
 void gui_init (gui_t *gui, const char *name, uint8_t framerate,
                 dim_t *dim, gui_bsp_api_t *bspapi)
 {
-    char temp[24];
+    char temp[GUI_MAX_NAME];
 
-    memset(gui, 0, sizeof(*gui));
+    d_memset(gui, 0, sizeof(*gui));
 
-    gui->font = BSP_LCD_GetFont();
+    gui->font = gui_get_font_4_size(gui, 20, 1);
 
     gui->dim.x = dim->x;
     gui->dim.y = dim->y;
@@ -186,7 +186,7 @@ void gui_init (gui_t *gui, const char *name, uint8_t framerate,
     snprintf(temp, sizeof(temp), "%s_%s", name, "dbglvl");
     cmd_register_i32(&gui->dbglvl, temp);
 
-    memcpy(&gui->bspapi, bspapi, sizeof(gui->bspapi));
+    d_memcpy(&gui->bspapi, bspapi, sizeof(gui->bspapi));
 }
 
 void gui_destroy (gui_t *gui)
@@ -384,7 +384,6 @@ void gui_rect_fill (component_t *com, dim_t *rect, rgba_t color)
 void
 gui_com_fill (component_t *com, rgba_t color)
 {
-    vid_vsync();
     BSP_LCD_SetTextColor(color);
     BSP_LCD_FillRect(com->dim.x, com->dim.y, com->dim.w, com->dim.h);
 }
@@ -512,6 +511,7 @@ static void gui_pane_draw (gui_t *gui, pane_t *pane)
     while (com) {
         if (com->repaint) {
             gui_comp_draw(pane, com);
+            gui->needsupdate++;
             com->repaint = 0;
         }
         com = com->next;
@@ -550,6 +550,10 @@ void gui_draw (gui_t *gui)
     if (selected && selected->repaint) {
         gui_pane_draw(gui, selected);
         selected->repaint = 0;
+    }
+    if (gui->needsupdate) {
+        vid_upate(NULL);
+        gui->needsupdate = 0;
     }
 }
 

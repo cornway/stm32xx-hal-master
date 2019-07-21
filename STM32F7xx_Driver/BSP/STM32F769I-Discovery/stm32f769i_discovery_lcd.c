@@ -980,6 +980,19 @@ void BSP_LCD_SetLayerVisible(uint32_t LayerIndex, FunctionalState State)
   HAL_LTDC_Reload(&(hltdc_discovery), LTDC_RELOAD_IMMEDIATE);
 }
 
+void BSP_LCD_SetLayerVisible_NoReload (uint32_t LayerIndex, FunctionalState State)
+{
+  if(State == ENABLE)
+  {
+    __HAL_LTDC_LAYER_ENABLE(&(hltdc_discovery), LayerIndex);
+  }
+  else
+  {
+    __HAL_LTDC_LAYER_DISABLE(&(hltdc_discovery), LayerIndex);
+  }
+  __HAL_LTDC_RELOAD_CONFIG(&(hltdc_discovery));
+  HAL_LTDC_Reload(&(hltdc_discovery), LTDC_RELOAD_VERTICAL_BLANKING);
+}
 /**
   * @brief  Configures the transparency.
   * @param  LayerIndex: Layer foreground or background.

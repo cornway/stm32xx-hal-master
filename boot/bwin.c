@@ -712,7 +712,7 @@ void win_prog_set (pane_t *pane, const char *text, int percent)
     }
 
     gui_print(win->title, "[%s]", text);
-    gui_print(win->bar, "%03i\%", percent);
+    gui_print(win->bar, "%03i%%", percent);
     gui_wakeup_pane(pane);
     win->percent = percent;
 }

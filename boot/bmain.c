@@ -605,7 +605,7 @@ static i_event_t *__post_key (i_event_t  *evts, i_event_t *event)
 
 static void boot_gui_bsp_init (gui_t *gui)
 {
-    screen_t s;
+    screen_t s = {0};
     dim_t dim = {0};
 
     const kbdmap_t kbdmap[JOY_STD_MAX] =

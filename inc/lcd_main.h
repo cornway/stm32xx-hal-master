@@ -20,12 +20,15 @@ typedef enum
 {
     LCD_BACKGROUND,
     LCD_FOREGROUND,
+    LCD_DIRECT,
     LCD_MAX_LAYER,
 } lcd_layers_t;
 
 typedef struct {
     void *buf;
+    int x, y;
     int width, height;
+    uint8_t colormode;
 } screen_t;
 
 typedef void *(*lcd_mem_malloc_t) (uint32_t size);

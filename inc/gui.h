@@ -141,8 +141,9 @@ typedef struct gui_s {
     uint32_t repainttsf;
     int32_t framerate;
     int32_t dbglvl;
-    void *font;
+    const void *font;
     uint8_t destroy;
+    uint8_t needsupdate;
     char name[GUI_MAX_NAME];
 
     gui_bsp_api_t bspapi;
