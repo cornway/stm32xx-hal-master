@@ -188,7 +188,7 @@ void gui_init (gui_t *gui, const char *name, uint8_t framerate,
 
     d_memcpy(&gui->bspapi, bspapi, sizeof(gui->bspapi));
 
-    {
+    if (0) {
         int err;
         arch_word_t argv[3] =
         {
@@ -522,6 +522,7 @@ static void gui_pane_draw (gui_t *gui, pane_t *pane)
 {
     component_t *com = pane->head;
 
+    vid_vsync();
     while (com) {
         if (com->repaint) {
             gui_comp_draw(pane, com);
@@ -544,6 +545,8 @@ static d_bool __gui_check_framerate (gui_t *gui)
 static void gui_hal_update (gui_t *gui)
 {
     if (gui->needsupdate) {
+        vid_vsync();
+        //vid_priv_updown(0);
         if (gui->directmem) {
             int err;
             screen_t screen[] =
@@ -561,6 +564,7 @@ static void gui_hal_update (gui_t *gui)
         } else {
             vid_upate(NULL);
         }
+        //vid_priv_updown(1);
         gui->needsupdate = 0;
     }
 }
@@ -588,7 +592,7 @@ void gui_draw (gui_t *gui)
     if (selected && selected->repaint) {
         gui_pane_draw(gui, selected);
     }
-    gui_hal_update(gui);
+    //gui_hal_update(gui);
 }
 
 static void gui_act (gui_t *gui, component_t *com, gevt_t *evt)

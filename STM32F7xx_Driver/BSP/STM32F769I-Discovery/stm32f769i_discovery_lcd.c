@@ -294,7 +294,8 @@ uint8_t BSP_LCD_InitEx(LCD_OrientationTypeDef orientation)
 {
   DSI_PLLInitTypeDef dsiPllInit;
   //static RCC_PeriphCLKInitTypeDef  PeriphClkInitStruct;
-  uint32_t LcdClock  = 27429; /*!< LcdClk = 27429 kHz */
+  /*FIXME : !!!! 27429 / 2 -> 27429*/
+  uint32_t LcdClock  = 27429 / 2; /*!< LcdClk = 27429 kHz */
   uint16_t read_id = 0;
 
   uint32_t laneByteClk_kHz = 0;

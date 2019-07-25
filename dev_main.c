@@ -146,7 +146,8 @@ static void SystemClock_Config(void)
         clock_fault();
 
     PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_LTDC;
-    PeriphClkInitStruct.PLLSAI.PLLSAIN = 384;
+    /*FIXME : !!!! 384 / 2 -> 384*/
+    PeriphClkInitStruct.PLLSAI.PLLSAIN = 384 / 2;
     PeriphClkInitStruct.PLLSAI.PLLSAIR = 7;
     PeriphClkInitStruct.PLLSAIDivR = RCC_PLLSAIDIVR_2;
     HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct);
