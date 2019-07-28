@@ -58,7 +58,7 @@ typedef struct bsp_video_api_s {
 #define vid_mem_avail       BSP_VID_API(mem_avail)
 #define vid_config          BSP_VID_API(win_cfg)
 #define vid_set_clut        BSP_VID_API(set_clut)
-#define vid_upate           BSP_VID_API(update)
+#define vid_update           BSP_VID_API(update)
 #define vid_direct          BSP_VID_API(direct)
 #define vid_vsync           BSP_VID_API(vsync)
 #define vid_ptr_align       BSP_VID_API(input_align)
