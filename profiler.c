@@ -15,7 +15,7 @@
 
 int g_profile_deep_level = 1;
 int g_profile_timer_tsf = 1;
-static uint32_t *prof_timer_cnt_ptr;
+static __IO uint32_t *prof_timer_cnt_ptr = NULL;
 static uint8_t prof_time_init_ok = 0;
 
 enum {
@@ -218,10 +218,10 @@ static void profiler_timer_init (void)
     if (hal_tim_init(&profile_timer_desc) == 0) {
         prof_time_init_ok = 1;
     }
-
     if (!prof_time_init_ok) {
         dprintf("%s() : fail\n", __func__);
     }
+    prof_timer_cnt_ptr = &profile_timer_desc.hw->CNT;
 }
 
 static void profiler_timer_deinit (void)

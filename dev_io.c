@@ -19,7 +19,7 @@
 
 #ifndef MAX_HANDLES
 #warning "MAX_HANDLES is undefined, using 3"
-#define MAX_HANDLES    3
+#define MAX_HANDLES    6
 #endif
 
 FATFS SDFatFs ALIGN(8);  /* File system object for SD card logical drive */

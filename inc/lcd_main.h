@@ -16,14 +16,6 @@
  *  type declarations                                                  *
  *---------------------------------------------------------------------*/
 
-typedef enum
-{
-    LCD_BACKGROUND,
-    LCD_FOREGROUND,
-    LCD_DIRECT,
-    LCD_MAX_LAYER,
-} lcd_layers_t;
-
 typedef struct {
     void *buf;
     int x, y;
@@ -31,13 +23,27 @@ typedef struct {
     uint8_t colormode;
 } screen_t;
 
-typedef void *(*lcd_mem_malloc_t) (uint32_t size);
+typedef struct {
+    void *(*malloc) (uint32_t);
+    void (*free) (void *);
+} screen_alloc_t;
+
+typedef struct {
+    screen_alloc_t alloc;
+    int16_t res_x;
+    int16_t res_y;
+    uint8_t laynum;
+    uint8_t colormode;
+    uint8_t clockpresc;
+    uint8_t hwaccel: 1,
+            reserved: 7;
+} screen_conf_t;
 
 typedef struct bsp_video_api_s {
     bspdev_t dev;
     void (*get_wh) (screen_t *);
     uint32_t (*mem_avail) (void);
-    int (*win_cfg) (lcd_mem_malloc_t, void *, screen_t *, uint32_t, int);
+    int (*win_cfg) (screen_conf_t *);
     void (*set_clut) (void *, uint32_t);
     void (*update) (screen_t *);
     void (*direct) (screen_t *);
@@ -68,8 +74,7 @@ int vid_init (void);
 void vid_deinit (void);
 void vid_wh (screen_t *s);
 uint32_t vid_mem_avail (void);
-int vid_config (lcd_mem_malloc_t __malloc, void *cfg,
-                    screen_t *screen, uint32_t colormode, int layers_cnt);
+int vid_config (screen_conf_t *);
 void vid_set_clut (void *palette, uint32_t clut_num_entries);
 void vid_upate (screen_t *in);
 void vid_direct (screen_t *s);
