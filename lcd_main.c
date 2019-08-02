@@ -49,6 +49,7 @@
 extern void *Sys_HeapAllocFb (int *size);
 
 static void screen_update_no_scale (screen_t *in);
+static void screen_update_2x2_fast (screen_t *in);
 static void screen_update_2x2_8bpp (screen_t *in);
 static void screen_update_3x3_8bpp (screen_t *in);
 
@@ -73,7 +74,7 @@ static const char *screen_mode2txt_map[] =
     [GFX_COLOR_MODE_RGBA8888] = "LTDC_ARGB8888",
 };
 
-static const uint32_t screen_mode2pixdeep[] =
+const uint32_t screen_mode2pixdeep[GFX_COLOR_MODE_MAX] =
 {
     [GFX_COLOR_MODE_CLUT]       = 1,
     [GFX_COLOR_MODE_RGB565]     = 2,
@@ -168,7 +169,11 @@ static screen_update_handler_t vid_set_scaler (int scale, uint8_t colormode)
             case 1:
                 h = screen_update_no_scale;
             case 2:
-                h = screen_update_2x2_8bpp;
+                if (lcd_active_cfg->config.hwaccel) {
+                    h = screen_update_2x2_fast;
+                } else {
+                    h = screen_update_2x2_8bpp;
+                }
             break;
             case 3:
                 h = screen_update_3x3_8bpp;
@@ -335,6 +340,19 @@ static void screen_update_no_scale (screen_t *in)
     vid_get_ready_screen(&screen);
 
     d_memcpy(screen.buf, in->buf, in->width * in->height);
+}
+
+static void screen_update_2x2_fast (screen_t *in)
+{
+    screen_t screen;
+    copybuf_t copybuf;
+
+    screen_hal_sync (lcd_active_cfg, 1);
+    vid_get_ready_screen(&screen);
+    copybuf.dest = screen;
+    copybuf.src = *in;
+
+    screen_hal_copy_h8(lcd_active_cfg, &copybuf);
 }
 
 static void screen_update_2x2_8bpp (screen_t *in)

@@ -5,13 +5,6 @@
 
 #define LCD_MAX_SCALE 3
 
-enum {
-    V_STATE_IDLE,
-    V_STATE_QCOPY,
-    V_STATE_COPYFAST,
-    V_STATE_MAX,
-};
-
 typedef enum
 {
     LCD_BACKGROUND,
@@ -37,7 +30,6 @@ typedef struct {
     __IO uint8_t waitreload;
     uint8_t poll;
     uint8_t layreload;
-    uint8_t state;
 } lcd_wincfg_t;
 
 typedef void (*screen_update_handler_t) (screen_t *in);
@@ -50,6 +42,7 @@ void *screen_hal_set_config (lcd_wincfg_t *cfg, int x, int y,
 void screen_hal_set_clut (lcd_wincfg_t *cfg, void *_buf, int size, int layer);
 void screen_hal_sync (lcd_wincfg_t *cfg, int wait);
 int screen_hal_copy (lcd_wincfg_t *cfg, copybuf_t *copybuf);
+int screen_hal_copy_h8 (lcd_wincfg_t *cfg, copybuf_t *copybuf);
 
 extern uint32_t lcd_x_size_var;
 extern uint32_t lcd_y_size_var;
@@ -58,6 +51,7 @@ extern int bsp_lcd_width;
 extern int bsp_lcd_height;
 
 extern const lcd_layers_t layer_switch[LCD_MAX_LAYER];
+extern const uint32_t screen_mode2pixdeep[GFX_COLOR_MODE_MAX];
 extern lcd_wincfg_t *lcd_active_cfg;
 
 #endif /*__LCD_INT_H__*/

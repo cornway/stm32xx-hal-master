@@ -4,6 +4,7 @@
 #define GFX_COLOR_MODE_CLUT 1
 #define GFX_COLOR_MODE_RGB565 2
 #define GFX_COLOR_MODE_RGBA8888 3
+#define GFX_COLOR_MODE_MAX 4
 
 #include "dev_conf.h"
 #include "stdint.h"
