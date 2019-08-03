@@ -267,9 +267,12 @@ uint32_t vid_mem_avail (void)
     return ((lcd_active_cfg->lay_size * lcd_active_cfg->config.laynum) / 1024);
 }
 
-void vid_vsync (void)
+void vid_vsync (int mode)
 {
     profiler_enter();
+    if (mode) {
+        screen_hal_layreload(lcd_active_cfg);
+    }
     screen_hal_sync(lcd_active_cfg, 1);
     profiler_exit();
 }
@@ -295,10 +298,10 @@ void vid_set_clut (void *palette, uint32_t clut_num_entries)
     }
 }
 
-void vid_upate (screen_t *in)
+void vid_update (screen_t *in)
 {
     if (in == NULL) {
-        vid_vsync();
+        vid_vsync(1);
     } else {
         screen_update_handle(in);
     }

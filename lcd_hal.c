@@ -37,24 +37,14 @@ lcd_layers_t screen_hal_set_layer (lcd_wincfg_t *cfg)
     switch (cfg->ready_lay_idx) {
         case LCD_BACKGROUND:
             BSP_LCD_SelectLayer(LCD_BACKGROUND);
-            if (cfg->layreload == 0) {
-                BSP_LCD_SetTransparency(LCD_FOREGROUND, GFX_OPAQUE);
-                BSP_LCD_SetTransparency(LCD_BACKGROUND, GFX_TRANSPARENT);
-            } else {
-                BSP_LCD_SetLayerVisible_NoReload(LCD_FOREGROUND, ENABLE);
-                BSP_LCD_SetLayerVisible_NoReload(LCD_BACKGROUND, DISABLE);
-            }
+            BSP_LCD_SetTransparency(LCD_FOREGROUND, GFX_OPAQUE);
+            BSP_LCD_SetTransparency(LCD_BACKGROUND, GFX_TRANSPARENT);
             return LCD_BACKGROUND;
         break;
         case LCD_FOREGROUND:
             BSP_LCD_SelectLayer(LCD_FOREGROUND);
-            if (cfg->layreload == 0) {
-                BSP_LCD_SetTransparency(LCD_BACKGROUND, GFX_OPAQUE);
-                BSP_LCD_SetTransparency(LCD_FOREGROUND, GFX_TRANSPARENT);
-            } else {
-                BSP_LCD_SetLayerVisible_NoReload(LCD_BACKGROUND, ENABLE);
-                BSP_LCD_SetLayerVisible_NoReload(LCD_FOREGROUND, DISABLE);
-            }
+            BSP_LCD_SetTransparency(LCD_BACKGROUND, GFX_OPAQUE);
+            BSP_LCD_SetTransparency(LCD_FOREGROUND, GFX_TRANSPARENT);
             return LCD_FOREGROUND;
         break;
         default:
@@ -173,8 +163,6 @@ static inline void __screen_hal_vsync (lcd_wincfg_t *cfg)
 {
     if (cfg->poll) {
         while ((LTDC->CDSR & LTDC_CDSR_VSYNCS)) {}
-    } else {
-        while (cfg->waitreload) {}
     }
 }
 
@@ -182,10 +170,6 @@ void screen_hal_sync (lcd_wincfg_t *cfg, int wait)
 {
     while (GET_VHAL_CTXT(cfg)->state != V_STATE_IDLE) {
         HAL_Delay(1);
-    }
-    if (cfg->config.laynum > 1) {
-        cfg->waitreload = wait & cfg->layreload;
-        cfg->ready_lay_idx = screen_hal_set_layer(cfg);
     }
     if (wait) {
         __screen_hal_vsync(cfg);

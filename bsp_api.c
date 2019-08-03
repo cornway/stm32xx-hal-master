@@ -150,7 +150,7 @@ bspapi_t *bsp_api_attach (void)
     BSP_VID_API(mem_avail)  = vid_mem_avail;
     BSP_VID_API(win_cfg)    = vid_config;
     BSP_VID_API(set_clut)   = vid_set_clut;
-    BSP_VID_API(update)     = vid_upate;
+    BSP_VID_API(update)     = vid_update;
     BSP_VID_API(direct)     = vid_direct;
     BSP_VID_API(vsync)      = vid_vsync;
     BSP_VID_API(input_align) = vid_ptr_align;

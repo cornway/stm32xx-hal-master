@@ -29,7 +29,6 @@ typedef struct {
     lcd_layers_t ready_lay_idx;
     __IO uint8_t waitreload;
     uint8_t poll;
-    uint8_t layreload;
 } lcd_wincfg_t;
 
 typedef void (*screen_update_handler_t) (screen_t *in);
@@ -43,6 +42,14 @@ void screen_hal_set_clut (lcd_wincfg_t *cfg, void *_buf, int size, int layer);
 void screen_hal_sync (lcd_wincfg_t *cfg, int wait);
 int screen_hal_copy (lcd_wincfg_t *cfg, copybuf_t *copybuf, uint8_t pix_bytes);
 int screen_hal_copy_h8 (lcd_wincfg_t *cfg, copybuf_t *copybuf, int interleave);
+
+static inline void screen_hal_layreload (lcd_wincfg_t *cfg)
+{
+    if (cfg->config.laynum < 2) {
+        return;
+    }
+    cfg->ready_lay_idx = screen_hal_set_layer(cfg);
+}
 
 extern uint32_t lcd_x_size_var;
 extern uint32_t lcd_y_size_var;

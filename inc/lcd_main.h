@@ -47,7 +47,7 @@ typedef struct bsp_video_api_s {
     void (*set_clut) (void *, uint32_t);
     void (*update) (screen_t *);
     void (*direct) (screen_t *);
-    void (*vsync) (void);
+    void (*vsync) (int);
     void (*input_align) (int *, int *);
 } bsp_video_api_t;
 
@@ -76,9 +76,9 @@ void vid_wh (screen_t *s);
 uint32_t vid_mem_avail (void);
 int vid_config (screen_conf_t *);
 void vid_set_clut (void *palette, uint32_t clut_num_entries);
-void vid_upate (screen_t *in);
+void vid_update (screen_t *in);
 void vid_direct (screen_t *s);
-void vid_vsync (void);
+void vid_vsync (int mode);
 void vid_ptr_align (int *x, int *y);
 int vid_priv_ctl (int c, void *v);
 #endif

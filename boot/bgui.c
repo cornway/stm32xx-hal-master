@@ -522,7 +522,7 @@ static void gui_pane_draw (gui_t *gui, pane_t *pane)
 {
     component_t *com = pane->head;
 
-    vid_vsync();
+    vid_vsync(0);
     while (com) {
         if (com->repaint) {
             gui_comp_draw(pane, com);
@@ -545,8 +545,7 @@ static d_bool __gui_check_framerate (gui_t *gui)
 static void gui_hal_update (gui_t *gui)
 {
     if (gui->needsupdate) {
-        vid_vsync();
-        //vid_priv_updown(0);
+        vid_vsync(1);
         if (gui->directmem) {
             int err;
             screen_t screen[] =
@@ -559,12 +558,11 @@ static void gui_hal_update (gui_t *gui)
             if (err < 0) {
                 return;
             }
-            vid_upate(NULL);
+            vid_update(NULL);
             err = vid_priv_ctl(VCTL_VRAM_COPY, &screen[0]);
         } else {
-            vid_upate(NULL);
+            vid_update(NULL);
         }
-        //vid_priv_updown(1);
         gui->needsupdate = 0;
     }
 }
