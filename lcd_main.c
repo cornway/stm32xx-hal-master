@@ -49,6 +49,7 @@
 extern void *Sys_HeapAllocFb (int *size);
 
 static void screen_update_no_scale (screen_t *in);
+static void screen_update_1x1_fast (screen_t *in);
 static void screen_update_2x2_fast (screen_t *in);
 static void screen_update_2x2_8bpp (screen_t *in);
 static void screen_update_3x3_8bpp (screen_t *in);
@@ -167,7 +168,11 @@ static screen_update_handler_t vid_set_scaler (int scale, uint8_t colormode)
     if (colormode == GFX_COLOR_MODE_CLUT) {
         switch (scale) {
             case 1:
-                h = screen_update_no_scale;
+                if (lcd_active_cfg->config.hwaccel) {
+                    h = screen_update_1x1_fast;
+                } else {
+                    h = screen_update_no_scale;
+                }
             case 2:
                 if (lcd_active_cfg->config.hwaccel) {
                     h = screen_update_2x2_fast;
@@ -240,7 +245,7 @@ int vid_config (screen_conf_t *conf)
     }
     lcd_active_cfg = cfg;
     lcd_active_cfg->config = *conf;
-    scale = vid_set_win_size(conf->res_y, conf->res_y, bsp_lcd_width, bsp_lcd_height, &x, &y, &w, &h);
+    scale = vid_set_win_size(conf->res_x, conf->res_y, bsp_lcd_width, bsp_lcd_height, &x, &y, &w, &h);
 
     screen_update_handle = vid_set_scaler(scale, conf->colormode);
 
@@ -271,8 +276,8 @@ void vid_vsync (void)
 
 static void vid_get_ready_screen (screen_t *screen)
 {
-    screen->width = bsp_lcd_width;
-    screen->height = bsp_lcd_height;
+    screen->width = lcd_active_cfg->w;
+    screen->height = lcd_active_cfg->h;
     screen->buf = (void *)lcd_active_cfg->lay_mem[lcd_active_cfg->ready_lay_idx];
     screen->x = 0;
     screen->y = 0;
@@ -342,6 +347,19 @@ static void screen_update_no_scale (screen_t *in)
     d_memcpy(screen.buf, in->buf, in->width * in->height);
 }
 
+static void screen_update_1x1_fast (screen_t *in)
+{
+    screen_t screen;
+    copybuf_t copybuf;
+
+    screen_hal_sync (lcd_active_cfg, 1);
+    vid_get_ready_screen(&screen);
+    copybuf.dest = screen;
+    copybuf.src = *in;
+
+    screen_hal_copy(lcd_active_cfg, &copybuf, 1);
+}
+
 static void screen_update_2x2_fast (screen_t *in)
 {
     screen_t screen;
@@ -352,6 +370,8 @@ static void screen_update_2x2_fast (screen_t *in)
     copybuf.dest = screen;
     copybuf.src = *in;
 
+    copybuf.dest.colormode = lcd_active_cfg->config.colormode;
+    copybuf.src.colormode = lcd_active_cfg->config.colormode;
     screen_hal_copy_h8(lcd_active_cfg, &copybuf);
 }
 
@@ -521,7 +541,7 @@ static int vid_priv_vram_copy (lcd_wincfg_t *cfg, screen_t screen[2])
         vid_get_ready_screen(&copybuf.dest);
     }
 
-    return screen_hal_copy(cfg, &copybuf);
+    return screen_hal_copy(cfg, &copybuf, screen_mode2pixdeep[copybuf.dest.colormode]);
 }
 
 int vid_priv_updown (int up)
