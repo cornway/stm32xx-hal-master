@@ -278,7 +278,7 @@ static inline int screen_hal_copy_start
         return -1;
     }
     if (GET_VHAL_CTXT(cfg)->poll) {
-        if (HAL_DMA2D_Start(hdma2d, (uint32_t)dptr, (uint32_t)sptr, src->width, src->height) != HAL_OK) {
+        if (HAL_DMA2D_Start(hdma2d, (uint32_t)sptr, (uint32_t)dptr, src->width, src->height) != HAL_OK) {
             return -1;
         }
         status = HAL_DMA2D_PollForTransfer(hdma2d, GET_VHAL_CTXT(cfg)->poll);

@@ -344,7 +344,7 @@ static void screen_update_no_scale (screen_t *in)
 {
     screen_t screen;
 
-    screen_hal_sync (lcd_active_cfg, 1);
+    vid_vsync(1);
     vid_get_ready_screen(&screen);
 
     d_memcpy(screen.buf, in->buf, in->width * in->height);
@@ -355,7 +355,7 @@ static void screen_update_1x1_fast (screen_t *in)
     screen_t screen;
     copybuf_t copybuf;
 
-    screen_hal_sync (lcd_active_cfg, 1);
+    vid_vsync(1);
     vid_get_ready_screen(&screen);
     copybuf.dest = screen;
     copybuf.src = *in;
@@ -368,7 +368,7 @@ static void screen_update_2x2_fast (screen_t *in)
     screen_t screen;
     copybuf_t copybuf;
 
-    screen_hal_sync (lcd_active_cfg, 1);
+    vid_vsync(1);
     vid_get_ready_screen(&screen);
     copybuf.dest = screen;
     copybuf.src = *in;
@@ -389,7 +389,7 @@ static void screen_update_2x2_8bpp (screen_t *in)
     scanline8_u d_yt0, d_yt1;
     screen_t screen;
 
-    screen_hal_sync (lcd_active_cfg, 1);
+    vid_vsync(1);
     vid_get_ready_screen(&screen);
 
     d_y0 = (pix_outx2_t *)screen.buf;
