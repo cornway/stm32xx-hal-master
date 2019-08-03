@@ -302,6 +302,9 @@ static inline tlv_t *__set_next_tlv (void *_tlv, uint32_t size)
     return tlv;
 }
 
+static const char **__argv = NULL;
+static int __argc = 0;
+
 const char **bsp_argc_argv_get (int *argc)
 {
     arch_word_t *ptr, size;
@@ -312,7 +315,28 @@ const char **bsp_argc_argv_get (int *argc)
     tlv = __get_next_tlv(ptr);
     tlv = __get_next_tlv(tlv);
     *argc = *(int *)&tlv->data[0];
-    return (const char **)&tlv->data[1];
+    __argv = (const char **)&tlv->data[1];
+    __argc = *argc;
+    return __argv;
+}
+
+int bsp_argv_check (const char *name)
+{
+    int i;
+    for (i = 0; i < __argc; i++) {
+        if (strcmp(__argv[i], name) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+const char *bsp_argv_get (int num)
+{
+    if (num >= __argc) {
+        return "";
+    }
+    return __argv[num];
 }
 
 #if defined(BSP_DRIVER)

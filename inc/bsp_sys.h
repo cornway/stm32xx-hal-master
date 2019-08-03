@@ -98,4 +98,7 @@ extern exec_region_t g_exec_region;
 #define DIR_SEPARATOR "/"
 #endif
 
+int bsp_argv_check (const char *name);
+const char *bsp_argv_get (int num);
+
 #endif /*__BSP_SYS_H__*/
