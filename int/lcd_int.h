@@ -42,7 +42,7 @@ void *screen_hal_set_config (lcd_wincfg_t *cfg, int x, int y,
 void screen_hal_set_clut (lcd_wincfg_t *cfg, void *_buf, int size, int layer);
 void screen_hal_sync (lcd_wincfg_t *cfg, int wait);
 int screen_hal_copy (lcd_wincfg_t *cfg, copybuf_t *copybuf, uint8_t pix_bytes);
-int screen_hal_copy_h8 (lcd_wincfg_t *cfg, copybuf_t *copybuf);
+int screen_hal_copy_h8 (lcd_wincfg_t *cfg, copybuf_t *copybuf, int interleave);
 
 extern uint32_t lcd_x_size_var;
 extern uint32_t lcd_y_size_var;

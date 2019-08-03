@@ -335,11 +335,15 @@ typedef struct {
     uint16_t src_leg;
     uint16_t copycnt;
     uint16_t copydone;
+    uint8_t interleave;
+    uint8_t mode;
 } fastline_t;
+
+#define M_INTERLEAVE 0x1
 
 static fastline_t fastline_h8;
 
-int screen_hal_copy_h8 (lcd_wincfg_t *cfg, copybuf_t *copybuf)
+int screen_hal_copy_h8 (lcd_wincfg_t *cfg, copybuf_t *copybuf, int interleave)
 {
     screen_t *dest = &copybuf->dest;
     screen_t *src = &copybuf->src;
@@ -358,8 +362,14 @@ int screen_hal_copy_h8 (lcd_wincfg_t *cfg, copybuf_t *copybuf)
     fastline_h8.copybuf = *copybuf;
     fastline_h8.dest_leg = dw;
     fastline_h8.src_leg = sw;
-    fastline_h8.copycnt = dw * 2;
     fastline_h8.copydone = 0;
+    if (interleave) {
+        fastline_h8.mode |= M_INTERLEAVE;
+        fastline_h8.copycnt = dw;
+        fastline_h8.interleave = 1 - fastline_h8.interleave;
+    } else {
+        fastline_h8.copycnt = dw * 2;
+    }
 
     dptr = (void *)((uint32_t)dest->buf + (dest->y * fastline_h8.dest_leg + dest->x) * pix_size);
     sptr      = (void *)((uint32_t)src->buf + (src->y * fastline_h8.src_leg + src->x) * pix_size);
@@ -392,7 +402,16 @@ screen_hal_copy_h8_next (screen_hal_ctxt_t *ctxt)
     fastline_h8.copycnt--;
     fastline_h8.copydone++;
 
-    switch (fastline_h8.copydone & 0x3) {
+    if (fastline_h8.mode & M_INTERLEAVE) {
+        if (fastline_h8.interleave) {
+            dptr_off = fastline_h8.dest_leg;
+        }
+        if ((fastline_h8.copydone & 0x1) == 0) {
+            src->x++;
+            fastline_h8.sptr = (void *)((uint32_t)fastline_h8.sptr + 1);
+        }
+        fastline_h8.dptr = (void *)((uint32_t)fastline_h8.dptr + 1);
+    } else switch (fastline_h8.copydone & 0x3) {
         case 0x3:
         case 0x1:
             dptr_off = fastline_h8.dest_leg;

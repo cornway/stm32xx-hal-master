@@ -35,8 +35,8 @@ typedef struct {
     uint8_t laynum;
     uint8_t colormode;
     uint8_t clockpresc;
-    uint8_t hwaccel: 1,
-            reserved: 7;
+    uint8_t hwaccel: 2,
+            reserved: 6;
 } screen_conf_t;
 
 typedef struct bsp_video_api_s {
