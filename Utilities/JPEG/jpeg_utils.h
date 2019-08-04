@@ -42,6 +42,12 @@
 /* Includes ------------------------------------------------------------------*/
 #include "jpeg_utils_conf.h"
 
+typedef struct {
+    uint16_t w, h;
+    uint8_t colormode;
+    uint8_t flags;
+} jpeg_info_t;
+
 /** @addtogroup Utilities
   * @{
   */
@@ -116,6 +122,15 @@ HAL_StatusTypeDef JPEG_GetEncodeColorConvertFunc(JPEG_ConfTypeDef *pJpegInfo, JP
 /**
   * @}
   */ 
+
+int JPEG_Decode_DMA(JPEG_HandleTypeDef *hjpeg, void *data, uint32_t size, uint32_t DestAddress);
+uint32_t JPEG_OutputHandler(JPEG_HandleTypeDef *hjpeg);
+void JPEG_InputHandler(JPEG_HandleTypeDef *hjpeg);
+int HAL_JPEG_UserInit (void);
+int JPEG_Info (jpeg_info_t *info);
+
+extern JPEG_HandleTypeDef    JPEG_Handle;
+
 #endif /* __JPEG_UTILS_H */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

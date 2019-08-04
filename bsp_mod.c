@@ -100,7 +100,7 @@ void *bspmod_insert (const bsp_heap_api_t *heap, const char *path, const char *n
     mod = heap->malloc(sizeof(*mod));
     assert(mod);
 
-    bin = bsp_setup_bin_desc(&mod->bin, path, name, bintype);
+    bin = bsp_setup_bin_desc(path, &mod->bin, path, name, bintype);
 
     if (!bin || !bspmod_check_mod_allowed(mod)) {
         heap->free(mod);

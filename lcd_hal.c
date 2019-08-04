@@ -224,7 +224,7 @@ __screen_hal_copy_setup
 
     hdma2d->Init.Mode         = DMA2D_M2M;
     hdma2d->Init.ColorMode    = dma2d_color_mode2out_map[dest->colormode];
-    hdma2d->Init.OutputOffset = dest_leg - dest->width;
+    hdma2d->Init.OutputOffset = dest_leg - src->width;
     hdma2d->Init.AlphaInverted = DMA2D_REGULAR_ALPHA;
     hdma2d->Init.RedBlueSwap   = DMA2D_RB_REGULAR;
 

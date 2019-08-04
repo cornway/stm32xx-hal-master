@@ -1,10 +1,13 @@
 #include <stm32f769i_discovery_lcd.h>
 #include <gui.h>
+#include <jpeg.h>
 #include <misc_utils.h>
 #include <lcd_main.h>
 #include <dev_io.h>
 #include <heap.h>
 #include <bsp_cmd.h>
+
+extern void vid_get_ready_screen (screen_t *screen);
 
 #define gui_error(fmt, args ...) \
     if (gui->dbglvl >= DBG_ERR) {dprintf("%s() [fatal] : "fmt, __func__, args);}
@@ -305,6 +308,51 @@ void gui_set_panexy (gui_t *gui, pane_t *pane, int x, int y, int w, int h)
     dim_place(&pane->dim, &gui->dim);
 }
 
+void gui_set_child (pane_t *parent, pane_t *child)
+{
+    parent->child = child;
+}
+
+rawpic_t *gui_set_jpeg (pane_t *pane, const char *path)
+{
+    gui_t *gui = pane->parent;
+    void *cache;
+    uint32_t size;
+    jpeg_info_t info;
+    rawpic_t *rawpic;
+    screen_t dest = {0}, src = {0};
+
+    if (!gui->tempmem) {
+        gui->tempmem = heap_alloc_shared(1 << 20);
+    }
+    if (!gui->tempmem) {
+        return NULL;
+    }
+    cache = jpeg_cache(path, &size);
+    if (!cache) {
+        return NULL;
+    }
+    jpeg_decode(&info, gui->tempmem, cache, size);
+
+    rawpic = heap_alloc_shared(info.w * info.h * 4 + sizeof(*rawpic));
+    if (!rawpic) {
+        return NULL;
+    }
+    rawpic->data = (void *)(rawpic + 1);
+    rawpic->w = info.w;
+    rawpic->h = info.h;
+
+    d_memcpy(rawpic->data, gui->tempmem, size);
+
+    jpeg_release(cache);
+    return rawpic;
+}
+
+void gui_set_pic (pane_t *pane, rawpic_t *pic)
+{
+    pane->pic = pic;
+}
+
 static void __gui_set_comp_def_sfx (component_t *com)
 {
     gui_sfx_t *sfx = &com->sfx;
@@ -482,6 +530,31 @@ int gui_draw_string_c (component_t *com, int line, rgba_t textcolor, const char 
     return __gui_draw_string(com, line, textcolor, str, CENTER_MODE);
 }
 
+static int gui_rawpic_draw (pane_t *pane, rawpic_t *pic)
+{
+    screen_t dest = {0}, src = {0};
+    point_t p;
+    dim_t d = {0, 0, pic->w, pic->h};
+
+    dim_get_origin(&p, &pane->dim);
+    dim_set_origin(&d, &p);
+
+    vid_get_ready_screen(&dest);
+
+    dest.x = d.x;
+    dest.y = d.y;
+
+    src.x = 0;
+    src.y = 0;
+    src.width = pic->w;
+    src.height = pic->h;
+    src.buf = pic->data;
+    src.colormode = GFX_COLOR_MODE_RGBA8888;
+    src.alpha = 0xff;
+
+    vid_copy(&dest, &src);
+}
+
 static void gui_comp_draw (pane_t *pane, component_t *com)
 {
     if (com->ispad) {
@@ -523,6 +596,9 @@ static void gui_pane_draw (gui_t *gui, pane_t *pane)
     component_t *com = pane->head;
 
     vid_vsync(0);
+    if (pane->child && pane->child->repaint) {
+        gui_pane_draw(gui, pane->child);
+    }
     while (com) {
         if (com->repaint) {
             gui_comp_draw(pane, com);
@@ -530,6 +606,9 @@ static void gui_pane_draw (gui_t *gui, pane_t *pane)
             com->repaint = 0;
         }
         com = com->next;
+    }
+    if (pane->pic) {
+        gui_rawpic_draw(pane, pane->pic);
     }
     pane->repaint = 0;
 }
@@ -745,6 +824,9 @@ void gui_wakeup_pane (pane_t *pane)
 
     if (pane->parent->selected == pane) {
         pane->repaint = 1;
+        if (pane->child) {
+            pane->child->repaint = 1;
+        }
     }
     while (com) {
         com->repaint = 1;

@@ -258,6 +258,7 @@ int dev_main (void)
 
     VID_PreConfig();
 #if defined(BOOT)
+    jpeg_init();
     boot_gui_preinit();
 #endif
 #if BSP_INDIR_API

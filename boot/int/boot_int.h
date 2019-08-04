@@ -24,6 +24,7 @@ typedef struct boot_bin_parm_s {
 
 typedef struct boot_bin_s {
     struct boot_bin_s *next;
+    void *pic;
     bsp_exec_file_type_t filetype;
     exec_mem_type_t memtype;
 
@@ -39,7 +40,7 @@ arch_word_t *bsp_install_exec (arch_word_t *progaddr, const char *path);
 int bsp_start_exec (arch_word_t *progaddr, int argc, const char **argv);
 
 void *bsp_cache_bin_file (const bsp_heap_api_t *heapapi, const char *path, int *binsize);
-bsp_bin_t *bsp_setup_bin_desc (bsp_bin_t *bin, const char *path,
+bsp_bin_t *bsp_setup_bin_desc (const char *dirpath, bsp_bin_t *bin, const char *path,
                            const char *originname, bsp_exec_file_type_t type);
 int bsp_setup_bin_param (bsp_bin_t *bin);
 int bhal_load_program (bhal_cplth_t cplth, arch_word_t *progaddr,

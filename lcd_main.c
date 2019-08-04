@@ -277,7 +277,7 @@ void vid_vsync (int mode)
     profiler_exit();
 }
 
-static void vid_get_ready_screen (screen_t *screen)
+void vid_get_ready_screen (screen_t *screen)
 {
     screen->width = lcd_active_cfg->w;
     screen->height = lcd_active_cfg->h;
@@ -285,6 +285,7 @@ static void vid_get_ready_screen (screen_t *screen)
     screen->x = 0;
     screen->y = 0;
     screen->colormode = lcd_active_cfg->config.colormode;
+    screen->alpha = 0xff;
 }
 
 void vid_set_clut (void *palette, uint32_t clut_num_entries)
@@ -320,6 +321,13 @@ void vid_print_info (void)
     dprintf("layers=%u, color mode=<%s>\n",
              lcd_active_cfg->config.laynum, screen_mode2txt_map[lcd_active_cfg->config.colormode]);
     dprintf("memory= <0x%p> 0x%08x bytes\n", lcd_active_cfg->fb_mem, lcd_active_cfg->fb_size);
+}
+
+int vid_copy (screen_t *dest, screen_t *src)
+{
+    copybuf_t copybuf = {NULL, *dest, *src};
+    vid_vsync(0);
+    screen_hal_copy(lcd_active_cfg, &copybuf, screen_mode2pixdeep[lcd_active_cfg->config.colormode]);
 }
 
 typedef uint8_t pix8_t;

@@ -7,6 +7,12 @@ typedef uint32_t rgba_t;
 #define GUI_MAX_NAME 16
 #define GUI_MAX_STRBUF 256
 
+typedef struct {
+    void *data;
+    uint16_t w, h;
+    uint8_t colormode;
+} rawpic_t;
+
 typedef enum {
     GUIX_INVTYPE,
     GUIX_COMP,
@@ -91,6 +97,8 @@ typedef struct component_s {
 typedef struct pane_s {
     GUI_COMMON(pane_s, gui_s);
 
+    struct pane_s *child;
+    rawpic_t *pic;
     component_t *onfocus;
     
     component_t *head, *tail;
@@ -134,6 +142,7 @@ typedef struct gui_bsp_api_s {
 
 typedef struct gui_s {
     void *directmem;
+    void *tempmem;
     void *dummy;
     dim_t dim;
     pane_t *head, *tail;
@@ -192,6 +201,10 @@ void gui_destroy (gui_t *gui);
 pane_t *gui_get_pane (gui_t *gui, const char *name, int extra);
 void gui_set_pane (gui_t *gui, pane_t *pane);
 void gui_set_panexy (gui_t *gui, pane_t *pane, int x, int y, int w, int h);
+void gui_set_child (pane_t *parent, pane_t *child);
+
+rawpic_t *gui_set_jpeg (pane_t *, const char *path);
+void gui_set_pic (pane_t *pane, rawpic_t *pic);
 
 component_t *gui_get_comp (gui_t *gui, const char *name, const char *text);
 void gui_set_comp (pane_t *pane, component_t *c, int x, int y, int w, int h);

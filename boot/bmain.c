@@ -118,13 +118,29 @@ bsp_setup_bin_param (bsp_bin_t *bin)
     return 0;
 }
 
+static void
+bsp_setup_title_pic (const char *dirpath, bsp_bin_t *bin)
+{
+    char name[D_MAX_NAME] = {0};
+    char tpath[D_MAX_PATH];
+    const char *argv[2] = {0};
+    int fpic;
+
+    strcpy(name, bin->name);
+    d_vstrtok(argv, 2, name, '.');
+
+    snprintf(tpath, sizeof(tpath), "%s/%s.jpg", dirpath, argv[0]);
+    bin->pic = gui_set_jpeg(pane_selector, tpath);
+}
+
 bsp_bin_t *
-bsp_setup_bin_desc (bsp_bin_t *bin, const char *path,
+bsp_setup_bin_desc (const char *dirpath, bsp_bin_t *bin, const char *path,
                            const char *originname, bsp_exec_file_type_t type)
 {
     snprintf(bin->name, sizeof(bin->name), "%s", originname);
     snprintf(bin->path, sizeof(bin->path), "%s", path);
     bin->filetype = type;
+    bsp_setup_title_pic(dirpath, bin);
     if (bsp_setup_bin_param(bin) < 0) {
         return NULL;
     }
@@ -132,28 +148,29 @@ bsp_setup_bin_desc (bsp_bin_t *bin, const char *path,
 }
 
 bsp_bin_t *
-bsp_setup_bin_link (bsp_bin_t *bin, const char *path,
+bsp_setup_bin_link (const char *dirpath, bsp_bin_t *bin, const char *path,
                            const char *originname, bsp_exec_file_type_t type)
 {
     snprintf(bin->name, sizeof(bin->name), "%s", originname);
     snprintf(bin->path, sizeof(bin->path), "%s", path);
     bin->filetype = type;
     bin->parm.progaddr = 0;
+    bsp_setup_title_pic(dirpath, bin);
     return bin;
 }
 
 
 static bsp_bin_t *
-boot_alloc_bin_desc (const char *path,
+boot_alloc_bin_desc (const char *dirpath, const char *path,
                            const char *originname, bsp_exec_file_type_t type)
 {
     bsp_bin_t *bin = (bsp_bin_t *)heap_malloc(sizeof(*bin));
 
     if (type == BIN_FILE) {
-        bin = bsp_setup_bin_desc(bin, path, originname, type);
+        bin = bsp_setup_bin_desc(dirpath, bin, path, originname, type);
         assert(bin);
     } else if (type == BIN_LINK) {
-        bin = bsp_setup_bin_link(bin, path, originname, type);
+        bin = bsp_setup_bin_link(dirpath, bin, path, originname, type);
     }
     boot_bin_link(bin);
     return bin;
@@ -252,7 +269,7 @@ void boot_read_path (const char *path)
 
                     if (type != BIN_MAX && type != BIN_FILE) {
                         snprintf(binpath, sizeof(binpath), "%s/%s", buf, binobj.name);
-                        if (boot_alloc_bin_desc(binpath, binobj.name, type)) {
+                        if (boot_alloc_bin_desc(buf, binpath, binobj.name, type)) {
                             filesfound++;
                         }
                     }
@@ -437,6 +454,7 @@ static int b_gui_print_bin_list (pane_t *pane)
             win_con_printline(pane, i, str, COLOR_WHITE);
         }
     }
+    gui_set_pic(pane, binarray[selected - start]->pic);
     return CMDERR_OK;
 }
 

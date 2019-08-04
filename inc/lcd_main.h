@@ -21,6 +21,7 @@ typedef struct {
     int x, y;
     int width, height;
     uint8_t colormode;
+    uint8_t alpha;
 } screen_t;
 
 typedef struct {
