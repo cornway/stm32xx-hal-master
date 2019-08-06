@@ -11,6 +11,7 @@ typedef struct {
     void *data;
     uint16_t w, h;
     uint8_t colormode;
+    uint8_t alpha;
 } rawpic_t;
 
 typedef enum {
@@ -106,7 +107,8 @@ typedef struct pane_s {
 
     char name[GUI_MAX_NAME];
 
-    uint8_t selectable: 1;
+    uint8_t selectable: 1,
+            picontop: 1;
 } pane_t;
 
 typedef struct gui_bsp_api_s {
@@ -203,8 +205,8 @@ void gui_set_pane (gui_t *gui, pane_t *pane);
 void gui_set_panexy (gui_t *gui, pane_t *pane, int x, int y, int w, int h);
 void gui_set_child (pane_t *parent, pane_t *child);
 
-rawpic_t *gui_set_jpeg (pane_t *, const char *path);
-void gui_set_pic (pane_t *pane, rawpic_t *pic);
+rawpic_t *gui_cache_jpeg (pane_t *, const char *path);
+void gui_set_pic (pane_t *pane, rawpic_t *pic, int top);
 
 component_t *gui_get_comp (gui_t *gui, const char *name, const char *text);
 void gui_set_comp (pane_t *pane, component_t *c, int x, int y, int w, int h);

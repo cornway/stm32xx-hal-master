@@ -7,8 +7,6 @@
 #include <dev_io.h>
 #include <heap.h>
 
-uint32_t JpegProcessing_End = 0;
-
 int jpeg_init (const char *conf)
 {
     HAL_JPEG_UserInit();
@@ -41,23 +39,7 @@ void jpeg_release (void *p)
 
 int jpeg_decode (jpeg_info_t *info, void *tempbuf, void *data, uint32_t size)
 {
-    int err;
-    irqmask_t irq = ~0;
-
-    err = JPEG_Decode_DMA(&JPEG_Handle, data, size, (uint32_t)tempbuf);
-
-    if (err < 0) return -1;
-
-    do
-    {
-      irq_save(&irq);
-      JPEG_InputHandler(&JPEG_Handle);
-      JpegProcessing_End = JPEG_OutputHandler(&JPEG_Handle);
-      irq_restore(irq);
-    } while(JpegProcessing_End == 0);
-    
-    JPEG_Info(info);
-    return 0;
+    return jpeg__hal_decode(info, tempbuf, data, size);
 }
 
 

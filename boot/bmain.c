@@ -130,7 +130,7 @@ bsp_setup_title_pic (const char *dirpath, bsp_bin_t *bin)
     d_vstrtok(argv, 2, name, '.');
 
     snprintf(tpath, sizeof(tpath), "%s/%s.jpg", dirpath, argv[0]);
-    bin->pic = gui_set_jpeg(pane_selector, tpath);
+    bin->pic = gui_cache_jpeg(pane_selector, tpath);
 }
 
 bsp_bin_t *
@@ -454,7 +454,7 @@ static int b_gui_print_bin_list (pane_t *pane)
             win_con_printline(pane, i, str, COLOR_WHITE);
         }
     }
-    gui_set_pic(pane, binarray[selected - start]->pic);
+    gui_set_pic(pane, binarray[selected - start]->pic, 1);
     return CMDERR_OK;
 }
 
@@ -540,6 +540,7 @@ void boot_gui_preinit (void)
 {
     dim_t dim;
     prop_t prop = {0};
+    rawpic_t *pic;
 
     boot_gui_bsp_init(&gui);
 
@@ -572,6 +573,10 @@ void boot_gui_preinit (void)
     pane_progress = win_new_progress(&gui, &prop, dim.x, dim.y, dim.w, dim.h);
 
     bsp_stdout_register_if(gui_stdout_hook);
+
+    pic = gui_cache_jpeg(pane_console, "sys/art/title.jpg");
+    pic->alpha = 50;
+    gui_set_pic(pane_console, pic, 0);
 }
 
 int boot_main (int argc, const char **argv)

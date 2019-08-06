@@ -313,17 +313,16 @@ void gui_set_child (pane_t *parent, pane_t *child)
     parent->child = child;
 }
 
-rawpic_t *gui_set_jpeg (pane_t *pane, const char *path)
+rawpic_t *gui_cache_jpeg (pane_t *pane, const char *path)
 {
     gui_t *gui = pane->parent;
     void *cache;
     uint32_t size;
     jpeg_info_t info;
     rawpic_t *rawpic;
-    screen_t dest = {0}, src = {0};
 
     if (!gui->tempmem) {
-        gui->tempmem = heap_alloc_shared(1 << 20);
+        gui->tempmem = heap_alloc_shared(2 << 20);
     }
     if (!gui->tempmem) {
         return NULL;
@@ -334,7 +333,8 @@ rawpic_t *gui_set_jpeg (pane_t *pane, const char *path)
     }
     jpeg_decode(&info, gui->tempmem, cache, size);
 
-    rawpic = heap_alloc_shared(info.w * info.h * 4 + sizeof(*rawpic));
+    size = info.w * info.h * 4;
+    rawpic = heap_alloc_shared(size + sizeof(*rawpic));
     if (!rawpic) {
         return NULL;
     }
@@ -348,9 +348,13 @@ rawpic_t *gui_set_jpeg (pane_t *pane, const char *path)
     return rawpic;
 }
 
-void gui_set_pic (pane_t *pane, rawpic_t *pic)
+void gui_set_pic (pane_t *pane, rawpic_t *pic, int top)
 {
+    if (!pic->alpha) {
+        pic->alpha = 0xff;
+    }
     pane->pic = pic;
+    pane->picontop = top;
 }
 
 static void __gui_set_comp_def_sfx (component_t *com)
@@ -550,7 +554,7 @@ static int gui_rawpic_draw (pane_t *pane, rawpic_t *pic)
     src.height = pic->h;
     src.buf = pic->data;
     src.colormode = GFX_COLOR_MODE_RGBA8888;
-    src.alpha = 0xff;
+    src.alpha = pic->alpha;
 
     vid_copy(&dest, &src);
 }
@@ -569,7 +573,7 @@ static void gui_comp_draw (pane_t *pane, component_t *com)
 
         if (com->draw) {
             com->draw(pane, com, NULL);
-        } else {
+        } else if (0) {
             gui_com_fill(com, color);
         }
 
@@ -599,6 +603,9 @@ static void gui_pane_draw (gui_t *gui, pane_t *pane)
     if (pane->child && pane->child->repaint) {
         gui_pane_draw(gui, pane->child);
     }
+    if (pane->pic && !pane->picontop) {
+        gui_rawpic_draw(pane, pane->pic);
+    }
     while (com) {
         if (com->repaint) {
             gui_comp_draw(pane, com);
@@ -607,7 +614,7 @@ static void gui_pane_draw (gui_t *gui, pane_t *pane)
         }
         com = com->next;
     }
-    if (pane->pic) {
+    if (pane->pic && pane->picontop) {
         gui_rawpic_draw(pane, pane->pic);
     }
     pane->repaint = 0;
@@ -669,7 +676,6 @@ void gui_draw (gui_t *gui)
     if (selected && selected->repaint) {
         gui_pane_draw(gui, selected);
     }
-    //gui_hal_update(gui);
 }
 
 static void gui_act (gui_t *gui, component_t *com, gevt_t *evt)
@@ -797,6 +803,7 @@ static int __wakeup (gui_t *gui, component_t *com)
     com->repaint = 1;
     if (com->parent == gui->selected) {
         com->parent->repaint = 1;
+        gui_com_clear(com);
     }
     return 0;
 }
@@ -825,7 +832,7 @@ void gui_wakeup_pane (pane_t *pane)
     if (pane->parent->selected == pane) {
         pane->repaint = 1;
         if (pane->child) {
-            pane->child->repaint = 1;
+            gui_wakeup_pane(pane->child);
         }
     }
     while (com) {

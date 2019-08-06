@@ -22,7 +22,8 @@
 
 
 #include <misc_utils.h>
-#include <dev_io.h>
+#include <heap.h>
+#include <lcd_main.h>
 
 /** @addtogroup STM32F7xx_HAL_Examples
   * @{
@@ -39,7 +40,7 @@ typedef struct
   uint8_t *DataBuffer;
   uint32_t DataBufferSize;
 
-}JPEG_Data_BufferTypeDef;
+} JPEG_Data_BufferTypeDef;
 
 /* Private define ------------------------------------------------------------*/
 
@@ -52,49 +53,80 @@ typedef struct
 #define NB_OUTPUT_DATA_BUFFERS      2
 #define NB_INPUT_DATA_BUFFERS       2
 
-JPEG_HandleTypeDef    JPEG_Handle;
-
-static DMA2D_HandleTypeDef    DMA2D_Handle;
-
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
-JPEG_YCbCrToRGB_Convert_Function pConvert_Function;
-uint8_t *Stream = NULL;     /* pointer to File object */
-int StreamPos = 0, StreamSize = 0;
 
-uint8_t MCU_Data_OutBuffer0[CHUNK_SIZE_OUT];
-uint8_t MCU_Data_OutBuffer1[CHUNK_SIZE_OUT];
+typedef struct {
+    uint8_t *ptr;
+    uint32_t pos;
+    uint32_t size;
+} byte_stream_t;
 
-JPEG_Data_BufferTypeDef Jpeg_OUT_BufferTab[NB_OUTPUT_DATA_BUFFERS] =
-{
-  {JPEG_BUFFER_EMPTY , MCU_Data_OutBuffer0 , 0},
-  {JPEG_BUFFER_EMPTY , MCU_Data_OutBuffer1, 0}
-};
+typedef struct {
+    JPEG_HandleTypeDef    hal_jpeg;
 
-JPEG_Data_BufferTypeDef Jpeg_IN_BufferTab[NB_INPUT_DATA_BUFFERS] =
-{
-  {JPEG_BUFFER_EMPTY , NULL, 0},
-  {JPEG_BUFFER_EMPTY , NULL, 0}
-};
+    void *framebuf;
+    byte_stream_t instream;
 
+    JPEG_Data_BufferTypeDef intab[NB_INPUT_DATA_BUFFERS];
+    JPEG_Data_BufferTypeDef outtab[NB_OUTPUT_DATA_BUFFERS];
 
-uint32_t MCU_TotalNb = 0;
+    JPEG_YCbCrToRGB_Convert_Function convert_func;
 
-uint32_t MCU_BlockIndex = 0;
-uint32_t Jpeg_HWDecodingEnd = 0;
+    uint32_t mcuidx;
+    uint32_t mcunum;
+    uint8_t inwrite_idx;
+    uint8_t inread_idx;
+    uint8_t outwrite_idx;
+    uint8_t outread_idx;
+    uint32_t input_paused: 1,
+             output_paused: 1,
+             hw_end: 1,
+             reserved: 29;
+} jpeg_hal_ctxt_t;
 
-uint32_t JPEG_OUT_Read_BufferIndex = 0;
-uint32_t JPEG_OUT_Write_BufferIndex = 0;
-__IO uint32_t Output_Is_Paused = 0;
-
-uint32_t JPEG_IN_Read_BufferIndex = 0;
-uint32_t JPEG_IN_Write_BufferIndex = 0;
-__IO uint32_t Input_Is_Paused = 0;
-
-uint32_t FrameBufferAddress;
+static jpeg_hal_ctxt_t jpeg_hal_ctxt = {0};
 
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
+
+static void *bytestream_move (byte_stream_t *stream, uint32_t *len)
+{
+    uint32_t oldpos = stream->pos;
+    uint32_t left = stream->size - stream->pos;
+
+    if (*len > left) {
+        *len = left;
+    }
+    stream->pos += *len;
+    return stream->ptr + oldpos;
+}
+
+int jpeg__hal_decode (jpeg_info_t *info, void *tempbuf, void *data, uint32_t size)
+{
+    int err;
+    irqmask_t irq = ~0;
+    int done;
+
+    err = JPEG_Decode_DMA(&jpeg_hal_ctxt.hal_jpeg, data, size, (uint32_t)tempbuf);
+
+    if (err < 0) return -1;
+
+    do
+    {
+      irq_save(&irq);
+      JPEG_InputHandler(&jpeg_hal_ctxt.hal_jpeg);
+      done = JPEG_OutputHandler(&jpeg_hal_ctxt.hal_jpeg);
+      irq_restore(irq);
+    } while(done == 0);
+
+    heap_free(jpeg_hal_ctxt.outtab[0].DataBuffer);
+
+    JPEG_Info(info);
+    JPEG_Abort(&jpeg_hal_ctxt.hal_jpeg);
+    return 0;
+}
+
 
 /**
   * @brief  Decode_DMA
@@ -105,32 +137,47 @@ uint32_t FrameBufferAddress;
   */
 int JPEG_Decode_DMA(JPEG_HandleTypeDef *hjpeg, void *data, uint32_t size, uint32_t DestAddress)
 {
-    uint32_t i;
+    uint32_t i, len;
     uint8_t *ptr;
     HAL_StatusTypeDef status;
 
-    Stream = data;
-    StreamPos = 0;
-    StreamSize = size;
-    FrameBufferAddress = DestAddress;
-    MCU_TotalNb = 0;
-    MCU_BlockIndex = 0;
-    Jpeg_HWDecodingEnd = 0;
-    JPEG_OUT_Read_BufferIndex = 0;
-    JPEG_IN_Read_BufferIndex = 0;
-    JPEG_IN_Write_BufferIndex = 0;
-    Input_Is_Paused = 0;
+    jpeg_hal_ctxt.convert_func = NULL;
+    jpeg_hal_ctxt.framebuf = NULL;
+    jpeg_hal_ctxt.hw_end = 0;
+    jpeg_hal_ctxt.inread_idx = 0;
+    jpeg_hal_ctxt.inwrite_idx = 0;
+    jpeg_hal_ctxt.mcuidx = 0;
+    jpeg_hal_ctxt.mcunum = 0;
+    jpeg_hal_ctxt.output_paused = 0;
+    jpeg_hal_ctxt.outread_idx = 0;
+    jpeg_hal_ctxt.outwrite_idx = 0;
 
-    for(i = 0; i < NB_INPUT_DATA_BUFFERS; i++)
+    jpeg_hal_ctxt.instream.pos = 0;
+    jpeg_hal_ctxt.instream.ptr = data;
+    jpeg_hal_ctxt.instream.size = size;
+    jpeg_hal_ctxt.framebuf = (void *)DestAddress;
+
+    len = CHUNK_SIZE_IN;
+    for(i = 0; i < NB_INPUT_DATA_BUFFERS && len; i++)
     {
-        Jpeg_IN_BufferTab[i].DataBuffer = Stream + StreamPos;
-        StreamPos += CHUNK_SIZE_IN;
-        StreamSize -= CHUNK_SIZE_IN;
-        Jpeg_IN_BufferTab[i].DataBufferSize = CHUNK_SIZE_IN;
-        Jpeg_IN_BufferTab[i].State = JPEG_BUFFER_FULL;
+        jpeg_hal_ctxt.intab[i].DataBuffer = bytestream_move(&jpeg_hal_ctxt.instream, &len);
+        jpeg_hal_ctxt.intab[i].DataBufferSize = len;
+        jpeg_hal_ctxt.intab[i].State = (len == CHUNK_SIZE_IN) ? JPEG_BUFFER_FULL : JPEG_BUFFER_EMPTY;
     }
 
-    status = HAL_JPEG_Decode_DMA(hjpeg ,Jpeg_IN_BufferTab[0].DataBuffer ,Jpeg_IN_BufferTab[0].DataBufferSize ,Jpeg_OUT_BufferTab[0].DataBuffer ,CHUNK_SIZE_OUT);
+    ptr = heap_alloc_shared(NB_OUTPUT_DATA_BUFFERS * CHUNK_SIZE_OUT);
+    d_memset(ptr, 0, NB_OUTPUT_DATA_BUFFERS * CHUNK_SIZE_OUT);
+
+    for (i = 0; i < NB_OUTPUT_DATA_BUFFERS; i++)
+    {
+        jpeg_hal_ctxt.outtab[i].DataBuffer = ptr;
+        jpeg_hal_ctxt.outtab[i].DataBufferSize = 0;
+        jpeg_hal_ctxt.outtab[i].State = JPEG_BUFFER_EMPTY;
+        ptr += CHUNK_SIZE_OUT;
+    }
+
+    status = HAL_JPEG_Decode_DMA(hjpeg , jpeg_hal_ctxt.intab[0].DataBuffer ,jpeg_hal_ctxt.intab[0].DataBufferSize,
+                                    jpeg_hal_ctxt.outtab[0].DataBuffer, CHUNK_SIZE_OUT);
 
     return status == HAL_OK ? 0 : -1;
 }
@@ -144,29 +191,30 @@ uint32_t JPEG_OutputHandler(JPEG_HandleTypeDef *hjpeg)
 {
   uint32_t ConvertedDataCount;
   
-  if(Jpeg_OUT_BufferTab[JPEG_OUT_Read_BufferIndex].State == JPEG_BUFFER_FULL)
+  if(jpeg_hal_ctxt.outtab[jpeg_hal_ctxt.outread_idx].State == JPEG_BUFFER_FULL)
   {  
-    MCU_BlockIndex += pConvert_Function(Jpeg_OUT_BufferTab[JPEG_OUT_Read_BufferIndex].DataBuffer, (uint8_t *)FrameBufferAddress, MCU_BlockIndex, Jpeg_OUT_BufferTab[JPEG_OUT_Read_BufferIndex].DataBufferSize, &ConvertedDataCount);   
+    jpeg_hal_ctxt.mcuidx += jpeg_hal_ctxt.convert_func(jpeg_hal_ctxt.outtab[jpeg_hal_ctxt.outread_idx].DataBuffer, (uint8_t *)jpeg_hal_ctxt.framebuf,
+                            jpeg_hal_ctxt.mcuidx, jpeg_hal_ctxt.outtab[jpeg_hal_ctxt.outread_idx].DataBufferSize, &ConvertedDataCount);
     
-    Jpeg_OUT_BufferTab[JPEG_OUT_Read_BufferIndex].State = JPEG_BUFFER_EMPTY;
-    Jpeg_OUT_BufferTab[JPEG_OUT_Read_BufferIndex].DataBufferSize = 0;
+    jpeg_hal_ctxt.outtab[jpeg_hal_ctxt.outread_idx].State = JPEG_BUFFER_EMPTY;
+    jpeg_hal_ctxt.outtab[jpeg_hal_ctxt.outread_idx].DataBufferSize = 0;
     
-    JPEG_OUT_Read_BufferIndex++;
-    if(JPEG_OUT_Read_BufferIndex >= NB_OUTPUT_DATA_BUFFERS)
+    jpeg_hal_ctxt.outread_idx++;
+    if(jpeg_hal_ctxt.outread_idx >= NB_OUTPUT_DATA_BUFFERS)
     {
-      JPEG_OUT_Read_BufferIndex = 0;
+      jpeg_hal_ctxt.outread_idx = 0;
     }
     
-    if(MCU_BlockIndex == MCU_TotalNb)
+    if(jpeg_hal_ctxt.mcuidx == jpeg_hal_ctxt.mcunum)
     {
       return 1;
     }
   }
-  else if((Output_Is_Paused == 1) && \
-          (JPEG_OUT_Write_BufferIndex == JPEG_OUT_Read_BufferIndex) && \
-          (Jpeg_OUT_BufferTab[JPEG_OUT_Read_BufferIndex].State == JPEG_BUFFER_EMPTY))
+  else if((jpeg_hal_ctxt.output_paused == 1) && \
+          (jpeg_hal_ctxt.outwrite_idx == jpeg_hal_ctxt.outread_idx) && \
+          (jpeg_hal_ctxt.outtab[jpeg_hal_ctxt.outread_idx].State == JPEG_BUFFER_EMPTY))
   {
-    Output_Is_Paused = 0;
+    jpeg_hal_ctxt.output_paused = 0;
     HAL_JPEG_Resume(hjpeg, JPEG_PAUSE_RESUME_OUTPUT);
   }
 
@@ -180,37 +228,32 @@ uint32_t JPEG_OutputHandler(JPEG_HandleTypeDef *hjpeg)
   */
 void JPEG_InputHandler(JPEG_HandleTypeDef *hjpeg)
 {
-  if(Jpeg_IN_BufferTab[JPEG_IN_Write_BufferIndex].State == JPEG_BUFFER_EMPTY)
+  if(jpeg_hal_ctxt.intab[jpeg_hal_ctxt.inwrite_idx].State == JPEG_BUFFER_EMPTY)
   {
     int bufsize = CHUNK_SIZE_IN;
 
-    Jpeg_IN_BufferTab[JPEG_IN_Write_BufferIndex].DataBuffer = Stream + StreamPos;
-    StreamPos += bufsize;
-    StreamSize -= bufsize;
-    if (StreamSize < 0) {
-        StreamPos += StreamSize;
-        StreamSize = bufsize + StreamSize;
-        if (StreamSize == 0) {
-            return;
-        }
-        bufsize = StreamSize;
+    jpeg_hal_ctxt.intab[jpeg_hal_ctxt.inwrite_idx].DataBuffer =
+                                                bytestream_move(&jpeg_hal_ctxt.instream, &bufsize);
+    if (bufsize == 0) {
+        return;
     }
-    Jpeg_IN_BufferTab[JPEG_IN_Write_BufferIndex].DataBufferSize = bufsize;
+    jpeg_hal_ctxt.intab[jpeg_hal_ctxt.inwrite_idx].DataBufferSize = bufsize;
 
-    Jpeg_IN_BufferTab[JPEG_IN_Write_BufferIndex].State = JPEG_BUFFER_FULL;
+    jpeg_hal_ctxt.intab[jpeg_hal_ctxt.inwrite_idx].State = JPEG_BUFFER_FULL;
 
-    if((Input_Is_Paused == 1) && (JPEG_IN_Write_BufferIndex == JPEG_IN_Read_BufferIndex))
+    if((jpeg_hal_ctxt.input_paused == 1) && (jpeg_hal_ctxt.inwrite_idx == jpeg_hal_ctxt.inread_idx))
     {
-      Input_Is_Paused = 0;
-      HAL_JPEG_ConfigInputBuffer(hjpeg,Jpeg_IN_BufferTab[JPEG_IN_Read_BufferIndex].DataBuffer, Jpeg_IN_BufferTab[JPEG_IN_Read_BufferIndex].DataBufferSize);    
+      jpeg_hal_ctxt.input_paused = 0;
+      HAL_JPEG_ConfigInputBuffer(hjpeg,jpeg_hal_ctxt.intab[jpeg_hal_ctxt.inread_idx].DataBuffer,
+                                jpeg_hal_ctxt.intab[jpeg_hal_ctxt.inread_idx].DataBufferSize);
   
       HAL_JPEG_Resume(hjpeg, JPEG_PAUSE_RESUME_INPUT); 
     }
     
-    JPEG_IN_Write_BufferIndex++;
-    if(JPEG_IN_Write_BufferIndex >= NB_INPUT_DATA_BUFFERS)
+    jpeg_hal_ctxt.inwrite_idx++;
+    if(jpeg_hal_ctxt.inwrite_idx >= NB_INPUT_DATA_BUFFERS)
     {
-      JPEG_IN_Write_BufferIndex = 0;
+      jpeg_hal_ctxt.inwrite_idx = 0;
     }            
   }
 }
@@ -223,7 +266,7 @@ void JPEG_InputHandler(JPEG_HandleTypeDef *hjpeg)
   */
 void HAL_JPEG_InfoReadyCallback(JPEG_HandleTypeDef *hjpeg, JPEG_ConfTypeDef *pInfo)
 {
-  if(JPEG_GetDecodeColorConvertFunc(pInfo, &pConvert_Function, &MCU_TotalNb) != HAL_OK)
+  if(JPEG_GetDecodeColorConvertFunc(pInfo, &jpeg_hal_ctxt.convert_func, &jpeg_hal_ctxt.mcunum) != HAL_OK)
   {
     assert(0);
   }
@@ -237,30 +280,32 @@ void HAL_JPEG_InfoReadyCallback(JPEG_HandleTypeDef *hjpeg, JPEG_ConfTypeDef *pIn
   */
 void HAL_JPEG_GetDataCallback(JPEG_HandleTypeDef *hjpeg, uint32_t NbDecodedData)
 {
-  if(NbDecodedData == Jpeg_IN_BufferTab[JPEG_IN_Read_BufferIndex].DataBufferSize)
+  if(NbDecodedData == jpeg_hal_ctxt.intab[jpeg_hal_ctxt.inread_idx].DataBufferSize)
   {  
-    Jpeg_IN_BufferTab[JPEG_IN_Read_BufferIndex].State = JPEG_BUFFER_EMPTY;
-    Jpeg_IN_BufferTab[JPEG_IN_Read_BufferIndex].DataBufferSize = 0;
+    jpeg_hal_ctxt.intab[jpeg_hal_ctxt.inread_idx].State = JPEG_BUFFER_EMPTY;
+    jpeg_hal_ctxt.intab[jpeg_hal_ctxt.inread_idx].DataBufferSize = 0;
   
-    JPEG_IN_Read_BufferIndex++;
-    if(JPEG_IN_Read_BufferIndex >= NB_INPUT_DATA_BUFFERS)
+    jpeg_hal_ctxt.inread_idx++;
+    if(jpeg_hal_ctxt.inread_idx >= NB_INPUT_DATA_BUFFERS)
     {
-      JPEG_IN_Read_BufferIndex = 0;
+      jpeg_hal_ctxt.inread_idx = 0;
     }
   
-    if(Jpeg_IN_BufferTab[JPEG_IN_Read_BufferIndex].State == JPEG_BUFFER_EMPTY)
+    if(jpeg_hal_ctxt.intab[jpeg_hal_ctxt.inread_idx].State == JPEG_BUFFER_EMPTY)
     {
       HAL_JPEG_Pause(hjpeg, JPEG_PAUSE_RESUME_INPUT);
-      Input_Is_Paused = 1;
+      jpeg_hal_ctxt.input_paused = 1;
     }
     else
     {    
-      HAL_JPEG_ConfigInputBuffer(hjpeg,Jpeg_IN_BufferTab[JPEG_IN_Read_BufferIndex].DataBuffer, Jpeg_IN_BufferTab[JPEG_IN_Read_BufferIndex].DataBufferSize);    
+      HAL_JPEG_ConfigInputBuffer(hjpeg,jpeg_hal_ctxt.intab[jpeg_hal_ctxt.inread_idx].DataBuffer,
+                                jpeg_hal_ctxt.intab[jpeg_hal_ctxt.inread_idx].DataBufferSize);
     }
   }
   else
   {
-    HAL_JPEG_ConfigInputBuffer(hjpeg,Jpeg_IN_BufferTab[JPEG_IN_Read_BufferIndex].DataBuffer + NbDecodedData, Jpeg_IN_BufferTab[JPEG_IN_Read_BufferIndex].DataBufferSize - NbDecodedData);      
+    HAL_JPEG_ConfigInputBuffer(hjpeg,jpeg_hal_ctxt.intab[jpeg_hal_ctxt.inread_idx].DataBuffer + NbDecodedData,
+                            jpeg_hal_ctxt.intab[jpeg_hal_ctxt.inread_idx].DataBufferSize - NbDecodedData);
   }
 }
 
@@ -273,21 +318,21 @@ void HAL_JPEG_GetDataCallback(JPEG_HandleTypeDef *hjpeg, uint32_t NbDecodedData)
   */
 void HAL_JPEG_DataReadyCallback (JPEG_HandleTypeDef *hjpeg, uint8_t *pDataOut, uint32_t OutDataLength)
 {
-  Jpeg_OUT_BufferTab[JPEG_OUT_Write_BufferIndex].State = JPEG_BUFFER_FULL;
-  Jpeg_OUT_BufferTab[JPEG_OUT_Write_BufferIndex].DataBufferSize = OutDataLength;
+  jpeg_hal_ctxt.outtab[jpeg_hal_ctxt.outwrite_idx].State = JPEG_BUFFER_FULL;
+  jpeg_hal_ctxt.outtab[jpeg_hal_ctxt.outwrite_idx].DataBufferSize = OutDataLength;
     
-  JPEG_OUT_Write_BufferIndex++;
-  if(JPEG_OUT_Write_BufferIndex >= NB_OUTPUT_DATA_BUFFERS)
+  jpeg_hal_ctxt.outwrite_idx++;
+  if(jpeg_hal_ctxt.outwrite_idx >= NB_OUTPUT_DATA_BUFFERS)
   {
-    JPEG_OUT_Write_BufferIndex = 0;
+    jpeg_hal_ctxt.outwrite_idx = 0;
   }
 
-  if(Jpeg_OUT_BufferTab[JPEG_OUT_Write_BufferIndex].State != JPEG_BUFFER_EMPTY)
+  if(jpeg_hal_ctxt.outtab[jpeg_hal_ctxt.outwrite_idx].State != JPEG_BUFFER_EMPTY)
   {
     HAL_JPEG_Pause(hjpeg, JPEG_PAUSE_RESUME_OUTPUT);
-    Output_Is_Paused = 1;
+    jpeg_hal_ctxt.output_paused = 1;
   }
-  HAL_JPEG_ConfigOutputBuffer(hjpeg, Jpeg_OUT_BufferTab[JPEG_OUT_Write_BufferIndex].DataBuffer, CHUNK_SIZE_OUT); 
+  HAL_JPEG_ConfigOutputBuffer(hjpeg, jpeg_hal_ctxt.outtab[jpeg_hal_ctxt.outwrite_idx].DataBuffer, CHUNK_SIZE_OUT); 
 }
 
 /**
@@ -307,7 +352,7 @@ void HAL_JPEG_ErrorCallback(JPEG_HandleTypeDef *hjpeg)
   */
 void HAL_JPEG_DecodeCpltCallback(JPEG_HandleTypeDef *hjpeg)
 {    
-  Jpeg_HWDecodingEnd = 1; 
+  jpeg_hal_ctxt.hw_end = 1; 
 }
 /**
   * @}
@@ -395,15 +440,15 @@ int HAL_JPEG_UserInit (void)
     JPEG_InitColorTables();
 
     /* Init the HAL JPEG driver */
-    JPEG_Handle.Instance = JPEG;
-    HAL_JPEG_Init(&JPEG_Handle);
+    jpeg_hal_ctxt.hal_jpeg.Instance = JPEG;
+    HAL_JPEG_Init(&jpeg_hal_ctxt.hal_jpeg);
 }
 
 int JPEG_Info (jpeg_info_t *info)
 {
     JPEG_ConfTypeDef JPEG_InfoHandle;
 
-    HAL_JPEG_GetInfo(&JPEG_Handle, &JPEG_InfoHandle);
+    HAL_JPEG_GetInfo(&jpeg_hal_ctxt.hal_jpeg, &JPEG_InfoHandle);
     info->w = JPEG_InfoHandle.ImageWidth;
     info->h = JPEG_InfoHandle.ImageHeight;
     info->colormode = JPEG_InfoHandle.ColorSpace;
@@ -418,17 +463,17 @@ int JPEG_Abort (JPEG_HandleTypeDef *hjpeg)
 
 void JPEG_IRQHandler(void)
 {
-  HAL_JPEG_IRQHandler(&JPEG_Handle);
+  HAL_JPEG_IRQHandler(&jpeg_hal_ctxt.hal_jpeg);
 }
 
 void DMA2_Stream3_IRQHandler(void)
 {
-  HAL_DMA_IRQHandler(JPEG_Handle.hdmain);
+  HAL_DMA_IRQHandler(jpeg_hal_ctxt.hal_jpeg.hdmain);
 }
 
 void DMA2_Stream4_IRQHandler(void)
 {
-  HAL_DMA_IRQHandler(JPEG_Handle.hdmaout);
+  HAL_DMA_IRQHandler(jpeg_hal_ctxt.hal_jpeg.hdmaout);
 }
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

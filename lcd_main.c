@@ -310,7 +310,9 @@ void vid_update (screen_t *in)
 
 void vid_direct (screen_t *s)
 {
-    vid_get_ready_screen(s);
+    screen_t screen;
+    vid_get_ready_screen(&screen);
+    vid_copy(&screen, s);
 }
 
 void vid_print_info (void)

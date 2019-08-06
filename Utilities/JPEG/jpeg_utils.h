@@ -129,8 +129,6 @@ void JPEG_InputHandler(JPEG_HandleTypeDef *hjpeg);
 int HAL_JPEG_UserInit (void);
 int JPEG_Info (jpeg_info_t *info);
 
-extern JPEG_HandleTypeDef    JPEG_Handle;
-
 #endif /* __JPEG_UTILS_H */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

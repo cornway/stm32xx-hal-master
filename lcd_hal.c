@@ -215,14 +215,13 @@ static int screen_update_direct (lcd_wincfg_t *cfg, screen_t *psrc)
 
 void DMA2D_XferCpltCallback (struct __DMA2D_HandleTypeDef * hdma2d);
 
-static DMA2D_HandleTypeDef *
-__screen_hal_copy_setup
-    (screen_hal_ctxt_t *ctxt, screen_t *dest, screen_t *src,
-     int dest_leg, int src_leg, uint32_t mode, uint32_t pixel_size)
+static DMA2D_HandleTypeDef *__screen_hal_copy_setup
+                        (screen_hal_ctxt_t *ctxt, screen_t *dest, screen_t *src,
+                        int dest_leg, int src_leg, uint32_t mode, uint32_t pixel_size)
 {
     DMA2D_HandleTypeDef *hdma2d = GET_VHAL_DMA2D(ctxt->lcd_cfg);
 
-    hdma2d->Init.Mode         = DMA2D_M2M;
+    hdma2d->Init.Mode         = DMA2D_M2M;/*FIXME : only m2m for single buffer*/
     hdma2d->Init.ColorMode    = dma2d_color_mode2out_map[dest->colormode];
     hdma2d->Init.OutputOffset = dest_leg - src->width;
     hdma2d->Init.AlphaInverted = DMA2D_REGULAR_ALPHA;
@@ -230,12 +229,12 @@ __screen_hal_copy_setup
 
     hdma2d->XferCpltCallback  = DMA2D_XferCpltCallback;
 
-    hdma2d->LayerCfg[1].AlphaMode = DMA2D_NO_MODIF_ALPHA;
-    hdma2d->LayerCfg[1].InputAlpha = 0xFF;
-    hdma2d->LayerCfg[1].InputColorMode = dma2d_color_mode2in_map[src->colormode];
-    hdma2d->LayerCfg[1].InputOffset = src_leg - src->width;
-    hdma2d->LayerCfg[1].RedBlueSwap = DMA2D_RB_REGULAR;
-    hdma2d->LayerCfg[1].AlphaInverted = DMA2D_REGULAR_ALPHA;
+    hdma2d->LayerCfg[0].AlphaMode = DMA2D_COMBINE_ALPHA;
+    hdma2d->LayerCfg[0].InputAlpha = src->alpha;
+    hdma2d->LayerCfg[0].InputColorMode = dma2d_color_mode2in_map[src->colormode];
+    hdma2d->LayerCfg[0].InputOffset = src_leg - src->width;
+    hdma2d->LayerCfg[0].RedBlueSwap = DMA2D_RB_REGULAR;
+    hdma2d->LayerCfg[0].AlphaInverted = DMA2D_REGULAR_ALPHA;
 
     hdma2d->Instance          = DMA2D;
     return hdma2d;
@@ -300,6 +299,8 @@ int screen_hal_copy (lcd_wincfg_t *cfg, copybuf_t *copybuf, uint8_t pix_bytes)
     screen_t *dest = &copybuf->dest;
     screen_t *src = &copybuf->src;
     DMA2D_HandleTypeDef *hdma2d;
+    uint8_t alpha = src->alpha;
+    uint32_t dma2d_mode = (src->alpha) ? DMA2D_M2M_BLEND : DMA2D_M2M;
 
     void *dptr = (void *)((uint32_t)dest->buf + (dest->y * dest->width + dest->x) * pix_bytes);
     void *source      = (void *)((uint32_t)src->buf + (src->y * src->width + src->x) * pix_bytes);
@@ -307,7 +308,7 @@ int screen_hal_copy (lcd_wincfg_t *cfg, copybuf_t *copybuf, uint8_t pix_bytes)
     GET_VHAL_CTXT(cfg)->state = V_STATE_QCOPY;
 
     hdma2d = __screen_hal_copy_setup(GET_VHAL_CTXT(cfg), dest, src,
-                                                          dest->width, src->width, DMA2D_M2M, pix_bytes);
+                                                          dest->width, src->width, dma2d_mode, pix_bytes);
 
     return screen_hal_copy_start(cfg, hdma2d, dest, src, dptr, source);
 }
