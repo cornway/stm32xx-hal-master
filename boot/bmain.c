@@ -18,6 +18,7 @@
 #define BOOT_SYS_LOG_NAME "log.txt"
 #define BOOT_BIN_DIR_NAME "BIN"
 #define BOOT_SYS_LOG_PATH BOOT_SYS_DIR_PATH"/"BOOT_SYS_LOG_NAME
+#define BOOT_STARTUP_MUSIC_PATH "/doom/music/psx/song_22.wav"
 
 static int boot_program_bypas = 0;
 
@@ -31,6 +32,8 @@ int bin_collected_cnt = 0;
 bsp_bin_t **boot_bin_packed_array = NULL;
 int boot_bin_packed_size = 0;
 int boot_bin_selected = 0;
+
+static cd_track_t boot_cd = {NULL};
 
 static void boot_gui_bsp_init (gui_t *gui);
 static int gui_stdout_hook (int argc, const char **argv);
@@ -411,7 +414,6 @@ static int __b_exec_selected (bsp_bin_t *bin)
     int ret = -CMDERR_INVPARM;
     switch (bin->filetype) {
         case BIN_FILE: ret = cmd_exec_dsr("boot", bin->path, NULL, NULL);
-                       
         break;
         case BIN_LINK: ret = b_handle_lnk(bin->path);
         break;
@@ -460,8 +462,14 @@ static int b_gui_print_bin_list (pane_t *pane)
 
 static int b_exec_selected (pane_t *pane, void *data, int size)
 {
+    int ret;
     gui_select_pane(&gui, pane_progress);
-    return __b_exec_selected(boot_bin_packed_array[boot_bin_selected]);
+    cd_stop(&boot_cd);
+    ret = __b_exec_selected(boot_bin_packed_array[boot_bin_selected]);
+    if (ret != CMDERR_OK) {
+        cd_play_name(&boot_cd, BOOT_STARTUP_MUSIC_PATH);
+    }
+    return ret;
 }
 
 static int b_handle_selected (pane_t *pane, component_t *com, void *user)
@@ -581,15 +589,13 @@ void boot_gui_preinit (void)
 
 int boot_main (int argc, const char **argv)
 {
-    cd_track_t cd;
-
     boot_read_path("");
     boot_pack_bin_list(boot_bin_head, bin_collected_cnt);
     b_gui_print_bin_list(pane_selector);
     cmd_register_i32(&boot_program_bypas, "skipflash");
     dprintf("Ready\n");
 
-    cd_play_name(&cd, "/doom/music/psx/song_22.wav");
+    cd_play_name(&boot_cd, BOOT_STARTUP_MUSIC_PATH);
 
     while (!gui.destroy) {
 

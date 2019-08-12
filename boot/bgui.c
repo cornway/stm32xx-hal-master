@@ -557,6 +557,7 @@ static int gui_rawpic_draw (pane_t *pane, rawpic_t *pic)
     src.alpha = pic->alpha;
 
     vid_copy(&dest, &src);
+    vid_vsync(0);
 }
 
 static void gui_comp_draw (pane_t *pane, component_t *com)
@@ -573,7 +574,7 @@ static void gui_comp_draw (pane_t *pane, component_t *com)
 
         if (com->draw) {
             com->draw(pane, com, NULL);
-        } else if (0) {
+        } else if (com->bcolor != color) {
             gui_com_fill(com, color);
         }
 
@@ -802,8 +803,8 @@ static int __wakeup (gui_t *gui, component_t *com)
 {
     com->repaint = 1;
     if (com->parent == gui->selected) {
-        com->parent->repaint = 1;
         gui_com_clear(com);
+        com->parent->repaint = 1;
     }
     return 0;
 }
@@ -836,10 +837,7 @@ void gui_wakeup_pane (pane_t *pane)
         }
     }
     while (com) {
-        com->repaint = 1;
-        //if (pane->repaint) {
-        //    gui_com_clear(com);
-        //}
+        __wakeup(pane->parent, com);
         com = com->next;
     }
 }

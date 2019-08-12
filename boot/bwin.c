@@ -175,21 +175,14 @@ pane_t *win_new_allert (gui_t *gui, int w, int h)
 
     pane->selectable = 0;
 
-    com = gui_get_comp(gui, "close", "X");
-    com->act = win_alert_handler;
-    com->userflags = WALERT_ACT_CLOSE;
-    com->glow = 0x1f;
-    com->selectable = 1;
-    gui_set_comp(pane, com, 0, 0, btnsize, btnsize);
-
     prop.bcolor = COLOR_RED;
     prop.fcolor = COLOR_BLACK;
     prop.sfx.sfx_close = sfxclose;
     gui_set_prop(com, &prop);
 
-    com = gui_get_comp(gui, "title", "/_\\ Warning");
+    com = gui_get_comp(gui, "title", "MESSAGE");
     com->userflags = WALERT_ACT_NONE;
-    gui_set_comp(pane, com, btnsize, 0, w - btnsize, btnsize);
+    gui_set_comp(pane, com, 0, 0, w, btnsize);
 
     prop.bcolor = COLOR_LBLUE;
     prop.fcolor = COLOR_WHITE;
@@ -729,13 +722,13 @@ static int win_prog_repaint (pane_t *pane, component_t *com, void *user)
     int compl, left;
 
     if (win->percent == 100) {
-        gui_com_fill(com, COLOR_BLUE);
+        gui_com_fill(com, COLOR_GREEN);
     } else if (win->percent >= 0) {
         compl = (dim.w * win->percent) / 100;
         left = dim.w - compl;
 
         dim.w = compl;
-        gui_rect_fill(com, &dim, COLOR_BLUE);
+        gui_rect_fill(com, &dim, COLOR_GREEN);
         dim.x = compl;
         dim.w = left;
         gui_rect_fill(com, &dim, COLOR_WHITE);

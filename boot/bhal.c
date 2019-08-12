@@ -285,7 +285,6 @@ static int bhal_prog_handle_func
     int errors = 0, errors_total = 0;
     int blkcnt = 0, blktotal = size / RW_PORTION;
     char linebuf[B_MAX_LINEBUF];
-    const char statbar[] = "....";
 
     if (cplth) {
         cplth(func->entermsg, 0);
@@ -310,7 +309,7 @@ static int bhal_prog_handle_func
         blkcnt++;
         if (cplth) {
             int per = (blkcnt * PERCENT) / blktotal;
-            cplth(statbar + GET_PAD(per, sizeof(statbar) - 1), per);
+            cplth(func->entermsg, per);
         }
     }
     size = size - (tmpaddr - addr);
