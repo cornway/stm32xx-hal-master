@@ -5,6 +5,7 @@
 #include "int/lcd_int.h"
 
 #include <misc_utils.h>
+#include <bsp_sys.h>
 
 enum {
     V_STATE_IDLE,
@@ -31,6 +32,14 @@ typedef struct screen_hal_ctxt_s {
 #define GET_VHAL_HALCFG(cfg) ((LCD_LayerCfgTypeDef *)GET_VHAL_CTXT(cfg)->hal_cfg)
 #define VHAL_PIX_FMT(cfg, num) (GET_VHAL_LTDC(cfg)->LayerCfg[num].PixelFormat)
 
+/*FIXME!!!*/
+int screen_hal_get_lcd_clock_presc (void)
+{
+    if (EXEC_REGION_DRIVER()) {
+        return 2;
+    }
+    return 1;
+}
 
 lcd_layers_t screen_hal_set_layer (lcd_wincfg_t *cfg)
 {

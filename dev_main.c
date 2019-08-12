@@ -106,6 +106,7 @@ static void SystemClock_Config(void)
     RCC_OscInitTypeDef RCC_OscInitStruct;
     RCC_PeriphCLKInitTypeDef PeriphClkInitStruct;
     HAL_StatusTypeDef  ret = HAL_OK;
+    const int ltdc_clk_presc = screen_hal_get_lcd_clock_presc();
 
     /* Enable Power Control clock */
     __HAL_RCC_PWR_CLK_ENABLE();
@@ -147,7 +148,7 @@ static void SystemClock_Config(void)
 
     PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_LTDC;
     /*FIXME : !!!! 384 / 2 -> 384*/
-    PeriphClkInitStruct.PLLSAI.PLLSAIN = 384 / 2;
+    PeriphClkInitStruct.PLLSAI.PLLSAIN = 384 / ltdc_clk_presc;
     PeriphClkInitStruct.PLLSAI.PLLSAIR = 7;
     PeriphClkInitStruct.PLLSAIDivR = RCC_PLLSAIDIVR_2;
     HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct);

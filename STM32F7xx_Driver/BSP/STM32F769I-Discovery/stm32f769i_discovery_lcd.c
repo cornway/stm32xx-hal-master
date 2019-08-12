@@ -98,6 +98,7 @@ EndDependencies */
 #include "../../../Utilities/Fonts/font16.c"
 #include "../../../Utilities/Fonts/font12.c"
 #include "../../../Utilities/Fonts/font8.c"
+#include "../../../int/lcd_int.h"
 #include "misc_utils.h"
 #include "debug.h"
 /** @addtogroup BSP
@@ -293,9 +294,10 @@ int BSP_LCD_UseHDMI (void)
 uint8_t BSP_LCD_InitEx(LCD_OrientationTypeDef orientation)
 {
   DSI_PLLInitTypeDef dsiPllInit;
+  const int clk_presc = screen_hal_get_lcd_clock_presc();
   //static RCC_PeriphCLKInitTypeDef  PeriphClkInitStruct;
   /*FIXME : !!!! 27429 / 2 -> 27429*/
-  uint32_t LcdClock  = 27429 / 2; /*!< LcdClk = 27429 kHz */
+  uint32_t LcdClock  = 27429 / clk_presc; /*!< LcdClk = 27429 kHz */
   uint16_t read_id = 0;
 
   uint32_t laneByteClk_kHz = 0;

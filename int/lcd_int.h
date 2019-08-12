@@ -43,6 +43,8 @@ void screen_hal_sync (lcd_wincfg_t *cfg, int wait);
 int screen_hal_copy (lcd_wincfg_t *cfg, copybuf_t *copybuf, uint8_t pix_bytes);
 int screen_hal_copy_h8 (lcd_wincfg_t *cfg, copybuf_t *copybuf, int interleave);
 
+int screen_hal_get_lcd_clock_presc (void);
+
 static inline void screen_hal_layreload (lcd_wincfg_t *cfg)
 {
     if (cfg->config.laynum < 2) {
