@@ -335,9 +335,10 @@ int bsp_exec_cmd (arch_word_t *progaddr, const char *path)
 
 static void __install_status_clbk (const char *msg, int percent)
 {
-    win_prog_set(pane_progress, msg, percent);
-    HAL_Delay(10);
-    gui_draw(&gui);
+    if (win_prog_set(pane_progress, msg, percent)) {
+        gui_draw(&gui);
+        HAL_Delay(10);
+    }
 }
 
 arch_word_t *bsp_install_exec (arch_word_t *progptr, const char *path)
@@ -582,7 +583,6 @@ void boot_gui_preinit (void)
 
     bsp_stdout_register_if(gui_stdout_hook);
 
-    pic = gui_cache_jpeg(pane_console, "sys/art/title.jpg");
     pic->alpha = 50;
     gui_set_pic(pane_console, pic, 0);
 }
@@ -606,10 +606,9 @@ int boot_main (int argc, const char **argv)
     return 0;
 }
 
-static uint32_t inpost_tsf = 0;
-
 static i_event_t *__post_key (i_event_t  *evts, i_event_t *event)
 {
+    static uint32_t inpost_tsf = 0;
     gevt_t evt;
 
     if (event->state == keydown) {

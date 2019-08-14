@@ -225,6 +225,7 @@ pane_t *win_new_allert (gui_t *gui, int w, int h)
     prop.fcolor = COLOR_BLACK;
     gui_set_prop(com, &prop);
 
+    /*TODO : 'repaint' field is private*/
     pane->repaint = 0;
 
     return pane;
@@ -497,7 +498,6 @@ static char *__get_buf (win_con_t *con, con_line_t *line, int x, int *size)
 static inline int
 __win_con_print_at (win_con_t *con, int x, int y, const char *str, rgba_t textcolor)
 {
-    fontprop_t fprop;
     con_line_t *line;
     char *buf;
     int max;
@@ -589,7 +589,7 @@ win_con_clean_line (component_t *com, fontprop_t *fprop, con_line_t *line, int l
 {
     if (line->pos) {
         dim_t dim = {0, linenum * fprop->h, line->pos * fprop->w, fprop->h};
-        gui_rect_fill(com, &dim, com->bcolor);
+        gui_rect_fill_HAL(com, &dim, com->bcolor);
     }
 }
 
@@ -671,7 +671,7 @@ pane_t *win_new_progress (gui_t *gui, prop_t *prop, int x, int y, int w, int h)
 
     win_trunc_frame(&dim, &border, 0, htitle, w, h - htitle);
 
-    com = gui_get_comp(gui, "statusbar", "     ");
+    com = gui_get_comp(gui, "statusbar", "     "); /*Reserved space to print "100%\0"*/
     gui_set_comp(pane, com, dim.x, dim.y, dim.w, dim.h);
     com->draw = win_prog_repaint;
     com->act = win_prog_act_resp;
@@ -692,7 +692,7 @@ pane_t *win_new_progress (gui_t *gui, prop_t *prop, int x, int y, int w, int h)
     return pane;
 }
 
-void win_prog_set (pane_t *pane, const char *text, int percent)
+int win_prog_set (pane_t *pane, const char *text, int percent)
 {
     win_progress_t *win = WPROG_HANDLE(pane);
 
@@ -701,13 +701,16 @@ void win_prog_set (pane_t *pane, const char *text, int percent)
     }
 
     if (win->percent && win->percent == percent) {
-        return;
+        return 0;
     }
 
-    gui_print(win->title, "[%s]", text);
-    gui_print(win->bar, "%03i%%", percent);
-    gui_wakeup_pane(pane);
+    if (text) {
+        gui_print(win->title, "[%s]", text);
+    }
+    gui_print(win->bar, "%02.03i%%", percent);
     win->percent = percent;
+
+    return 1;
 }
 
 static int win_prog_act_resp (pane_t *pane, component_t *com, void *user)
@@ -722,21 +725,21 @@ static int win_prog_repaint (pane_t *pane, component_t *com, void *user)
     int compl, left;
 
     if (win->percent == 100) {
-        gui_com_fill(com, COLOR_GREEN);
+        gui_com_fill_HAL(com, COLOR_GREEN);
     } else if (win->percent >= 0) {
         compl = (dim.w * win->percent) / 100;
         left = dim.w - compl;
 
         dim.w = compl;
-        gui_rect_fill(com, &dim, COLOR_GREEN);
+        gui_rect_fill_HAL(com, &dim, COLOR_GREEN);
         dim.x = compl;
         dim.w = left;
-        gui_rect_fill(com, &dim, COLOR_WHITE);
+        gui_rect_fill_HAL(com, &dim, COLOR_WHITE);
     } else {
-        gui_com_fill(com, COLOR_RED);
+        gui_com_fill_HAL(com, COLOR_RED);
     }
     return 1;
-}
+} 
 
 #endif /*BSP_DRIVER*/
 

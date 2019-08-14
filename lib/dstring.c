@@ -76,7 +76,7 @@ D_DECL_MEMSET(uint32_t, 32);
 #define d_memzero_8(dst, cnt, off) d_memset_8(dst, cnt, 0, off)
 #define d_memzero_32(dst, cnt, off) d_memset_32(dst, cnt, 0, off)
 
-static void d_memzero (void *_dst, int cnt)
+static void _d_memzero (void *_dst, int cnt)
 {
     arch_word_t wdest = (arch_word_t)_dst;
 
@@ -108,7 +108,7 @@ static void d_memzero (void *_dst, int cnt)
 void d_memset (void *_dst, int v, int cnt)
 {
     if (0 == v) {
-        d_memzero(_dst, cnt);
+        _d_memzero(_dst, cnt);
     } else {
         __d_memset(_dst, v, cnt);
     }

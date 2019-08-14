@@ -68,7 +68,6 @@ struct {                                \
     gui_sfx_t sfx;                      \
     uint16_t focus: 1,                  \
              type:  6,                  \
-             repaint: 1,                \
              ispad:   1,                \
              userdraw: 1;               \
 }
@@ -108,6 +107,7 @@ typedef struct pane_s {
     char name[GUI_MAX_NAME];
 
     uint8_t selectable: 1,
+            repaint: 1,
             picontop: 1;
 } pane_t;
 
@@ -144,18 +144,16 @@ typedef struct gui_bsp_api_s {
 
 typedef struct gui_s {
     void *directmem;
-    void *tempmem;
-    void *dummy;
+    void *cachemem;
+    void *user;
     dim_t dim;
     pane_t *head, *tail;
     pane_t *selected;
-    void *user;
     uint32_t repainttsf;
     int32_t framerate;
     int32_t dbglvl;
     const void *font;
     uint8_t destroy;
-    uint8_t needsupdate;
     char name[GUI_MAX_NAME];
 
     gui_bsp_api_t bspapi;
@@ -214,18 +212,17 @@ void gui_set_prop (component_t *c, prop_t *prop);
 void gui_get_font_prop (fontprop_t *prop, const void *_font);
 const void *gui_get_font_4_size (gui_t *gui, int size, int bestmatch);
 
-void gui_text (component_t *com, const char *text, int x, int y);
+void gui_set_text (component_t *com, const char *text, int x, int y);
 void gui_printxy (component_t *com, int x, int y, const char *fmt, ...) PRINTF_ATTR(4, 5);
 int gui_apendxy (component_t *com, int x, int y, const char *fmt, ...) PRINTF_ATTR(4, 5);
 int gui_draw_string (component_t *com, int line, rgba_t textcolor, const char *str);
 int gui_draw_string_c (component_t *com, int line, rgba_t textcolor, const char *str);
-void gui_rect_fill (component_t *com, dim_t *rect, rgba_t color);
+void gui_rect_fill_HAL (component_t *com, dim_t *rect, rgba_t color);
 
 void gui_com_clear (component_t *com);
-void gui_com_fill (component_t *com, rgba_t color);
+void gui_com_fill_HAL (component_t *com, rgba_t color);
 void gui_draw (gui_t *gui);
 void gui_resp (gui_t *gui, component_t *com, gevt_t *evt);
-void gui_wakeup (gui_t *gui, const char *name);
 void gui_wakeup_com (gui_t *gui, component_t *com);
 void gui_wakeup_pane (pane_t *pane);
 pane_t *gui_search_pane (gui_t *gui, const char *name);
@@ -233,9 +230,6 @@ component_t *gui_search_com (pane_t *pane, const char *name);
 void gui_select_pane (gui_t *gui, pane_t *pane);
 void gui_release_pane (gui_t *gui, pane_t *pane);
 pane_t *gui_select_next_pane (gui_t *gui);
-
-void *gui_touch (gui_t *gui, gui_obj_type_t *type, const char *path);
-component_t *gui_set_focus (gui_t *gui, const char *path);
 component_t *gui_set_next_focus (gui_t *gui);
 
 #define COLOR_WHITE (GFX_RGBA8888(0xffU, 0xffU, 0xffU, 0xffU))
@@ -274,5 +268,5 @@ int win_con_printline_c (pane_t *pane, int y,
 void win_con_clear (pane_t *pane);
 
 pane_t *win_new_progress (gui_t *gui, prop_t *prop, int x, int y, int w, int h);
-void win_prog_set (pane_t *pane, const char *text, int percent);
+int win_prog_set (pane_t *pane, const char *text, int percent);
 

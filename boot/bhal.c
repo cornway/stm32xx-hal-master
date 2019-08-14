@@ -309,7 +309,7 @@ static int bhal_prog_handle_func
         blkcnt++;
         if (cplth) {
             int per = (blkcnt * PERCENT) / blktotal;
-            cplth(func->entermsg, per);
+            cplth(NULL, per);
         }
     }
     size = size - (tmpaddr - addr);
