@@ -239,7 +239,7 @@ static component_t *gui_iterate_all (gui_t *gui, void *user, int (*h) (component
 static inline void
 gui_set_dirty (gui_t *gui, dim_t *dim)
 {
-    gui_int_t *gui_int = gui->user;
+    gui_int_t *gui_int = gui->ctxt;
     assert(gui_int);
 
     dim_extend(&gui_int->dirtybox, dim);
@@ -248,7 +248,7 @@ gui_set_dirty (gui_t *gui, dim_t *dim)
 static inline d_bool
 gui_is_com_durty (gui_t *gui, component_t *com)
 {
-    gui_int_t *gui_int = gui->user;
+    gui_int_t *gui_int = gui->ctxt;
     assert(gui_int);
 
     return dim_check_intersect(&gui_int->activebox, &com->dim);
@@ -257,7 +257,7 @@ gui_is_com_durty (gui_t *gui, component_t *com)
 static inline void
 gui_mark_dirty (gui_t *gui)
 {
-    gui_int_t *gui_int = gui->user;
+    gui_int_t *gui_int = gui->ctxt;
     assert(gui_int);
 
     d_memcpy(&gui_int->activebox, &gui_int->dirtybox, sizeof(gui_int->activebox));
@@ -267,7 +267,7 @@ gui_mark_dirty (gui_t *gui)
 static inline void
 gui_post_draw (gui_t *gui)
 {
-    gui_int_t *gui_int = gui->user;
+    gui_int_t *gui_int = gui->ctxt;
     assert(gui_int);
 
     d_memzero(&gui_int->activebox, sizeof(gui_int->activebox));
@@ -345,7 +345,7 @@ void gui_init (gui_t *gui, const char *name, uint8_t framerate,
 
     d_memcpy(&gui->bspapi, bspapi, sizeof(gui->bspapi));
     d_memcpy(&gui_int.activebox, &gui->dim, sizeof(gui_int.activebox));
-    gui->user = &gui_int;
+    gui->ctxt = &gui_int;
 }
 
 void gui_destroy (gui_t *gui)
@@ -411,9 +411,7 @@ pane_t *gui_create_pane (gui_t *gui, const char *name, int extra)
         allocsize += extra;
     }
     allocsize = ROUND_UP(allocsize, 4);
-    if (gui_bsp_alloc(gui)) {
-        pane = gui_bsp_alloc(gui)(allocsize);
-    }
+    pane = gui_bsp_alloc(gui, allocsize);
     assert(pane);
     d_memzero(pane, allocsize);
     snprintf(pane->name, namelen + 1, "%s", name);
@@ -495,9 +493,7 @@ component_t *gui_create_comp (gui_t *gui, const char *name, const char *text)
 
     allocsize = sizeof(*com) + namelen + 1 + textlen + 1;
     allocsize = ROUND_UP(allocsize, sizeof(uint32_t));
-    if (gui_bsp_alloc(gui)) {
-        com = gui_bsp_alloc(gui)(allocsize);
-    }
+    com = gui_bsp_alloc(gui, allocsize);
     assert(com && name);
     d_memzero(com, allocsize);
     snprintf(com->name, sizeof(com->name), "%s", name);
@@ -902,7 +898,7 @@ pane_t *gui_release_pane (gui_t *gui)
     } else {
         gui->selected_head = head->selected_next;
     }
-    return head;
+    return gui->selected_head;
 }
 
 static inline pane_t *

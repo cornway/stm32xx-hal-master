@@ -502,7 +502,7 @@ static void __dbgstream_send (uart_desc_t *uart_desc, streambuf_t *stbuf)
 static void dbgstream_apend_data (streambuf_t *stbuf, const void *data, size_t size)
 {
     char *p = stbuf->data + stbuf->bufposition;
-    memcpy(p, data, size);
+    d_memcpy(p, data, size);
     if (stbuf->bufposition == 0) {
         stbuf->timestamp = HAL_GetTick();
     }

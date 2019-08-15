@@ -72,7 +72,7 @@ __unlink_desc (sfx_cache_t *sfx)
                 wave_cache_head = cur->next;
             }
             wave_cache_slot[sfx->slotnum] = NULL;
-            break;
+            return;
         }
         prev = cur;
         cur = cur->next;

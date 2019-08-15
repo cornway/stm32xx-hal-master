@@ -10,32 +10,6 @@ extern bsp_bin_t *boot_bin_head;
 
 int g_boot_log_level = -1;
 
-static int boot_print_bin_list (int argc, const char **argv)
-{
-    int i = 0;
-    bsp_bin_t *bin = boot_bin_head;
-    boot_bin_parm_t *parm;
-
-    dprintf("%s() :\n", __func__);
-    while (bin) {
-        parm = &bin->parm;
-
-        if (bin->filetype == BIN_FILE) {
-            dprintf("[%i] %s, %s, <0x%p> %u bytes\n",
-                i++, bin->name, bin->path, (void *)parm->progaddr, parm->size);
-        } else if (bin->filetype == BIN_LINK) {
-            dprintf("[%i] %s, %s, <link file>\n",
-                i++, bin->name, bin->path);
-        } else {
-            dprintf("unable to handle : [%i] %s, %s, ???\n",
-                i++, bin->name, bin->path);
-            assert(0)
-        }
-        bin = bin->next;
-    }
-    return argc;
-}
-
 static void __bin_cmd_dump (arch_word_t addr, arch_word_t bytescnt, const char *path)
 {
     int f, i, tmp;

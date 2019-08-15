@@ -140,36 +140,35 @@ typedef struct gui_bsp_api_s {
     } sfx;
 } gui_bsp_api_t;
 
-#define gui_bsp_alloc(gui) \
-    (gui)->bspapi.mem.alloc
+#define gui_bsp_alloc(gui, size) \
+    (gui)->bspapi.mem.alloc(size)
 
-#define gui_bsp_free(gui) \
-    (gui)->bspapi.mem.free
+#define gui_bsp_free(gui, ptr) \
+    (gui)->bspapi.mem.free(ptr)
 
-#define gui_bsp_sfxalloc(gui) \
-    (gui)->bspapi.sfx.alloc
+#define gui_bsp_sfxalloc(gui, name) \
+    (gui)->bspapi.sfx.alloc(name)
 
-#define gui_bsp_sfxrelease(gui) \
+#define gui_bsp_sfxrelease(gui, num) \
     (gui)->bspapi.sfx.release
 
-#define gui_bsp_sfxplay(gui) \
-    (gui)->bspapi.sfx.play
+#define gui_bsp_sfxplay(gui, num, vol) \
+    (gui)->bspapi.sfx.play(num, vol)
 
-#define gui_bsp_sfxstop(gui) \
-    (gui)->bspapi.sfx.stop
+#define gui_bsp_sfxstop(gui, num) \
+    (gui)->bspapi.sfx.stop(num)
 
 typedef struct gui_s {
-    void *directmem;
-    void *cachemem;
-    void *user;
     dim_t dim;
+    void *ctxt;
+    void *cachemem;
+    uint8_t destroy;
     pane_t *head;
     pane_t *selected_head, *selected_tail;
     uint32_t repainttsf;
     int32_t framerate;
     int32_t dbglvl;
     const void *font;
-    uint8_t destroy;
     char name[GUI_MAX_NAME];
 
     gui_bsp_api_t bspapi;
@@ -260,14 +259,16 @@ component_t *gui_set_next_focus (gui_t *gui);
 #define COLOR_GREY (GFX_RGBA8888(0x80U, 0x80U, 0x80U, 0xffU))
 #define COLOR_DGREY (GFX_RGBA8888(0x40U, 0x40U, 0x40U, 0xffU))
 #define COLOR_LGREY (GFX_RGBA8888(0xC0U, 0xC0U, 0xC0U, 0xffU))
+#define COLOR_AQUAMARINE (GFX_RGBA8888(0x7FU, 0xFFU, 0xD4U, 0xffU))
+typedef int (*win_alert_hdlr_t) (const component_t *);
+typedef int (*win_user_hdlr_t) (gevt_t *);
 
-typedef int (*win_handler_t) (pane_t *, void *, int);
-
-void win_set_act_clbk (void *_pane, comp_handler_t h);
+void win_con_set_clbk (void *_pane, comp_handler_t h);
+void win_set_user_clbk (pane_t *pane, win_user_hdlr_t clbk);
 
 pane_t *win_new_allert (gui_t *gui, int w, int h);
-int win_alert (pane_t *pane, const char *text, win_handler_t close,
-                   win_handler_t accept, win_handler_t decline);
+int win_alert (pane_t *pane, const char *text,
+                  win_alert_hdlr_t accept, win_alert_hdlr_t decline);
 
 #define WIN_ALERT_ACCEPT(pane, text, accept) win_alert(pane, text, NULL, accept, NULL)
 #define WIN_ALERT_DECLINE(pane, text, decline) win_alert(pane, text, decline, NULL, decline)

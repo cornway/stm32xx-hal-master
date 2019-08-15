@@ -457,3 +457,9 @@ int d_rlimit_wrap (uint32_t *tsf, uint32_t period)
     return 1;
 }
 
+void d_sleep (uint32_t ms)
+{
+    ms = d_time() + ms;
+    while (ms > d_time()) {}
+}
+

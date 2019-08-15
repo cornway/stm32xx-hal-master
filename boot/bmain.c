@@ -15,29 +15,89 @@
 #include <misc_utils.h>
 
 #define BOOT_SYS_DIR_PATH "/sys"
+#define BOOT_SFX_DIR_PATH (BOOT_SYS_DIR_PATH"/sfx")
 #define BOOT_SYS_LOG_NAME "log.txt"
 #define BOOT_BIN_DIR_NAME "BIN"
 #define BOOT_SYS_LOG_PATH BOOT_SYS_DIR_PATH"/"BOOT_SYS_LOG_NAME
-#define BOOT_STARTUP_MUSIC_PATH "/doom/music/psx/song_22.wav"
+#define BOOT_STARTUP_MUSIC_PATH "/doom/music/3do/song_5.wav"
 
 static int boot_program_bypas = 0;
 
-gui_t gui;
-pane_t *pane, *alert_pane;
-pane_t *pane_console, *pane_selector, *pane_alert, *pane_progress;
-pane_t *pane_pic;
-component_t *gui_com_pic = NULL;
+static gui_t gui;
+static pane_t *pane, *alert_pane;
+static pane_t *pane_console, *pane_selector, *pane_alert, *pane_progress;
+static pane_t *pane_pic;
+static component_t *gui_com_pic = NULL;
 
-bsp_bin_t *boot_bin_head = NULL;
-int bin_collected_cnt = 0;
-bsp_bin_t **boot_bin_packed_array = NULL;
-int boot_bin_packed_size = 0;
-int boot_bin_selected = 0;
+static bsp_bin_t *boot_bin_head = NULL;
+static int bin_collected_cnt = 0;
+static bsp_bin_t **boot_bin_packed_array = NULL;
+static int boot_bin_packed_size = 0;
+static int boot_bin_selected = 0;
 
 static cd_track_t boot_cd = {NULL};
 
+enum {
+    SFX_MOVE,
+    SFX_SCROLL,
+    SFX_WARNING,
+    SFX_CONFIRM,
+    SFX_START_APP,
+    SFX_NOWAY,
+    SFX_MAX,
+};
+
+const char *sfx_names[] =
+{
+    [SFX_MOVE] = "sfxmove.wav",
+    [SFX_SCROLL] = "sfxscrol.wav",
+    [SFX_WARNING] = "sfxwarn.wav",
+    [SFX_CONFIRM] = "sfxconf.wav",
+    [SFX_START_APP] = "sfxstart.wav",
+    [SFX_NOWAY] = "sfxnoway.wav"
+};
+
+static int sfx_ids[arrlen(sfx_names)] = {0};
+
 static void boot_gui_bsp_init (gui_t *gui);
 static int gui_stdout_hook (int argc, const char **argv);
+
+static void boot_sfx_chart_alloc (gui_t *gui)
+{
+    int i;
+    char path[BOOT_MAX_PATH];
+
+    for (i = 0; i < arrlen(sfx_names); i++) {
+        snprintf(path, sizeof(path), "%s/%s", BOOT_SFX_DIR_PATH, sfx_names[i]);
+        sfx_ids[i] = gui_bsp_sfxalloc(gui, path);
+    }
+}
+
+int boot_print_bin_list (int argc, const char **argv)
+{
+    int i = 0;
+    bsp_bin_t *bin = boot_bin_head;
+    boot_bin_parm_t *parm;
+
+    dprintf("%s() :\n", __func__);
+    while (bin) {
+        parm = &bin->parm;
+
+        if (bin->filetype == BIN_FILE) {
+            dprintf("[%i] %s, %s, <0x%p> %u bytes\n",
+                i++, bin->name, bin->path, (void *)parm->progaddr, parm->size);
+        } else if (bin->filetype == BIN_LINK) {
+            dprintf("[%i] %s, %s, <link file>\n",
+                i++, bin->name, bin->path);
+        } else {
+            dprintf("unable to handle : [%i] %s, %s, ???\n",
+                i++, bin->name, bin->path);
+            assert(0)
+        }
+        bin = bin->next;
+    }
+    return argc;
+}
 
 bsp_exec_file_type_t
 bsp_bin_file_compat (const char *in)
@@ -443,29 +503,58 @@ static int b_gui_print_bin_list (pane_t *pane)
     assert(selected >= start);
 
     for (i = 0; i < start; i++) {
-        win_con_printline(pane, i, ".", COLOR_WHITE);
+        win_con_printline(pane, i, "    *", COLOR_BLACK);
     }
     for (i = start + size; i < maxy; i++) {
-        win_con_printline(pane, i, ".", COLOR_WHITE);
+        win_con_printline(pane, i, "    *", COLOR_BLACK);
     }
     for (i = start; i < start + size; i++) {
         if (i == selected) {
-            snprintf(str, sizeof(str), "%*.*s <<<", -prsize, -prsize, binarray[i - start]->name);
-            win_con_printline(pane, i, str, COLOR_YELLOW);
+            snprintf(str, sizeof(str), "%*.*s <---", -prsize, -prsize, binarray[i - start]->name);
+            win_con_printline(pane, i, str, COLOR_RED);
         } else {
             snprintf(str, sizeof(str), "%*.*s", -prsize, -prsize, binarray[i - start]->name);
-            win_con_printline(pane, i, str, COLOR_WHITE);
+            win_con_printline(pane, i, str, COLOR_BLACK);
         }
     }
     gui_set_pic(gui_com_pic, binarray[selected - start]->pic, 1);
     return CMDERR_OK;
 }
 
-static int b_exec_selected (pane_t *pane, void *data, int size)
+static int b_alert_user_clbk (gevt_t *evt)
+{
+    if (evt->sym == GUI_KEY_LEFT ||
+        evt->sym == GUI_KEY_RIGHT) {
+        gui_bsp_sfxplay(&gui, sfx_ids[SFX_MOVE], 100);
+    }
+    return 1;
+}
+
+static int b_console_user_clbk (gevt_t *evt)
+{
+    if (evt->sym == GUI_KEY_LEFT ||
+        evt->sym == GUI_KEY_RIGHT) {
+        gui_bsp_sfxplay(&gui, sfx_ids[SFX_MOVE], 100);
+    }
+    return 1;
+}
+
+static int
+b_alert_decline_clbk (const component_t *com)
+{
+    gui_bsp_sfxplay(&gui, sfx_ids[SFX_NOWAY], 100);
+}
+
+static int b_alert_accept_clbk (const component_t *com)
 {
     int ret;
-    gui_select_pane(&gui, pane_progress);
+
     cd_stop(&boot_cd);
+    gui_bsp_sfxplay(&gui, sfx_ids[SFX_START_APP], 100);
+    d_sleep(100);
+
+    gui_select_pane(&gui, pane_progress);
+
     ret = __b_exec_selected(boot_bin_packed_array[boot_bin_selected]);
     if (ret != CMDERR_OK) {
         cd_play_name(&boot_cd, BOOT_STARTUP_MUSIC_PATH);
@@ -473,7 +562,8 @@ static int b_exec_selected (pane_t *pane, void *data, int size)
     return ret;
 }
 
-static int b_handle_selected (pane_t *pane, component_t *com, void *user)
+static int
+b_selected_clbk (pane_t *pane, component_t *com, void *user)
 {
     gevt_t *evt = (gevt_t *)user;
     d_bool refresh = d_false, wakeup = d_true;
@@ -489,9 +579,10 @@ static int b_handle_selected (pane_t *pane, component_t *com, void *user)
         {
             char buf[CMD_MAX_BUF];
 
+            gui_bsp_sfxplay(&gui, sfx_ids[SFX_WARNING], 100);
             snprintf(buf, sizeof(buf), "Open :\n\'%s\'\nApplicarion?",
                      boot_bin_packed_array[boot_bin_selected]->name);
-            WIN_ALERT_ACCEPT(pane_alert, buf, b_exec_selected);
+            win_alert(pane_alert, buf, b_alert_accept_clbk, b_alert_decline_clbk);
         }
         break;
         default: wakeup = d_false;
@@ -500,6 +591,7 @@ static int b_handle_selected (pane_t *pane, component_t *com, void *user)
         gui_wakeup_pane(pane);
     }
     if (refresh) {
+        gui_bsp_sfxplay(&gui, sfx_ids[SFX_MOVE], 100);
         b_gui_print_bin_list(pane);
     }
     return 1;
@@ -530,12 +622,13 @@ void boot_gui_preinit (void)
     gui_select_pane(&gui, pane_console);
 
     prop.fontprop.font = NULL;
-    prop.bcolor = COLOR_BLACK;
+    prop.bcolor = COLOR_AQUAMARINE;
     prop.name = "binselect";
     pane_selector = win_new_console(&gui, &prop, gui.dim.x, gui.dim.y, gui.dim.w / 2, gui.dim.h);
-    win_set_act_clbk(pane_selector, b_handle_selected);
+    win_con_set_clbk(pane_selector, b_selected_clbk);
 
     pane_alert = win_new_allert(&gui, 400, 300);
+    win_set_user_clbk(pane_alert, b_alert_user_clbk);
 
     dim = pane_alert->dim;
     dim_set_top(&dim, &dim);
@@ -556,7 +649,7 @@ void boot_gui_preinit (void)
     gui_set_comp(pane_pic, gui_com_pic, 0, 0, -1, -1);
     prop.user_draw = 1;
     prop.fcolor = COLOR_BLACK;
-    prop.bcolor = COLOR_BLACK;
+    prop.bcolor = COLOR_AQUAMARINE;
     gui_set_prop(gui_com_pic, &prop);
     gui_set_child(pane_selector, pane_pic);
 
@@ -571,9 +664,11 @@ int boot_main (int argc, const char **argv)
     boot_pack_bin_list(boot_bin_head, bin_collected_cnt);
     b_gui_print_bin_list(pane_selector);
     cmd_register_i32(&boot_program_bypas, "skipflash");
+    boot_sfx_chart_alloc(&gui);
     dprintf("Ready\n");
 
     cd_play_name(&boot_cd, BOOT_STARTUP_MUSIC_PATH);
+    cd_volume(&boot_cd, 40);
 
     while (!gui.destroy) {
 
@@ -592,6 +687,7 @@ static void _gui_symbolic_event_wrap (gui_t *gui, gevt_t *evt)
 
     switch (evt->sym) {
         case GUI_KEY_SELECT:
+            gui_bsp_sfxplay(gui, sfx_ids[SFX_SCROLL], 100);
             gui_select_next_pane(gui);
         break;
         default:

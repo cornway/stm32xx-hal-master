@@ -60,6 +60,8 @@ void bsp_release_wave_sfx (int hdl);
 
 int boot_cmd_handle (int argc, const char **argv);
 
+int boot_print_bin_list (int argc, const char **argv);
+
 enum {
     BOOT_LOG_NONE = -1,
     BOOT_LOG_ERR = 0,

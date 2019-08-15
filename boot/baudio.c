@@ -8,10 +8,10 @@
 #define BSFX_POOLMAX 16
 
 typedef struct bsfx_s {
+    void *cache;
     int channel;
     int wavenum;
     uint16_t id;
-    uint8_t cache[1];
 } bsfx_t;
 
 bsfx_t *bsfx_pool[BSFX_POOLMAX] = {NULL};
@@ -79,10 +79,11 @@ int bsp_open_wave_sfx (const char *name)
     if (!sfx) {
         return -1;
     }
+    sfx->cache = sfx + 1;
     sfx->wavenum = cachenum;
     sfx->channel = -1;
     __set_sfx(sfxidx, sfx);
-    audio_wave_cache(cachenum, sfx->cache, cachesize);
+    audio_wave_cache(cachenum, (uint8_t *)sfx->cache, cachesize);
 
     return sfx->id;
 }
