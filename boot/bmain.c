@@ -22,10 +22,11 @@
 
 static int boot_program_bypas = 0;
 
-component_t *com_console = NULL;
 gui_t gui;
 pane_t *pane, *alert_pane;
 pane_t *pane_console, *pane_selector, *pane_alert, *pane_progress;
+pane_t *pane_pic;
+component_t *gui_com_pic = NULL;
 
 bsp_bin_t *boot_bin_head = NULL;
 int bin_collected_cnt = 0;
@@ -127,13 +128,12 @@ bsp_setup_title_pic (const char *dirpath, bsp_bin_t *bin)
     char name[D_MAX_NAME] = {0};
     char tpath[D_MAX_PATH];
     const char *argv[2] = {0};
-    int fpic;
 
     strcpy(name, bin->name);
     d_vstrtok(argv, 2, name, '.');
 
     snprintf(tpath, sizeof(tpath), "%s/%s.jpg", dirpath, argv[0]);
-    bin->pic = gui_cache_jpeg(pane_selector, tpath);
+    bin->pic = gui_cache_jpeg(&gui, tpath);
 }
 
 bsp_bin_t *
@@ -336,7 +336,7 @@ int bsp_exec_cmd (arch_word_t *progaddr, const char *path)
 static void __install_status_clbk (const char *msg, int percent)
 {
     if (win_prog_set(pane_progress, msg, percent)) {
-        gui_draw(&gui);
+        gui_draw(&gui, 1);
         HAL_Delay(10);
     }
 }
@@ -457,7 +457,7 @@ static int b_gui_print_bin_list (pane_t *pane)
             win_con_printline(pane, i, str, COLOR_WHITE);
         }
     }
-    gui_set_pic(pane, binarray[selected - start]->pic, 1);
+    gui_set_pic(gui_com_pic, binarray[selected - start]->pic, 1);
     return CMDERR_OK;
 }
 
@@ -479,22 +479,20 @@ static int b_handle_selected (pane_t *pane, component_t *com, void *user)
     d_bool refresh = d_false, wakeup = d_true;
 
     switch (evt->sym) {
-        case 'u': boot_bin_select_next(1);
+        case GUI_KEY_UP: boot_bin_select_next(1);
                   refresh = d_true;
         break;
-        case 'd': boot_bin_select_next(-1);
+        case GUI_KEY_DOWN: boot_bin_select_next(-1);
                   refresh = d_true;
         break;
-        case 'e':
+        case GUI_KEY_RETURN:
         {
             char buf[CMD_MAX_BUF];
 
             snprintf(buf, sizeof(buf), "Open :\n\'%s\'\nApplicarion?",
                      boot_bin_packed_array[boot_bin_selected]->name);
-            WIN_ALERT_ACCEPT(&gui, buf, b_exec_selected);
+            WIN_ALERT_ACCEPT(pane_alert, buf, b_exec_selected);
         }
-        break;
-        case '1': /*Alert*/
         break;
         default: wakeup = d_false;
     }
@@ -505,37 +503,6 @@ static int b_handle_selected (pane_t *pane, component_t *com, void *user)
         b_gui_print_bin_list(pane);
     }
     return 1;
-}
-
-static void boot_handle_input (gevt_t *evt)
-{
-    if (evt->e != GUIACT) {
-        return;
-    }
-
-    switch (evt->sym) {
-        case 'x':
-            gui_select_next_pane(&gui);
-        break;
-        case 'u':
-        case 'd':
-        case 'l':
-        case 'r':
-            if (gui.selected == pane_alert) {
-                gui_set_next_focus(&gui);
-                break;
-            }
-        case 'e':
-            if (gui.selected == pane_alert) {
-                gui_resp(&gui, NULL, evt);
-                break;
-            }
-        default:
-            if (gui.selected != pane_alert) {
-                gui_resp(&gui, NULL, evt);
-            }
-        break;
-    }
 }
 
 static int gui_stdout_hook (int argc, const char **argv)
@@ -549,7 +516,6 @@ void boot_gui_preinit (void)
 {
     dim_t dim;
     prop_t prop = {0};
-    rawpic_t *pic;
 
     boot_gui_bsp_init(&gui);
 
@@ -560,13 +526,13 @@ void boot_gui_preinit (void)
     prop.bcolor = COLOR_BLACK;
     prop.name = "console";
     prop.fontprop.font = gui_get_font_4_size(&gui, 16, 1);
-    pane_console = win_new_console(&gui, &prop, 0, 0, gui.dim.w, gui.dim.h);
+    pane_console = win_new_console(&gui, &prop, gui.dim.x, gui.dim.y, gui.dim.w, gui.dim.h);
     gui_select_pane(&gui, pane_console);
 
     prop.fontprop.font = NULL;
     prop.bcolor = COLOR_BLACK;
     prop.name = "binselect";
-    pane_selector = win_new_console(&gui, &prop, 0, 0, gui.dim.w, gui.dim.h);
+    pane_selector = win_new_console(&gui, &prop, gui.dim.x, gui.dim.y, gui.dim.w / 2, gui.dim.h);
     win_set_act_clbk(pane_selector, b_handle_selected);
 
     pane_alert = win_new_allert(&gui, 400, 300);
@@ -581,10 +547,22 @@ void boot_gui_preinit (void)
     prop.fontprop.font = gui_get_font_4_size(&gui, 24, 1);
     pane_progress = win_new_progress(&gui, &prop, dim.x, dim.y, dim.w, dim.h);
 
+    pane_pic = gui_create_pane(&gui, "pane_pic", 0);
+    gui_set_panexy(&gui, pane_pic, gui.dim.x + (gui.dim.w / 2), gui.dim.y, gui.dim.w / 2, gui.dim.h);
+    pane_pic->selectable = 0;
+
+    gui_com_pic = gui_create_comp(&gui, "pic", "");
+    gui_com_pic->pic = NULL;
+    gui_set_comp(pane_pic, gui_com_pic, 0, 0, -1, -1);
+    prop.user_draw = 1;
+    prop.fcolor = COLOR_BLACK;
+    prop.bcolor = COLOR_BLACK;
+    gui_set_prop(gui_com_pic, &prop);
+    gui_set_child(pane_selector, pane_pic);
+
     bsp_stdout_register_if(gui_stdout_hook);
 
-    pic->alpha = 50;
-    gui_set_pic(pane_console, pic, 0);
+    gui_select_pane(&gui, pane_console);
 }
 
 int boot_main (int argc, const char **argv)
@@ -599,11 +577,27 @@ int boot_main (int argc, const char **argv)
 
     while (!gui.destroy) {
 
-        gui_draw(&gui);
+        gui_draw(&gui, 0);
         input_proc_keys(NULL);
         bsp_tickle();
     }
     return 0;
+}
+
+static void _gui_symbolic_event_wrap (gui_t *gui, gevt_t *evt)
+{
+    if (evt->e != GUIACT) {
+        return;
+    }
+
+    switch (evt->sym) {
+        case GUI_KEY_SELECT:
+            gui_select_next_pane(gui);
+        break;
+        default:
+            gui_send_event(gui, evt);
+        break;
+    }
 }
 
 static i_event_t *__post_key (i_event_t  *evts, i_event_t *event)
@@ -621,13 +615,17 @@ static i_event_t *__post_key (i_event_t  *evts, i_event_t *event)
     evt.p.y = event->y;
     evt.e = event->state == keydown ? GUIACT : GUIRELEASE;
     evt.sym = event->sym;
+    evt.symbolic = 0;
 
     if (event->x == 0 && event->y == 0) {
-        boot_handle_input(&evt);
-        return NULL;
+        evt.symbolic = 1;
     }
 
-    gui_resp(&gui, NULL, &evt);
+    if (evt.symbolic) {
+        _gui_symbolic_event_wrap(&gui, &evt);
+    } else {
+        gui_send_event(&gui, &evt);
+    }
     return NULL;
 }
 
@@ -638,20 +636,20 @@ static void boot_gui_bsp_init (gui_t *gui)
 
     const kbdmap_t kbdmap[JOY_STD_MAX] =
     {  
-        [JOY_UPARROW]       = {'u', 0},
-        [JOY_DOWNARROW]     = {'d', 0},
-        [JOY_LEFTARROW]     = {'l', 0},
-        [JOY_RIGHTARROW]    = {'r', 0},
-        [JOY_K1]            = {'1', PAD_FREQ_LOW},
-        [JOY_K4]            = {'2', 0},
-        [JOY_K3]            = {'3', 0},
-        [JOY_K2]            = {'4', PAD_FREQ_LOW},
-        [JOY_K5]            = {'5', 0},
-        [JOY_K6]            = {'6', 0},
-        [JOY_K7]            = {'7', 0},
-        [JOY_K8]            = {'8', 0},
-        [JOY_K9]            = {'e', 0},
-        [JOY_K10]           = {'x', PAD_FREQ_LOW},
+        [JOY_UPARROW]       = {GUI_KEY_UP, 0},
+        [JOY_DOWNARROW]     = {GUI_KEY_DOWN, 0},
+        [JOY_LEFTARROW]     = {GUI_KEY_LEFT, 0},
+        [JOY_RIGHTARROW]    = {GUI_KEY_RIGHT, 0},
+        [JOY_K1]            = {GUI_KEY_1, PAD_FREQ_LOW},
+        [JOY_K4]            = {GUI_KEY_2, 0},
+        [JOY_K3]            = {GUI_KEY_3, 0},
+        [JOY_K2]            = {GUI_KEY_4, PAD_FREQ_LOW},
+        [JOY_K5]            = {GUI_KEY_5, 0},
+        [JOY_K6]            = {GUI_KEY_6, 0},
+        [JOY_K7]            = {GUI_KEY_7, 0},
+        [JOY_K8]            = {GUI_KEY_8, 0},
+        [JOY_K9]            = {GUI_KEY_RETURN, 0},
+        [JOY_K10]           = {GUI_KEY_SELECT, PAD_FREQ_LOW},
     };
 
     gui_bsp_api_t bspapi =

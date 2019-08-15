@@ -32,7 +32,7 @@ typedef struct {
 static component_t *
 win_new_border (gui_t *gui)
 {
-    component_t *com = gui_get_comp(gui, "pad", "");
+    component_t *com = gui_create_comp(gui, "pad", "");
     com->bcolor = COLOR_LGREY;
     com->fcolor = COLOR_LGREY;
     com->ispad = 1;
@@ -47,11 +47,6 @@ static inline win_t *WIN_HANDLE (void *_pane)
     win = (win_t *)(pane + 1);
     assert(win->pane == pane);
     return win;
-}
-
-component_t *win_get_user_component (pane_t *pane)
-{
-    return gui_search_com(pane, "user");
 }
 
 static void win_trunc_frame (dim_t *dim, const point_t *border, int x, int y, int w, int h)
@@ -99,6 +94,8 @@ enum {
 typedef struct {
     win_t win;
     win_handler_t yes, no, close;
+    component_t *com_yes, *com_no, *com_close;
+    component_t *com_msg;
 } win_alert_t;
 
 static inline win_alert_t *
@@ -107,21 +104,22 @@ WALERT_HANDLE (pane_t *pane)
     return (win_alert_t *)(pane + 1);
 }
 
-static int inline
-__win_close_allert (gui_t *gui, pane_t *pane)
-{
-    gui_release_pane(gui, pane);
-    return 0;
-}
-
 static int win_alert_handler (pane_t *pane, component_t *c, void *user)
 {
+    gevt_t *evt = (gevt_t *)user;
     win_handler_t h = NULL;
     win_alert_t *alert = WALERT_HANDLE(pane);
     int needsclose = 1;
 
-    if ((c->userflags & WALERT_ACT_MS) == 0) {
-        return 0;
+    if (evt->sym == GUI_KEY_LEFT ||
+        evt->sym == GUI_KEY_RIGHT) {
+        gui_set_next_focus(pane->parent);
+        return 1;
+    }
+
+    if ((c->userflags & WALERT_ACT_MS) == 0 ||
+        evt->sym != GUI_KEY_RETURN) {
+        return 1;
     }
     switch (c->userflags & WALERT_ACT_MS) {
         case WALERT_ACT_CLOSE: h = alert->close;
@@ -133,7 +131,7 @@ static int win_alert_handler (pane_t *pane, component_t *c, void *user)
         default: needsclose = 0;
     }
     if (needsclose) {
-        win_close_allert(pane->parent, pane);
+        win_close_allert(pane);
     }
     if (h) {
         h(pane, NULL, 0);
@@ -147,7 +145,7 @@ static win_alert_t *win_alert_alloc (gui_t *gui)
     win_alert_t *win;
     int memsize = sizeof(win_alert_t);
 
-    pane = gui_get_pane(gui, "allert", memsize);
+    pane = gui_create_pane(gui, "allert", memsize);
     win = (win_alert_t *)(pane + 1);
     win->win.pane = pane;
     win->win.type = WIN_ALERT;
@@ -180,7 +178,7 @@ pane_t *win_new_allert (gui_t *gui, int w, int h)
     prop.sfx.sfx_close = sfxclose;
     gui_set_prop(com, &prop);
 
-    com = gui_get_comp(gui, "title", "MESSAGE");
+    com = gui_create_comp(gui, "title", "MESSAGE");
     com->userflags = WALERT_ACT_NONE;
     gui_set_comp(pane, com, 0, 0, w, btnsize);
 
@@ -189,24 +187,27 @@ pane_t *win_new_allert (gui_t *gui, int w, int h)
     prop.sfx.sfx_close = -1;
     gui_set_prop(com, &prop);
 
-    com = gui_get_comp(gui, "accept", "YES");
+    com = gui_create_comp(gui, "accept", "YES");
     com->act = win_alert_handler;
     com->userflags = WALERT_ACT_ACCEPT;
     com->glow = 0x1f;
     com->selectable = 1;
     gui_set_comp(pane, com, 0, h - btnsize, w / 2 - border.w / 2, btnsize);
+    alert->com_yes = com;
 
     prop.bcolor = COLOR_DGREY;
     prop.fcolor = COLOR_WHITE;
     gui_set_prop(com, &prop);
 
-    com = gui_get_comp(gui, "decline", "NO");
+    com = gui_create_comp(gui, "decline", "NO");
     com->act = win_alert_handler;
     com->userflags = WALERT_ACT_DECLINE;
     com->glow = 0x1f;
     com->selectable = 1;
     gui_set_comp(pane, com, w / 2 + border.w / 2, h - btnsize, w / 2 - border.w / 2, btnsize);
     pane->onfocus = com;
+    alert->com_no = com;
+    alert->com_close = NULL;
 
     prop.sfx.sfx_close = sfxclose;
     gui_set_prop(com, &prop);
@@ -218,8 +219,9 @@ pane_t *win_new_allert (gui_t *gui, int w, int h)
     win_trunc_frame(&dim, &border, 0, btnsize, w, h - btnsize * 2);
     win_setup_frame(pane, &border, &dim);
 
-    com = gui_get_comp(gui, "message", NULL);
+    com = gui_create_comp(gui, "message", NULL);
     gui_set_comp(pane, com, dim.x, dim.y, dim.w, dim.h);
+    alert->com_msg = com;
 
     prop.bcolor = COLOR_WHITE;
     prop.fcolor = COLOR_BLACK;
@@ -231,35 +233,32 @@ pane_t *win_new_allert (gui_t *gui, int w, int h)
     return pane;
 }
 
-int win_alert (gui_t *gui, const char *text,
-                   win_handler_t close, win_handler_t accept, win_handler_t decline)
+int win_alert (pane_t *pane, const char *text,
+               win_handler_t close, win_handler_t accept, win_handler_t decline)
 {
     win_alert_t *alert;
-    pane_t *pane = gui_search_pane(gui, "allert");
     component_t *com;
+
     if (!pane) {
         return -1;
     }
-    com = gui_search_com(pane, "message");
-    assert(com);
     alert = WALERT_HANDLE(pane);
+    com = alert->com_msg;
+    assert(com);
     alert->close = close;
     alert->yes = accept;
     alert->no = decline;
     gui_print(com, "%s", text);
-    gui_select_pane(gui, pane);
+    gui_select_pane(pane->parent, pane);
     return 0;
 }
 
-int win_close_allert (gui_t *gui, pane_t *pane)
+int win_close_allert (pane_t *pane)
 {
-    if (!pane) {
-        pane = gui_search_pane(gui, "allert");
+    pane = gui_release_pane(pane->parent);
+    if (pane) {
+       gui_select_pane(pane->parent, pane);
     }
-    if (!pane) {
-        return -1;
-    }
-    __win_close_allert(gui, pane);
     return 0;
 }
 
@@ -388,7 +387,7 @@ wcon_alloc (gui_t *gui, const char *name,
     winmemsize += textsize;
     textoff = winmemsize - textsize;
 
-    pane = gui_get_pane(gui, name ? name : "noname", winmemsize);
+    pane = gui_create_pane(gui, name ? name : "noname", winmemsize);
 
     win = (win_con_t *)(pane + 1);
     d_memset(win, 0, winmemsize);
@@ -434,7 +433,7 @@ pane_t *win_new_console (gui_t *gui, prop_t *prop, int x, int y, int w, int h)
     win_setup_frame(win->win.pane, &border, &dim);
 
     prop->user_draw = 1;
-    com = gui_get_comp(gui, "user", "");
+    com = gui_create_comp(gui, "user", "");
     com->draw = win_con_repaint;
     com->act = win_act_handler;
     gui_set_comp(win->win.pane, com, dim.x, dim.y, dim.w, dim.h);
@@ -640,7 +639,7 @@ static win_progress_t *win_prog_alloc (gui_t *gui, const char *name)
     pane_t *pane;
     int memsize = sizeof(win_progress_t);
 
-    pane = gui_get_pane(gui, name, memsize);
+    pane = gui_create_pane(gui, name, memsize);
 
     win = (win_progress_t *)(pane + 1);
     win->win.pane = pane;
@@ -671,7 +670,7 @@ pane_t *win_new_progress (gui_t *gui, prop_t *prop, int x, int y, int w, int h)
 
     win_trunc_frame(&dim, &border, 0, htitle, w, h - htitle);
 
-    com = gui_get_comp(gui, "statusbar", "     "); /*Reserved space to print "100%\0"*/
+    com = gui_create_comp(gui, "statusbar", "     "); /*Reserved space to print "100%\0"*/
     gui_set_comp(pane, com, dim.x, dim.y, dim.w, dim.h);
     com->draw = win_prog_repaint;
     com->act = win_prog_act_resp;
@@ -681,7 +680,7 @@ pane_t *win_new_progress (gui_t *gui, prop_t *prop, int x, int y, int w, int h)
 
     win_setup_frame(pane, &border, &dim);
 
-    com = gui_get_comp(gui, "title", NULL);
+    com = gui_create_comp(gui, "title", NULL);
     gui_set_comp(pane, com, 0, 0, w, htitle);
     win->title = com;
 
@@ -706,8 +705,10 @@ int win_prog_set (pane_t *pane, const char *text, int percent)
 
     if (text) {
         gui_print(win->title, "[%s]", text);
+        gui_wakeup_com(pane->parent, win->title);
     }
     gui_print(win->bar, "%02.03i%%", percent);
+    gui_wakeup_com(pane->parent, win->bar);
     win->percent = percent;
 
     return 1;
