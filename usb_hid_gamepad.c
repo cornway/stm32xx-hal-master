@@ -129,6 +129,9 @@ int joypad_read (int8_t *pads)
     memcpy(&data, &gamepad_data, sizeof(data));
     irq_restore(irq);
 
+    if (data.dword == 0) {
+        return 0;
+    }
     mode = data.data[__MODE];
 
     if (mode == __MODE_STD) {
