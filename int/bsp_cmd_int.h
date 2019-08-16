@@ -39,10 +39,10 @@ typedef struct {
     uint32_t flags;
 } cmdvar_t;
 
-typedef struct {
+typedef struct cmdexec_s {
+    struct cmdexec_s *next;
     char *text;
-    int len;
-    void *user1, *user2;
+    uint32_t len;
 } cmdexec_t;
 
 typedef struct {
@@ -82,8 +82,7 @@ int cmd_init (void);
 void cmd_deinit (void);
 int cmd_unregister (const char *);
 int cmd_execute (const char *, int);
-int cmd_exec_dsr (const char *, const char *,
-                        void *, void *);
+int cmd_exec_dsr (const char *, const char *);
 
 void __print_cmd_map (const cmd_func_map_t *map, int cnt);
 #define PRINT_CMD_MAP(map) __print_cmd_map(map, arrlen(map))

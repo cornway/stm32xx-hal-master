@@ -5,6 +5,7 @@
 #define GFX_COLOR_MODE_RGB565 2
 #define GFX_COLOR_MODE_RGBA8888 3
 #define GFX_COLOR_MODE_MAX 4
+#define GFX_COLOR_MODE_SCREEN (0xff)
 
 #include "dev_conf.h"
 #include "stdint.h"

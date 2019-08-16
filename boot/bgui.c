@@ -105,7 +105,7 @@ d_bool dim_check (const dim_t *d, const point_t *p)
     return d_true;
 }
 
-static d_bool dim_check_invis (const dim_t *d, const dim_t *mask)
+static d_bool dim_check_overlap (const dim_t *d, const dim_t *mask)
 {
     if (mask->x > d->x) {
         return d_false;
@@ -597,7 +597,8 @@ int gui_draw_string_c (component_t *com, int line, rgba_t textcolor, const char 
     return gui_draw_string_HAL(com, line, textcolor, str, CENTER_MODE);
 }
 
-static int gui_rawpic_draw (component_t *com, rawpic_t *pic)
+static int
+gui_rawpic_draw (component_t *com, rawpic_t *pic)
 {
     screen_t dest = {0}, src = {0};
     point_t p;
@@ -616,7 +617,7 @@ static int gui_rawpic_draw (component_t *com, rawpic_t *pic)
     src.width = pic->w;
     src.height = pic->h;
     src.buf = pic->data;
-    src.colormode = GFX_COLOR_MODE_RGBA8888;
+    src.colormode = GFX_COLOR_MODE_SCREEN;
     src.alpha = pic->alpha;
 
     vid_copy(&dest, &src);
@@ -624,9 +625,36 @@ static int gui_rawpic_draw (component_t *com, rawpic_t *pic)
     return 0;
 }
 
-static void gui_comp_draw (pane_t *pane, component_t *com)
+static inline void
+gui_com_draw_default (pane_t *pane, component_t *com)
+{
+    int len = 0, tmp;
+    int line = 0;
+    char *text;
+
+    if (com->draw) {
+        com->draw(pane, com, NULL);
+    }
+    if (com->showname) {
+        gui_draw_string_c(com, line, com->fcolor, com->name);
+        line++;
+    }
+    len = com->text_index;
+    text = com->text;
+    tmp = len;
+    while (len > 0 && tmp > 0) {
+        tmp = gui_draw_string_c(com, line, com->fcolor, text);
+        len = len - tmp;
+        text += tmp;
+        line++;
+    }
+}
+
+static void
+gui_com_draw (pane_t *pane, component_t *com)
 {
     rgba_t color;
+
     if (com->ispad) {
         gui_com_clear(com);
         return;
@@ -637,29 +665,11 @@ static void gui_comp_draw (pane_t *pane, component_t *com)
     if (com->pic && !com->pictop) {
         gui_rawpic_draw(com, com->pic);
     }
-    if (!com->userdraw) {
-        int len = 0, tmp;
-        int line = 0;
-        uint8_t *text;
-
-        if (com->draw) {
-            com->draw(pane, com, NULL);
-        }
-        if (com->showname) {
-            gui_draw_string_c(com, line, com->fcolor, com->name);
-            line++;
-        }
-        len = com->text_index;
-        text = (uint8_t *)com->text;
-        tmp = len;
-        while (len > 0 && tmp > 0) {
-            tmp = gui_draw_string_c(com, line, com->fcolor, text);
-            len = len - tmp;
-            text += tmp;
-            line++;
-        }
-    } else if (com->draw) {
+    if (com->draw) {
         com->draw(pane, com, NULL);
+    }
+    if (!com->userdraw) {
+        gui_com_draw_default(pane, com);
     }
     if (com->pic && com->pictop) {
         gui_rawpic_draw(com, com->pic);
@@ -680,7 +690,7 @@ static int gui_pane_draw (gui_t *gui, pane_t *pane)
     vid_vsync(0);
     while (com) {
         if (gui_is_com_durty(gui, com)) {
-            gui_comp_draw(pane, com);
+            gui_com_draw(pane, com);
         }
         com = com->next;
     }

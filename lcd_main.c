@@ -385,7 +385,7 @@ static void screen_update_2x2_fast (screen_t *in)
 
     copybuf.dest.colormode = lcd_active_cfg->config.colormode;
     copybuf.src.colormode = lcd_active_cfg->config.colormode;
-    screen_hal_copy_h8(lcd_active_cfg, &copybuf, lcd_active_cfg->config.hwaccel > 1);
+    screen_hal_scale_h8_2x2(lcd_active_cfg, &copybuf, lcd_active_cfg->config.hwaccel > 1);
 }
 
 static void screen_update_2x2_8bpp (screen_t *in)

@@ -19,13 +19,12 @@
 #define BOOT_SYS_LOG_NAME "log.txt"
 #define BOOT_BIN_DIR_NAME "BIN"
 #define BOOT_SYS_LOG_PATH BOOT_SYS_DIR_PATH"/"BOOT_SYS_LOG_NAME
-#define BOOT_STARTUP_MUSIC_PATH "/doom/music/3do/song_5.wav"
+#define BOOT_STARTUP_MUSIC_PATH (BOOT_SYS_DIR_PATH"/mus/title.wav")
 
 static int boot_program_bypas = 0;
 
 static gui_t gui;
-static pane_t *pane, *alert_pane,
-              *pane_console, *pane_selector,
+static pane_t *pane_console, *pane_selector,
               *pane_alert, *pane_progress,
               *pane_jpeg;
 
@@ -50,10 +49,10 @@ enum {
 const char *sfx_names[] =
 {
     [SFX_MOVE] = "sfxmove.wav",
-    [SFX_SCROLL] = "sfxscrol.wav",
+    [SFX_SCROLL] = "sfxmisc1.wav",
     [SFX_WARNING] = "sfxwarn.wav",
     [SFX_CONFIRM] = "sfxconf.wav",
-    [SFX_START_APP] = "sfxstart.wav",
+    [SFX_START_APP] = "sfxstart2.wav",
     [SFX_NOWAY] = "sfxnoway.wav"
 };
 
@@ -460,13 +459,13 @@ static int b_handle_lnk (const char *path)
         return -CMDERR_NOCORE;
     }
     d_close(f);
-    cmd_exec_dsr("bin", strbuf, NULL, NULL);
+    cmd_exec_dsr("bin", strbuf);
     return CMDERR_OK;
 }
 
 static int b_handle_cmd (const char *path)
 {
-    cmd_exec_dsr("runcmd", path, NULL, NULL);
+    cmd_exec_dsr("runcmd", path);
     return CMDERR_OK;
 }
 
@@ -474,7 +473,7 @@ static int __b_exec_selected (bsp_bin_t *bin)
 {
     int ret = -CMDERR_INVPARM;
     switch (bin->filetype) {
-        case BIN_FILE: ret = cmd_exec_dsr("boot", bin->path, NULL, NULL);
+        case BIN_FILE: ret = cmd_exec_dsr("boot", bin->path);
         break;
         case BIN_LINK: ret = b_handle_lnk(bin->path);
         break;
@@ -559,6 +558,8 @@ static int b_alert_accept_clbk (const component_t *com)
     ret = __b_exec_selected(boot_bin_packed_array[boot_bin_selected]);
     if (ret != CMDERR_OK) {
         cd_play_name(&boot_cd, BOOT_STARTUP_MUSIC_PATH);
+    } else {
+        gui.destroy = 1;
     }
     return ret;
 }
@@ -658,11 +659,13 @@ int boot_main (int argc, const char **argv)
     cd_volume(&boot_cd, 40);
 
     while (!gui.destroy) {
-
+        bsp_tickle();
         gui_draw(&gui, 0);
         input_proc_keys(NULL);
-        bsp_tickle();
     }
+    boot_destr_exec_list();
+    bsp_tickle();
+    assert(0);
     return 0;
 }
 

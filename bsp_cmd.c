@@ -36,7 +36,7 @@ static int __cmd_var_readonly (const char *name);
 static int __cmd_fs_print_dir (int argc, const char **argv);
 static int _cmd_export_all (int argc, const char **argv);
 static int __cmd_fs_touch (int argc, const char **argv);
-static void cmd_unregister_all (void);
+static void cmd_dvar_unregister_all (void);
 static int cmd_bsp_sys_reset (int argc, const char **argv);
 static int __cmd_fs_mkdir (int argc, const char **argv);
 static int __cmd_fs_mkdir (int argc, const char **argv);
@@ -160,12 +160,12 @@ static char __cmd_tofile_buf[256] = {0};
 static uint8_t __cmd_tofile_full = 0;
 static uint8_t __cmd_tofile_tresh = 128;
 static uint32_t __cmd_tofile_usage_tsf = 0;
+static cmdexec_t *cmd_exec_head = NULL;
 
 int cmd_init (void)
 {
-    bsp_stdin_register_if(cmd_stdin_ascii_forward);
-
     int i;
+    bsp_stdin_register_if(cmd_stdin_ascii_forward);
 
     for (i = 0; i < arrlen(cmd_func_tbl); i++) {
         _cmd_register_func(cmd_func_tbl[i].func, cmd_func_tbl[i].name);
@@ -174,10 +174,22 @@ int cmd_init (void)
     return 0;
 }
 
+static void cmd_exec_flush (void)
+{
+    cmdexec_t *next;
+
+    while (cmd_exec_head) {
+        next = cmd_exec_head->next;
+        heap_free(cmd_exec_head);
+        cmd_exec_head = next;
+    }
+}
+
 void cmd_deinit (void)
 {
     bsp_stdin_unreg_if(cmd_stdin_ascii_forward);
-    cmd_unregister_all();
+    cmd_dvar_unregister_all();
+    cmd_exec_flush();
 }
 
 static char *cmd_get_eof (const char *data, int len)
@@ -266,7 +278,7 @@ static int __cmd_set_stdin_file (int argc, const char **argv)
     stdin_to_path_bytes_cnt = 0;
     bsp_stdin_type = STDIN_PATH;
     if (payload) {
-        cmd_exec_dsr("", payload, NULL, NULL);
+        cmd_exec_dsr("", payload);
     }
 
     return f;
@@ -316,7 +328,7 @@ static int cmd_stdin_to_path_write (int argc, const char **argv)
         g_stdin_eof_timeout_var = d_time() + g_stdin_eof_timeout;
         /*[stdin > 0 -g] : means- set stdin as character stream
            and flush everything.*/
-        cmd_exec_dsr("bsp", "stdin > 0 -g", NULL, NULL);
+        cmd_exec_dsr("bsp", "stdin > 0 -g");
     }
     return 0;
 }
@@ -532,7 +544,7 @@ void cmd_tickle (void)
     if (g_stdin_eof_timeout_var && g_stdin_eof_timeout_var < d_time()) {
         dprintf("wait for stdin : timeout\n");
         dprintf("flushing..\n");
-        cmd_exec_dsr("bsp", "stdin > 0 -g", NULL, NULL);
+        cmd_exec_dsr("bsp", "stdin > 0 -g");
     } else if (__cmd_tofile_usage_tsf && __cmd_tofile_usage_tsf < d_time()) {
         dprintf("stdin: flushed\n");
         __cmd_filebuf_flush();
@@ -665,15 +677,15 @@ int cmd_execute (const char *cmd, int len)
 {
     char buf[CMD_MAX_BUF];
 
-    if (len > 0) {
-        if (len > sizeof(buf)) {
-            dprintf("%s() : too many characters\n", __func__);
-            return -1;
-        }
-        d_memcpy(buf, cmd, len);
-    } else {
-        len = snprintf(buf, sizeof(buf), "%s", cmd);
+    if (len <= 0) {
+        dprintf("%s() : empty buffer\n", __func__);
+        return -CMDERR_INVPARM;
     }
+    if (len > sizeof(buf)) {
+        dprintf("%s() : too many characters\n", __func__);
+        return -CMDERR_INVPARM;
+    }
+    d_memcpy(buf, cmd, len);
     return bsp_inout_forward(buf, len, '<');
 }
 
@@ -931,55 +943,34 @@ static void cmd_set_errno (int err)
     }
 }
 
-#define CMD_EXEC_MAX 6
-cmdexec_t cmd_exec_pool[CMD_EXEC_MAX];
-cmdexec_t *boot_cmd_top = &cmd_exec_pool[0];
-
-int cmd_exec_dsr (const char *cmd, const char *text, void *user1, void *user2)
+int cmd_exec_dsr (const char *name, const char *text)
 {
-    int i;
-    char buf[CMD_MAX_BUF];
+    cmdexec_t *cmd = heap_malloc(sizeof(*cmd) + CMD_MAX_BUF);
 
-    if (boot_cmd_top == &cmd_exec_pool[arrlen(cmd_exec_pool)]) {
+    if (!cmd) {
         return -CMDERR_NOCORE;
     }
-    i = snprintf(buf, sizeof(buf), "%s %s", cmd, text);
-    boot_cmd_top->text = heap_malloc(i + 1);
-    assert(boot_cmd_top->text);
-    strcpy(boot_cmd_top->text, buf);
-    boot_cmd_top->user1 = user1;
-    boot_cmd_top->user2 = user2;
-    boot_cmd_top->len = i;
-    boot_cmd_top++;
-    dprintf("%s() : \'%s\' [%s]\n", __func__, cmd, text);
-    return CMDERR_OK;
-}
+    cmd->text = (char *)(cmd + 1);
+    cmd->len = snprintf(cmd->text, CMD_MAX_BUF, "%s %s", name, text);
+    cmd->next = cmd_exec_head;
+    cmd_exec_head = cmd;
 
-static cmdexec_t *__cmd_iter_next (char *text, cmdexec_t *cmd)
-{
-    if (boot_cmd_top == &cmd_exec_pool[0]) {
-        return NULL;
-    }
-    boot_cmd_top--;
-    strcpy(text, boot_cmd_top->text);
-    heap_free(boot_cmd_top->text);
-    boot_cmd_top->text = NULL;
-    cmd->user1 = boot_cmd_top->user1;
-    cmd->user2 = boot_cmd_top->user2;
-    cmd->len = boot_cmd_top->len;
-    return cmd;
+    dprintf("%s() : \'%s\'\n", __func__, cmd->text);
+    return CMDERR_OK;
 }
 
 static void cmd_exec_pending (cmd_handler_t hdlr)
 {
-     cmdexec_t cmd;
-     char buf[256];
-     cmdexec_t *cmdptr = __cmd_iter_next(buf, &cmd);
+    cmdexec_t *cmd = cmd_exec_head;
 
-     while (cmdptr) {
-        hdlr(buf, cmdptr->len);
-        cmdptr = __cmd_iter_next(buf, cmdptr);
-     }
+    while (cmd) {
+        cmd_exec_head = cmd->next;
+
+        hdlr(cmd->text, cmd->len);
+        heap_free(cmd);
+        cmd = cmd_exec_head;
+    }
+    cmd_exec_head = NULL;
 }
 
 static int cmd_var_exist (PACKED const char *name, dvar_int_t **_prev, dvar_int_t **_dvar)
@@ -1108,7 +1099,7 @@ int cmd_unregister (const char *name)
     return 0;
 }
 
-static void cmd_unregister_all (void)
+static void cmd_dvar_unregister_all (void)
 {
     dvar_int_t *next = NULL;
     dvar_int_t *v = dvar_head;

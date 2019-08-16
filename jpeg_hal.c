@@ -104,9 +104,7 @@ static void *bytestream_move (byte_stream_t *stream, uint32_t *len)
 
 int jpeg__hal_decode (jpeg_info_t *info, void *tempbuf, void *data, uint32_t size)
 {
-    int err;
-    irqmask_t irq = ~0;
-    int done;
+    int err, done;
 
     err = JPEG_Decode_DMA(&jpeg_hal_ctxt.hal_jpeg, data, size, (uint32_t)tempbuf);
 
@@ -451,6 +449,7 @@ int JPEG_Info (jpeg_info_t *info)
     info->h = JPEG_InfoHandle.ImageHeight;
     info->colormode = JPEG_InfoHandle.ColorSpace;
     info->flags = 0;
+    return 0;
 }
 
 int JPEG_Abort (JPEG_HandleTypeDef *hjpeg)

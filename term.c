@@ -72,14 +72,16 @@ done:
 
 /*Split 'quoted' text with other*/
 static int
-str_tkn_split (const char **argv, tknmatch_t match, int *argc, char *str)
+str_tkn_split (const char **argv, tknmatch_t match, int *argc,
+                    char *str, uint32_t size)
 {
     int matchcnt = 0, totalcnt = 0;
     int tknstart = 1, dummy = 0;
     int maxargs = *argc;
 
+    assert(size > 0);
     argv[totalcnt++] = str;
-    while (*str && totalcnt < maxargs) {
+    while (size && *str && totalcnt < maxargs) {
 
         if (match(*str, &dummy)) {
             *str = 0;
@@ -92,6 +94,7 @@ str_tkn_split (const char **argv, tknmatch_t match, int *argc, char *str)
             tknstart = 1 - tknstart;
         }
         str++;
+        size--;
     }
     *argc = totalcnt;
     return matchcnt;
@@ -157,7 +160,8 @@ int quotematch (char c, int *state)
 /*argc - in argc*/
 /*argv - output buffer*/
 /*ret - result argc*/
-static int str_tokenize_string (char *str, int argc, const char **argv)
+static int str_tokenize_string (int argc, const char **argv,
+                                       char *str, uint32_t size)
 {
     const char *tempbuf[MAX_TOKENS] = {0},
                *splitbuf[MAX_TOKENS] = {0},
@@ -172,7 +176,7 @@ static int str_tokenize_string (char *str, int argc, const char **argv)
     }
 
     totalcnt = MAX_TOKENS;
-    str_tkn_split(splitptr, quotematch, &totalcnt, str);
+    str_tkn_split(splitptr, quotematch, &totalcnt, str, size);
 
     totalcnt = str_tkn_clean(tempptr, splitptr, flags, totalcnt);
 
@@ -182,9 +186,11 @@ static int str_tokenize_string (char *str, int argc, const char **argv)
     return totalcnt;
 }
 
-static inline int str_tokenize_parms (char *buf, int argc, const char **argv)
+static inline int
+str_tokenize_parms (int argc, const char **argv,
+                    char *buf, uint32_t size)
 {
-    return str_tokenize_string(buf, argc, argv);
+    return str_tokenize_string(argc, argv, buf, size);
 }
 
 #define STR_MAXARGS     9
@@ -300,7 +306,8 @@ __bsp_stdin_handle_argv
                 int argc, const char **argv);
 
 static int
-__bsp_stdin_iter_fwd_ascii (cmd_func_t *begin, cmd_func_t *end, char *buf);
+__bsp_stdin_iter_fwd_ascii (cmd_func_t *begin, cmd_func_t *end,
+                                      char *buf, uint32_t size);
 
 static int
 __bsp_stdout_iter_fwd_raw
@@ -341,7 +348,7 @@ int bsp_inout_forward (char *buf, int size, char dir)
             err = __bsp_stdout_iter_fwd_raw(&serial_tx_clbk[0], last_tx_clbk, 1, &bufptr);
         break;
         case '<':
-            err = __bsp_stdin_iter_fwd_ascii(&serial_rx_clbk[0], last_rx_clbk, buf);
+            err = __bsp_stdin_iter_fwd_ascii(&serial_rx_clbk[0], last_rx_clbk, buf, size);
         break;
         default: assert(0);
     }
@@ -366,13 +373,14 @@ __bsp_stdout_iter_fwd_raw (cmd_func_t *_begin, cmd_func_t *end, int argc, const 
 }
 
 static int
-__bsp_stdin_iter_fwd_ascii (cmd_func_t *begin, cmd_func_t *end, char *buf)
+__bsp_stdin_iter_fwd_ascii (cmd_func_t *begin, cmd_func_t *end,
+                                     char *buf, uint32_t size)
 {
     const char *argvbuf[MAX_TOKENS] = {NULL};
     const char **argv = (const char **)&argvbuf[0];
     int argc = MAX_TOKENS;
 
-    argc = str_tokenize_parms(buf, argc, &argv[0]);
+    argc = str_tokenize_parms(argc, &argv[0], buf, size);
     return __bsp_stdin_handle_argv(begin, end, argc, argv);
 }
 

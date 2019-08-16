@@ -559,8 +559,7 @@ int win_con_append (pane_t *pane, const char *str, rgba_t textcolor)
 {
     win_con_t *con;
     const char *strptr = str;
-    int charcnt = 0, linecnt = 0;
-    int tmp, nextline;
+    int linecnt = 0, tmp, nextline;
     con_line_t *line;
 
     con = WCON_HANDLE(pane);

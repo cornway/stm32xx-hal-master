@@ -304,20 +304,25 @@ static inline int screen_hal_copy_start
 
 int screen_hal_copy (lcd_wincfg_t *cfg, copybuf_t *copybuf, uint8_t pix_bytes)
 {
-    HAL_StatusTypeDef status = HAL_OK;
     screen_t *dest = &copybuf->dest;
     screen_t *src = &copybuf->src;
     DMA2D_HandleTypeDef *hdma2d;
-    uint8_t alpha = src->alpha;
     uint32_t dma2d_mode = (src->alpha) ? DMA2D_M2M_BLEND : DMA2D_M2M;
 
     void *dptr = (void *)((uint32_t)dest->buf + (dest->y * dest->width + dest->x) * pix_bytes);
-    void *source      = (void *)((uint32_t)src->buf + (src->y * src->width + src->x) * pix_bytes);
+    void *source = (void *)((uint32_t)src->buf + (src->y * src->width + src->x) * pix_bytes);
 
     GET_VHAL_CTXT(cfg)->state = V_STATE_QCOPY;
 
+    if (dest->colormode == GFX_COLOR_MODE_SCREEN) {
+        dest->colormode = cfg->config.colormode;
+    }
+    if (src->colormode == GFX_COLOR_MODE_SCREEN) {
+        src->colormode = cfg->config.colormode;
+    }
+
     hdma2d = __screen_hal_copy_setup(GET_VHAL_CTXT(cfg), dest, src,
-                                                          dest->width, src->width, dma2d_mode, pix_bytes);
+                                     dest->width, src->width, dma2d_mode, pix_bytes);
 
     return screen_hal_copy_start(cfg, hdma2d, dest, src, dptr, source);
 }
@@ -337,7 +342,7 @@ typedef struct {
 
 static fastline_t fastline_h8;
 
-int screen_hal_copy_h8 (lcd_wincfg_t *cfg, copybuf_t *copybuf, int interleave)
+int screen_hal_scale_h8_2x2 (lcd_wincfg_t *cfg, copybuf_t *copybuf, int interleave)
 {
     screen_t *dest = &copybuf->dest;
     screen_t *src = &copybuf->src;
@@ -371,6 +376,9 @@ int screen_hal_copy_h8 (lcd_wincfg_t *cfg, copybuf_t *copybuf, int interleave)
     fastline_h8.dptr = dptr;
     fastline_h8.sptr = sptr;
 
+    dest->colormode = GFX_COLOR_MODE_CLUT;
+    src->colormode = GFX_COLOR_MODE_CLUT;
+
     GET_VHAL_CTXT(cfg)->state = V_STATE_COPYFAST;
 
     hdma2d = __screen_hal_copy_setup(GET_VHAL_CTXT(cfg), dest, src, dw * 2, sw, DMA2D_M2M, pix_size);
@@ -381,11 +389,8 @@ static inline int
 screen_hal_copy_h8_next (screen_hal_ctxt_t *ctxt)
 {
     uint32_t dptr_off = 0;
-    const int pix_size = 1;
     screen_t *dest = &fastline_h8.copybuf.dest;
     screen_t *src = &fastline_h8.copybuf.src;
-    int dw = dest->width, sw = src->width;
-    int ret;
 
     if (fastline_h8.copycnt == 0) {
         ctxt->state = V_STATE_IDLE;
@@ -420,7 +425,7 @@ screen_hal_copy_h8_next (screen_hal_ctxt_t *ctxt)
         break;
     }
 
-    ret = screen_hal_copy_start(ctxt->lcd_cfg, GET_VHAL_DMA2D(ctxt->lcd_cfg),
+    return screen_hal_copy_start(ctxt->lcd_cfg, GET_VHAL_DMA2D(ctxt->lcd_cfg),
                                 dest, src,
                                 (void *)((uint32_t)fastline_h8.dptr + dptr_off),
                                 fastline_h8.sptr);
@@ -498,7 +503,7 @@ static void screen_copybuf_split (screen_hal_ctxt_t *ctxt, copybuf_t *buf, int p
     }
 }
 
-static int screen_hal_clock_cfg (screen_hal_ctxt_t *ctxt)
+int screen_hal_clock_cfg (screen_hal_ctxt_t *ctxt)
 {
     RCC_PeriphCLKInitTypeDef PeriphClkInitStruct;
     uint8_t prescaler = ctxt->prescaler;
@@ -512,9 +517,6 @@ static int screen_hal_clock_cfg (screen_hal_ctxt_t *ctxt)
     PeriphClkInitStruct.PLLSAIDivR = RCC_PLLSAIDIVR_2;
     HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct);
 }
-
-
-
 
 void DMA2D_IRQHandler(void)
 {

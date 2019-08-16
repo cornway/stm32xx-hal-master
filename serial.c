@@ -618,7 +618,6 @@ int dprintf (const char *fmt, ...)
 int aprint (const char *str, int size)
 {
     char            string[1024];
-    int offset = 0;
     memcpy(string, str, size);
     str_replace_2_ascii(string);
     bsp_serial_send(string, size);
