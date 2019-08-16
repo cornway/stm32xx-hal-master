@@ -24,10 +24,10 @@
 static int boot_program_bypas = 0;
 
 static gui_t gui;
-static pane_t *pane, *alert_pane;
-static pane_t *pane_console, *pane_selector, *pane_alert, *pane_progress;
-static pane_t *pane_pic;
-static component_t *gui_com_pic = NULL;
+static pane_t *pane, *alert_pane,
+              *pane_console, *pane_selector,
+              *pane_alert, *pane_progress,
+              *pane_jpeg;
 
 static bsp_bin_t *boot_bin_head = NULL;
 static int bin_collected_cnt = 0;
@@ -193,7 +193,7 @@ bsp_setup_title_pic (const char *dirpath, bsp_bin_t *bin)
     d_vstrtok(argv, 2, name, '.');
 
     snprintf(tpath, sizeof(tpath), "%s/%s.jpg", dirpath, argv[0]);
-    bin->pic = gui_cache_jpeg(&gui, tpath);
+    bin->pic = win_jpeg_decode(pane_jpeg, tpath);
 }
 
 bsp_bin_t *
@@ -517,20 +517,20 @@ static int b_gui_print_bin_list (pane_t *pane)
             win_con_printline(pane, i, str, COLOR_BLACK);
         }
     }
-    gui_set_pic(gui_com_pic, binarray[selected - start]->pic, 1);
+    win_jpeg_set_rawpic(pane_jpeg, binarray[selected - start]->pic, 1);
     return CMDERR_OK;
 }
 
-static int b_alert_user_clbk (gevt_t *evt)
+static int b_console_user_clbk (gevt_t *evt)
 {
-    if (evt->sym == GUI_KEY_LEFT ||
-        evt->sym == GUI_KEY_RIGHT) {
+    if (evt) {
         gui_bsp_sfxplay(&gui, sfx_ids[SFX_MOVE], 100);
+        return 1;
     }
-    return 1;
+    return 0;
 }
 
-static int b_console_user_clbk (gevt_t *evt)
+static int b_alert_user_clbk (gevt_t *evt)
 {
     if (evt->sym == GUI_KEY_LEFT ||
         evt->sym == GUI_KEY_RIGHT) {
@@ -543,6 +543,7 @@ static int
 b_alert_decline_clbk (const component_t *com)
 {
     gui_bsp_sfxplay(&gui, sfx_ids[SFX_NOWAY], 100);
+    return 1;
 }
 
 static int b_alert_accept_clbk (const component_t *com)
@@ -566,14 +567,15 @@ static int
 b_selected_clbk (pane_t *pane, component_t *com, void *user)
 {
     gevt_t *evt = (gevt_t *)user;
-    d_bool refresh = d_false, wakeup = d_true;
+    int dir = -1;
 
     switch (evt->sym) {
-        case GUI_KEY_UP: boot_bin_select_next(1);
-                  refresh = d_true;
-        break;
-        case GUI_KEY_DOWN: boot_bin_select_next(-1);
-                  refresh = d_true;
+        case GUI_KEY_UP:
+            dir = 1;
+        case GUI_KEY_DOWN:
+            boot_bin_select_next(dir);
+            b_gui_print_bin_list(pane);
+            gui_bsp_sfxplay(&gui, sfx_ids[SFX_MOVE], 100);
         break;
         case GUI_KEY_RETURN:
         {
@@ -585,14 +587,6 @@ b_selected_clbk (pane_t *pane, component_t *com, void *user)
             win_alert(pane_alert, buf, b_alert_accept_clbk, b_alert_decline_clbk);
         }
         break;
-        default: wakeup = d_false;
-    }
-    if (wakeup) {
-        gui_wakeup_pane(pane);
-    }
-    if (refresh) {
-        gui_bsp_sfxplay(&gui, sfx_ids[SFX_MOVE], 100);
-        b_gui_print_bin_list(pane);
     }
     return 1;
 }
@@ -620,6 +614,7 @@ void boot_gui_preinit (void)
     prop.fontprop.font = gui_get_font_4_size(&gui, 16, 1);
     pane_console = win_new_console(&gui, &prop, gui.dim.x, gui.dim.y, gui.dim.w, gui.dim.h);
     gui_select_pane(&gui, pane_console);
+    win_set_user_clbk(pane_console, b_console_user_clbk);
 
     prop.fontprop.font = NULL;
     prop.bcolor = COLOR_AQUAMARINE;
@@ -640,18 +635,10 @@ void boot_gui_preinit (void)
     prop.fontprop.font = gui_get_font_4_size(&gui, 24, 1);
     pane_progress = win_new_progress(&gui, &prop, dim.x, dim.y, dim.w, dim.h);
 
-    pane_pic = gui_create_pane(&gui, "pane_pic", 0);
-    gui_set_panexy(&gui, pane_pic, gui.dim.x + (gui.dim.w / 2), gui.dim.y, gui.dim.w / 2, gui.dim.h);
-    pane_pic->selectable = 0;
-
-    gui_com_pic = gui_create_comp(&gui, "pic", "");
-    gui_com_pic->pic = NULL;
-    gui_set_comp(pane_pic, gui_com_pic, 0, 0, -1, -1);
-    prop.user_draw = 1;
-    prop.fcolor = COLOR_BLACK;
-    prop.bcolor = COLOR_AQUAMARINE;
-    gui_set_prop(gui_com_pic, &prop);
-    gui_set_child(pane_selector, pane_pic);
+    prop.name = "pane_jpeg";
+    pane_jpeg = win_new_jpeg(&gui, &prop, gui.dim.x + (gui.dim.w / 2),
+                                          gui.dim.y, gui.dim.w / 2, gui.dim.h);
+    gui_set_child(pane_selector, pane_jpeg);
 
     bsp_stdout_register_if(gui_stdout_hook);
 

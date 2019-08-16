@@ -1,4 +1,6 @@
 #include <string.h>
+#include <heap.h>
+#include <jpeg.h>
 #include <gfx.h>
 #include <gui.h>
 
@@ -21,6 +23,7 @@ typedef enum {
     WIN_ALERT,
     WIN_CONSOLE,
     WIN_PROGRESS,
+    WIN_JPEG,
     WIN_MAX,
 } WIN_TYPE;
 
@@ -43,10 +46,15 @@ win_new_border (gui_t *gui)
 static inline win_t *WIN_HANDLE (void *_pane)
 {
     pane_t *pane = _pane;
-    win_t *win;
-
-    win = (win_t *)(pane + 1);
+    win_t *win = (win_t *)(pane + 1);
     assert(win->pane == pane);
+    return win;
+}
+
+static inline win_t *WIN_HANDLE_CHECK (void *pane, WIN_TYPE type)
+{
+    win_t *win = WIN_HANDLE(pane);
+    assert(win->type == type);
     return win;
 }
 
@@ -105,9 +113,9 @@ typedef struct {
 } win_alert_t;
 
 static inline win_alert_t *
-WALERT_HANDLE (pane_t *pane)
+WALERT_HANDLE (void *pane)
 {
-    return (win_alert_t *)(pane + 1);
+    return (win_alert_t *)WIN_HANDLE_CHECK(pane, WIN_ALERT);
 }
 
 static void win_user_handler (win_t *win, gevt_t *evt)
@@ -238,9 +246,6 @@ pane_t *win_new_allert (gui_t *gui, int w, int h)
     prop.fcolor = COLOR_BLACK;
     gui_set_prop(com, &prop);
 
-    /*TODO : 'repaint' field is private*/
-    pane->repaint = 0;
-
     return pane;
 }
 
@@ -295,12 +300,9 @@ typedef struct {
 
 static int win_con_repaint (pane_t *pane, component_t *com, void *user);
 
-static inline win_con_t *WCON_HANDLE (void *_pane)
+static inline win_con_t *WCON_HANDLE (void *pane)
 {
-    win_t *win = WIN_HANDLE(_pane);
-    assert(win->type == WIN_CONSOLE);
-
-    return container_of(win, win_con_t, win);
+    return (win_con_t *)WIN_HANDLE_CHECK(pane, WIN_CONSOLE);
 }
 
 void win_con_set_clbk (void *_pane, comp_handler_t h)
@@ -470,11 +472,6 @@ static int wcon_append_line (int *nextline, win_con_t *con, con_line_t *line, co
     return cnt;
 }
 
-static void wcom_wakeup (win_con_t *con)
-{
-    gui_wakeup_pane(con->win.pane);
-}
-
 int win_con_get_dim (pane_t *pane, int *w, int *h)
 {
     win_con_t *con;
@@ -556,7 +553,6 @@ void win_con_clear (pane_t *pane)
         line->pos = 0;
         line = line->next;
     }
-    gui_wakeup_pane(pane);
 }
 
 int win_con_append (pane_t *pane, const char *str, rgba_t textcolor)
@@ -584,11 +580,7 @@ int win_con_append (pane_t *pane, const char *str, rgba_t textcolor)
     }
     con->lastline = line;
 
-    charcnt = strptr - str;
-    if (charcnt) {
-        wcom_wakeup(con);
-    }
-    return charcnt;
+    return strptr - str;
 }
 
 static inline void
@@ -631,11 +623,10 @@ typedef struct {
     component_t *title, *bar;
 } win_progress_t;
 
-static inline win_progress_t *WPROG_HANDLE (void *_pane)
+static inline win_progress_t *
+WPROG_HANDLE (void *pane)
 {
-    win_t *win = WIN_HANDLE(_pane);
-    assert(win->type == WIN_PROGRESS);
-    return (win_progress_t *)win;
+    return (win_progress_t *)WIN_HANDLE_CHECK(pane, WIN_PROGRESS);
 }
 
 static int win_prog_act_resp (pane_t *pane, component_t *com, void *user);
@@ -714,11 +705,11 @@ int win_prog_set (pane_t *pane, const char *text, int percent)
     win_user_handler(&win->win, NULL);
 
     if (text) {
+        gui_com_set_dirty(pane->parent, win->title);
         gui_print(win->title, "[%s]", text);
-        gui_wakeup_com(pane->parent, win->title);
     }
+    gui_com_set_dirty(pane->parent, win->bar);
     gui_print(win->bar, "%02.03i%%", percent);
-    gui_wakeup_com(pane->parent, win->bar);
     win->percent = percent;
 
     return 1;
@@ -751,6 +742,62 @@ static int win_prog_repaint (pane_t *pane, component_t *com, void *user)
     }
     return 1;
 } 
+
+typedef struct {
+    win_t win;
+    component_t *com;
+    void *cache;
+} win_jpeg_t;
+
+static inline win_jpeg_t *
+WJPEG_HANDLE (void *pane)
+{
+    return (win_jpeg_t *)WIN_HANDLE_CHECK(pane, WIN_JPEG);
+}
+
+pane_t *win_new_jpeg (gui_t *gui, prop_t *prop, int x, int y, int w, int h)
+{
+    pane_t *pane = gui_create_pane(gui, "jpeg", sizeof(win_jpeg_t));
+    win_jpeg_t *win = (win_jpeg_t *)(pane + 1);
+    component_t *com;
+    dim_t *dim = &gui->dim;
+
+    gui_set_panexy(gui, pane, dim->x + (dim->w / 2), dim->y, dim->w / 2, dim->h);
+    pane->selectable = 0;
+
+    com = gui_create_comp(gui, "pic", "");
+    gui_set_comp(pane, com, 0, 0, -1, -1);
+    prop->user_draw = 1;
+    prop->fcolor = COLOR_BLACK;
+    prop->bcolor = COLOR_AQUAMARINE;
+    gui_set_prop(com, prop);
+    win->com = com;
+    win->win.pane = pane;
+    win->win.type = WIN_JPEG;
+
+    return pane;
+}
+
+rawpic_t *win_jpeg_decode (pane_t *pane, const char *path)
+{
+    const uint32_t memsize = (2 << 20);
+    win_jpeg_t *win = WJPEG_HANDLE(pane);
+
+    if (NULL == win->cache) {
+        win->cache = heap_alloc_shared(memsize);
+    }
+    if (NULL == win->cache) {
+        return NULL;
+    }
+    return jpeg_2_rawpic(path, win->cache, memsize);
+}
+
+void win_jpeg_set_rawpic (pane_t *pane, void *pic, int top)
+{
+    win_jpeg_t *win = WJPEG_HANDLE(pane);
+    win->com->pic = pic;
+    win->com->pictop = top;
+}
 
 #endif /*BSP_DRIVER*/
 

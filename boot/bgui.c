@@ -10,6 +10,7 @@
 typedef struct {
     dim_t activebox;
     dim_t dirtybox;
+    uint8_t dirty;
 } gui_int_t; /*internal usage*/
 
 #define gui_error(fmt, args ...) \
@@ -67,17 +68,17 @@ d_bool dim_check_intersect (dim_t *durty, dim_t *dim)
         max_x = durty->x + durty->w,
         max_y = durty->y + durty->h;
 
+    if (!max_x || !max_y) {
+        return d_false;
+    }
     if (dim->x > max_x ||
         dim->y > max_y) {
         return d_false;
     }
-
     tmp = (dim->x + dim->w) - durty->x;
-
     if (tmp < 0) {
         return d_false;
     }
-
     tmp = (dim->y + dim->h) - durty->y;
     if (tmp < 0) {
         return d_false;
@@ -243,6 +244,12 @@ gui_set_dirty (gui_t *gui, dim_t *dim)
     assert(gui_int);
 
     dim_extend(&gui_int->dirtybox, dim);
+    gui_int->dirty = 1;
+}
+
+void gui_com_set_dirty (gui_t *gui, component_t *com)
+{
+    gui_set_dirty(gui, &com->dim);
 }
 
 static inline d_bool
@@ -260,8 +267,13 @@ gui_mark_dirty (gui_t *gui)
     gui_int_t *gui_int = gui->ctxt;
     assert(gui_int);
 
+    if (!gui_int->dirty) {
+        return;
+    }
+
     d_memcpy(&gui_int->activebox, &gui_int->dirtybox, sizeof(gui_int->activebox));
     d_memzero(&gui_int->dirtybox, sizeof(gui_int->dirtybox));
+    gui_int->dirty = 0;
 }
 
 static inline void
@@ -344,8 +356,9 @@ void gui_init (gui_t *gui, const char *name, uint8_t framerate,
     cmd_register_i32(&gui->dbglvl, temp);
 
     d_memcpy(&gui->bspapi, bspapi, sizeof(gui->bspapi));
-    d_memcpy(&gui_int.activebox, &gui->dim, sizeof(gui_int.activebox));
     gui->ctxt = &gui_int;
+    gui_set_dirty(gui, &gui->dim);
+    gui_mark_dirty(gui);
 }
 
 void gui_destroy (gui_t *gui)
@@ -446,19 +459,6 @@ void gui_set_child (pane_t *parent, pane_t *child)
     parent->child = child;
 }
 
-rawpic_t *gui_cache_jpeg (gui_t *gui, const char *path)
-{
-    const uint32_t memsize = (2 << 20);
-
-    if (!gui->cachemem) {
-        gui->cachemem = heap_alloc_shared(memsize);
-    }
-    if (!gui->cachemem) {
-        return NULL;
-    }
-    return jpeg_2_rawpic(path, gui->cachemem, memsize);
-}
-
 void gui_set_pic (component_t *com, rawpic_t *pic, int top)
 {
     if (!pic->alpha) {
@@ -551,6 +551,11 @@ static inline void gui_com_clear (component_t *com)
     gui_com_fill_HAL(com, com->bcolor);
 }
 
+static inline void gui_com_fill (component_t *com, rgba_t color)
+{
+    gui_com_fill_HAL(com, color);
+}
+
 void gui_set_text (component_t *com, const char *text, int x, int y)
 {
     snprintf(com->text, com->text_size, "%s", text);
@@ -621,27 +626,25 @@ static int gui_rawpic_draw (component_t *com, rawpic_t *pic)
 
 static void gui_comp_draw (pane_t *pane, component_t *com)
 {
+    rgba_t color;
     if (com->ispad) {
         gui_com_clear(com);
         return;
     }
+    color = gui_com_select_color(com);
+    gui_com_fill(com, color);
+
     if (com->pic && !com->pictop) {
         gui_rawpic_draw(com, com->pic);
     }
     if (!com->userdraw) {
-        rgba_t color;
         int len = 0, tmp;
         int line = 0;
         uint8_t *text;
 
-        color = gui_com_select_color(com);
-
         if (com->draw) {
             com->draw(pane, com, NULL);
-        } else if (com->bcolor != color) {
-            gui_com_fill_HAL(com, color);
         }
-
         if (com->showname) {
             gui_draw_string_c(com, line, com->fcolor, com->name);
             line++;
@@ -663,14 +666,18 @@ static void gui_comp_draw (pane_t *pane, component_t *com)
     }
 }
 
-static void gui_pane_draw (gui_t *gui, pane_t *pane)
+static int gui_pane_draw (gui_t *gui, pane_t *pane)
 {
     component_t *com = pane->head;
+    int repaint = 0;
 
-    vid_vsync(0);
-    if (pane->child && pane->child->repaint) {
-        gui_pane_draw(gui, pane->child);
+    if (!pane->repaint) {
+        return repaint;
     }
+    if (pane->child) {
+        repaint = gui_pane_draw(gui, pane->child);
+    }
+    vid_vsync(0);
     while (com) {
         if (gui_is_com_durty(gui, com)) {
             gui_comp_draw(pane, com);
@@ -678,35 +685,28 @@ static void gui_pane_draw (gui_t *gui, pane_t *pane)
         com = com->next;
     }
     pane->repaint = 0;
+    return repaint;
 }
 
 void gui_draw (gui_t *gui, int force)
 {
-    pane_t *pane = gui->head;
     pane_t *selected = gui->selected_head;
-    const dim_t *invis = NULL;
 
     if (!__gui_draw_allowed(gui)) {
         return;
     }
-    if (force) {
-        gui_mark_dirty(gui);
+    assert(selected);
+    if (gui_pane_draw(gui, selected)) {
+        gui_post_draw(gui);
     }
-    if (selected) {
-        invis = &selected->dim;
-    }
+}
+
+void gui_set_repaint (pane_t *pane, int repaint)
+{
     while (pane) {
-        if (pane != selected && pane->repaint) {
-            if (!invis || !dim_check_invis(&pane->dim, invis)) {
-                gui_pane_draw(gui, pane);
-            }
-        }
-        pane = pane->next;
+        pane->repaint = repaint;
+        pane = pane->child;
     }
-    if (selected && selected->repaint) {
-        gui_pane_draw(gui, selected);
-    }
-    gui_post_draw(gui);
 }
 
 static component_t *
@@ -800,9 +800,6 @@ int gui_send_event (gui_t *gui, gevt_t *evt)
 
     assert(pane);
     if (evt->symbolic) {
-        if (pane->onfocus == NULL) {
-            return 0;
-        }
         com = pane->onfocus;
     }
     if (com) {
@@ -811,6 +808,11 @@ int gui_send_event (gui_t *gui, gevt_t *evt)
         }
     } else {
         handled = gui_com_input_xy(pane, evt);
+    }
+    if (handled) {
+        pane = gui->selected_head;
+        gui_set_repaint(pane, 1);
+        gui_mark_dirty(gui);
     }
     return handled;
 }
@@ -835,29 +837,8 @@ void gui_wakeup_com (gui_t *gui, component_t *com)
         !gui_contain_child(gui->selected_head, pane)) {
         return;
     }
-    if (gui_is_com_durty(gui, com)) {
-        gui_com_clear(com);
-    }
     com->parent->repaint = 1;
 
-}
-
-void gui_wakeup_pane (pane_t *pane)
-{
-    component_t *com = pane->head;
-    gui_t *gui = pane->parent;
-
-    if (pane->parent->selected_head == pane) {
-        if (pane->child) {
-            gui_wakeup_pane(pane->child);
-        }
-    }
-    gui_set_dirty(gui, &pane->dim);
-    gui_mark_dirty(gui);
-    while (com) {
-        gui_wakeup_com(pane->parent, com);
-        com = com->next;
-    }
 }
 
 pane_t *gui_get_pane_4_name (gui_t *gui, const char *name)
@@ -880,8 +861,8 @@ void gui_select_pane (gui_t *gui, pane_t *pane)
         gui->selected_tail = pane;
     }
     gui->selected_head = pane;
-
-    gui_wakeup_pane(pane);
+    gui_mark_dirty(gui);
+    gui_set_repaint(pane, 1);
 }
 
 pane_t *gui_release_pane (gui_t *gui)
@@ -893,12 +874,15 @@ pane_t *gui_release_pane (gui_t *gui)
         return NULL;
     }
     if (head == tail) {
-        gui->selected_head = NULL;
+        gui_mark_dirty(gui);
+        gui_set_repaint(head, 1);
+        head = NULL;
         gui->selected_tail = NULL;
     } else {
-        gui->selected_head = head->selected_next;
+        head = head->selected_next;
     }
-    return gui->selected_head;
+    gui->selected_head = head;
+    return head;
 }
 
 static inline pane_t *
@@ -943,25 +927,20 @@ component_t *
 gui_set_focus (pane_t *pane, component_t *com, component_t *prev)
 {
     gui_t *gui = pane->parent;
-    int dirty = 0;
 
     assert(com || prev);
     pane->onfocus = com;
     if (com) {
-        gui_set_dirty(gui, &com->dim);
+        gui_com_set_dirty(gui, com);
         com->glow = 127;
-        dirty = 1;
     }
     if (prev) {
-        gui_set_dirty(gui, &prev->dim);
+        gui_com_set_dirty(gui, prev);
         prev->glow = 0;
-        dirty = 1;
     }
 
-    if (dirty) gui_mark_dirty(gui);
-    if (com) gui_wakeup_com(gui, com);
-    if (prev) gui_wakeup_com(gui, prev);
-
+    gui_set_repaint(pane, 1);
+    gui_mark_dirty(gui);
     return com;
 }
 

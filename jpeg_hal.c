@@ -114,10 +114,8 @@ int jpeg__hal_decode (jpeg_info_t *info, void *tempbuf, void *data, uint32_t siz
 
     do
     {
-      irq_save(&irq);
       JPEG_InputHandler(&jpeg_hal_ctxt.hal_jpeg);
       done = JPEG_OutputHandler(&jpeg_hal_ctxt.hal_jpeg);
-      irq_restore(irq);
     } while(done == 0);
 
     heap_free(jpeg_hal_ctxt.outtab[0].DataBuffer);
