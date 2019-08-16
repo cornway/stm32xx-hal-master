@@ -22,9 +22,8 @@
 #define MAX_HANDLES    6
 #endif
 
-FATFS SDFatFs ALIGN(8);  /* File system object for SD card logical drive */
-char SDPath[4] = {0}; /* SD card logical drive path */
-
+static FATFS DEV_Fs ALIGN(8);
+static char DEV_Path[4] = {0};
 
 typedef struct {
     int type;
@@ -51,6 +50,8 @@ static dirhandle_t __dir_handles[MAX_HANDLES] ALIGN(8);
 static fobjhdl_t *file_handles[MAX_HANDLES] ALIGN(8);
 static fobjhdl_t *dir_handles[MAX_HANDLES] ALIGN(8);
 
+static int _devio_mount (char *path);
+static void _devio_unmount (char *path);
 
 #define alloc_file(nump) allochandle(file_handles, nump)
 #define alloc_dir(nump) allochandle(dir_handles, nump)
@@ -100,42 +101,43 @@ static inline void releasehandle (fobjhdl_t **hdls, int handle)
     hdls[handle]->is_owned = 0;
 }
 
-/*
-DERR_NOPATH,
-    DERR_NORES,
-    DERR_INVPARAM,
-    DERR_NOFS,
-*/
-const int _fres_to_derrno (FRESULT res)
+int FR_2_ERR (FRESULT res)
 {
+    int err = -DERR_INT;
     switch(res) {
-        case FR_OK: return DERR_OK;
+        case FR_OK:
+            err = DERR_OK;
+        break;
         case FR_DISK_ERR:
         case FR_INT_ERR:
         case FR_NOT_READY:
-            return DERR_INT;
+            err = -DERR_INT;
+        break;
         case FR_NO_FILE:
         case FR_NO_PATH:
-            return DERR_NOPATH;
+            err = -DERR_NOPATH;
+        break;
         case FR_INVALID_NAME:
         case FR_DENIED:
         case FR_EXIST:
         case FR_INVALID_OBJECT:
         case FR_WRITE_PROTECTED:
         case FR_INVALID_DRIVE:
-            return DERR_INVPARAM;
+            err = -DERR_INVPARAM;
+        break;
         case FR_NOT_ENABLED:
         case FR_NO_FILESYSTEM:
-            return DERR_NOFS;
+            err = -DERR_NOFS;
+        break;
         case FR_MKFS_ABORTED:
         case FR_TIMEOUT:
         case FR_LOCKED:
         case FR_NOT_ENOUGH_CORE:
         case FR_TOO_MANY_OPEN_FILES:
         case FR_INVALID_PARAMETER:
-            return DERR_NORES;
+            err = -DERR_NORES;
     }
-    return DERR_INT;
+    return err;
 }
 
 const char *_fres_to_string (FRESULT res)
@@ -143,6 +145,7 @@ const char *_fres_to_string (FRESULT res)
 #define errorcase(res) case res: str = #res ; break
 const char *str;
     switch (res) {
+        errorcase(FR_OK);
         errorcase(FR_DISK_ERR);
         errorcase(FR_INT_ERR);
         errorcase(FR_NOT_READY);
@@ -167,14 +170,9 @@ const char *str;
 #undef errorcase
 }
 
-static int _devio_mount (void *p1, void *p2);
-static void _devio_unmount (void);
-void cmd_unregister_all (void);
-
-
 int dev_io_init (void)
 {
-    return _devio_mount(SDPath, NULL);
+    return _devio_mount(DEV_Path);
 }
 
 void dev_io_deinit (void)
@@ -182,7 +180,7 @@ void dev_io_deinit (void)
 extern void SD_Deinitialize(void);
 
     dprintf("%s() :\n", __func__);
-    _devio_unmount();
+    _devio_unmount(DEV_Path);
     SD_Deinitialize();
 }
 
@@ -235,7 +233,7 @@ int d_open (const char *path, int *hndl, char const * att)
         dbg_eval(DBG_WARN) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
         freefile(*hndl);
         *hndl = -1;
-        return -_fres_to_derrno(res);
+        return FR_2_ERR(res);
     }
     if (extend) {
         ret = d_seek(*hndl, 0, DSEEK_END);
@@ -270,17 +268,17 @@ int d_unlink (const char *path)
     res = f_unlink(path);
     if (res != FR_OK) {
         dbg_eval(DBG_WARN) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
-        return -_fres_to_derrno(res);
+        return FR_2_ERR(res);
     }
     return 0;
 }
 
 int d_seek (int handle, int position, uint32_t mode)
 {
-    FRESULT res;
+    FRESULT res = FR_OK;
 
     if (handle < 0) {
-        return -1;
+        return -DERR_INVPARAM;
     }
     switch (mode) {
         case DSEEK_SET:
@@ -294,10 +292,10 @@ int d_seek (int handle, int position, uint32_t mode)
         break;
         default:
             dprintf("Unknown SEEK mode : %u\n", mode);
-            return -1;
+            res = FR_INVALID_PARAMETER;
         break;
     }
-    return -_fres_to_derrno(res);
+    return FR_2_ERR(res);
 }
 
 int d_eof (int handle)
@@ -320,7 +318,7 @@ int d_read (int handle, PACKED void *dst, int count)
     }
     if (res != FR_OK) {
         dbg_eval(DBG_WARN) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
-        return -_fres_to_derrno(res);
+        return FR_2_ERR(res);
     }
     return done;
 }
@@ -359,7 +357,7 @@ int d_write (int handle, PACKED const void *src, int count)
     }
     if (res != FR_OK) {
         dbg_eval(DBG_ERR) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
-        return -_fres_to_derrno(res);
+        return FR_2_ERR(res);
     }
     return done;
 #else
@@ -372,7 +370,7 @@ int d_mkdir (const char *path)
 #if !DEVIO_READONLY
     FRESULT res = f_mkdir(path);
     if ((res != FR_OK) && (res != FR_EXIST)) {
-        return -_fres_to_derrno(res);
+        return FR_2_ERR(res);
     }
 #endif
     return 0;
@@ -393,7 +391,7 @@ int d_opendir (const char *path)
             dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
         }
         freedir(h);
-        return -_fres_to_derrno(res);
+        return FR_2_ERR(res);
     }
     return h;
 }
@@ -485,24 +483,23 @@ uint32_t d_time (void)
     return HAL_GetTick();
 }
 
-static int _devio_mount (void *p1, void *p2)
+static int _devio_mount (char *path)
 {
     int i;
     FRESULT res;
 
-    memset(&SDFatFs, 0, sizeof(SDFatFs));
-    FATFS_UnLinkDriver((char *)p1);
+    d_memzero(&DEV_Fs, sizeof(DEV_Fs));
 
-    if(FATFS_LinkDriver(&SD_Driver, (char *)p1)) {
-        return -1;
+    if(FATFS_LinkDriver(&SD_Driver, path)) {
+        return -DERR_NOFS;
     }
 
-    dbg_eval(DBG_WARN) dprintf("mount fs : %s\n", (char *)p1);
-    res = f_mount(&SDFatFs, (TCHAR const*)p1, 1);
+    res = f_mount(&DEV_Fs, path, 1);
     if(res != FR_OK) {
         dbg_eval(DBG_ERR) dprintf("%s() : fail : \'%s\'\n", __func__, _fres_to_string(res));
-        return -1;
+        return FR_2_ERR(res);
     }
+    dprintf("FS mount : \'%s\'\n", path);
 
     /*TODO : Add own size to each pool*/
     for (i = 0; i < MAX_HANDLES; i++) {
@@ -517,10 +514,9 @@ static int _devio_mount (void *p1, void *p2)
     return 0;
 }
 
-static void _devio_unmount (void)
+static void _devio_unmount (char *path)
 {
-    /*TODO : !!!*/
-    FATFS_UnLinkDriver("0");
+    FATFS_UnLinkDriver(path);
 }
 
 #endif
