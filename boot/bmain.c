@@ -13,160 +13,56 @@
 #include <bsp_cmd.h>
 #include <audio_main.h>
 #include <misc_utils.h>
-
-#define BOOT_SYS_DIR_PATH "/sys"
-#define BOOT_SFX_DIR_PATH (BOOT_SYS_DIR_PATH"/sfx")
-#define BOOT_SYS_LOG_NAME "log.txt"
-#define BOOT_BIN_DIR_NAME "BIN"
-#define BOOT_SYS_LOG_PATH BOOT_SYS_DIR_PATH"/"BOOT_SYS_LOG_NAME
-#define BOOT_STARTUP_MUSIC_PATH (BOOT_SYS_DIR_PATH"/mus/title.wav")
-
-static int boot_program_bypas = 0;
+#include <jpeg.h>
+#include <bconf.h>
 
 static gui_t gui;
 static pane_t *pane_console, *pane_selector,
               *pane_alert, *pane_progress,
               *pane_jpeg;
 
-static bsp_bin_t *boot_bin_head = NULL;
-static int bin_collected_cnt = 0;
-static bsp_bin_t **boot_bin_packed_array = NULL;
-static int boot_bin_packed_size = 0;
-static int boot_bin_selected = 0;
-
-static cd_track_t boot_cd = {NULL};
-
-enum {
-    SFX_MOVE,
-    SFX_SCROLL,
-    SFX_WARNING,
-    SFX_CONFIRM,
-    SFX_START_APP,
-    SFX_NOWAY,
-    SFX_MAX,
-};
-
-const char *sfx_names[] =
-{
-    [SFX_MOVE] = "sfxmove.wav",
-    [SFX_SCROLL] = "sfxmisc1.wav",
-    [SFX_WARNING] = "sfxwarn.wav",
-    [SFX_CONFIRM] = "sfxconf.wav",
-    [SFX_START_APP] = "sfxstart2.wav",
-    [SFX_NOWAY] = "sfxnoway.wav"
-};
-
-static int sfx_ids[arrlen(sfx_names)] = {0};
+static int b_exec_selector_cursor = 0;
 
 static void boot_gui_bsp_init (gui_t *gui);
-static int gui_stdout_hook (int argc, const char **argv);
+static void b_exec_install_status_clbk (const char *msg, int percent);
+static void b_dev_deinit_callback (void);
 
-static void boot_sfx_chart_alloc (gui_t *gui)
+typedef struct {
+    int (*func) (const char *);
+    bsp_exec_file_type_t file_type;
+    const char *file_ext;
+} b_exec_type_func_t;
+
+static int b_execute_boot (const char *path);
+
+static const b_exec_type_func_t b_exec_type_func_tbl[] =
 {
-    int i;
-    char path[BOOT_MAX_PATH];
+    [BIN_FILE] = {b_execute_boot, BIN_FILE, ".bin"},
+    [BIN_LINK] = {b_execute_link, BIN_LINK, ".als"},
+    [BIN_CMD] =  {b_execute_boot, BIN_CMD,  ".cmd"},
+    {NULL, BIN_MAX, ""},
+};
 
-    for (i = 0; i < arrlen(sfx_names); i++) {
-        snprintf(path, sizeof(path), "%s/%s", BOOT_SFX_DIR_PATH, sfx_names[i]);
-        sfx_ids[i] = gui_bsp_sfxalloc(gui, path);
-    }
-}
-
-int boot_print_bin_list (int argc, const char **argv)
-{
-    int i = 0;
-    bsp_bin_t *bin = boot_bin_head;
-    boot_bin_parm_t *parm;
-
-    dprintf("%s() :\n", __func__);
-    while (bin) {
-        parm = &bin->parm;
-
-        if (bin->filetype == BIN_FILE) {
-            dprintf("[%i] %s, %s, <0x%p> %u bytes\n",
-                i++, bin->name, bin->path, (void *)parm->progaddr, parm->size);
-        } else if (bin->filetype == BIN_LINK) {
-            dprintf("[%i] %s, %s, <link file>\n",
-                i++, bin->name, bin->path);
-        } else {
-            dprintf("unable to handle : [%i] %s, %s, ???\n",
-                i++, bin->name, bin->path);
-            assert(0)
-        }
-        bin = bin->next;
-    }
-    return argc;
-}
+complete_ind_t complete_ind_clbk = NULL;
 
 bsp_exec_file_type_t
-bsp_bin_file_compat (const char *in)
+bsp_bin_file_fmt_supported (const char *in)
 {
-    const struct exec_file_ext_map {
-        bsp_exec_file_type_t type;
-        const char ext[5];
-    } extmap[] =
-    {
-        {BIN_FILE, ".bin"},
-        {BIN_LINK, ".als"},
-        {BIN_LINK, ".lnk"},
-        {BIN_CMD,  ".cmd"},
-    };
     int i;
+    const b_exec_type_func_t *desc_type;
 
-    for (i = 0; i < arrlen(extmap); i++) {
-        if (!d_astrnmatch(in, extmap[i].ext, 1 - sizeof(extmap[i].ext))) {
-            return extmap[i].type;
+    for (i = 0; i < arrlen(b_exec_type_func_tbl); i++) {
+
+        desc_type = &b_exec_type_func_tbl[i];
+        if (!d_astrnmatch(in, desc_type->file_ext, 0 - strlen(desc_type->file_ext))) {
+            return b_exec_type_func_tbl[i].file_type;
         }
     }
     return BIN_MAX;
 }
 
-static void boot_bin_link (bsp_bin_t *bin)
-{
-    bin->next = boot_bin_head;
-    boot_bin_head = bin;
-    bin_collected_cnt++;
-}
-
-static void boot_bin_unlink (bsp_bin_t *del)
-{
-    bsp_bin_t *bin = boot_bin_head, *prev = NULL;
-
-    while (bin) {
-
-        if (del == bin) {
-            if (prev) {
-                prev->next = bin->next;
-            } else {
-                boot_bin_head = bin->next;
-            }
-            bin_collected_cnt--;
-            heap_free(bin);
-            break;
-        }
-        prev = bin;
-        bin = bin->next;
-    }
-}
-
-static void boot_destr_exec_list (void)
-{
-    bsp_bin_t *bin = boot_bin_head, *prev;
-
-    while (bin) {
-        prev = bin;
-        bin = bin->next;
-        heap_free(prev);
-    }
-    boot_bin_head = NULL;
-    bin_collected_cnt = 0;
-    if (boot_bin_packed_array) {
-        heap_free(boot_bin_packed_array);
-    }
-}
-
 int
-bsp_setup_bin_param (bsp_bin_t *bin)
+bsp_setup_bin_param (exec_desc_t *bin)
 {
     int f, size;
     uint8_t buf[sizeof(bin->parm)];
@@ -176,13 +72,13 @@ bsp_setup_bin_param (bsp_bin_t *bin)
         return -1;
     }
     d_read(f, buf, sizeof(buf));
-    b_setup_bin_param(&bin->parm, buf, size);
+    bhal_setup_bin_param(&bin->parm, buf, size);
     d_close(f);
     return 0;
 }
 
-static void
-bsp_setup_title_pic (const char *dirpath, bsp_bin_t *bin)
+void
+bsp_load_exec_title_pic (const char *dirpath, exec_desc_t *bin)
 {
     char name[D_MAX_NAME] = {0};
     char tpath[D_MAX_PATH];
@@ -195,257 +91,7 @@ bsp_setup_title_pic (const char *dirpath, bsp_bin_t *bin)
     bin->pic = win_jpeg_decode(pane_jpeg, tpath);
 }
 
-bsp_bin_t *
-bsp_setup_bin_desc (const char *dirpath, bsp_bin_t *bin, const char *path,
-                           const char *originname, bsp_exec_file_type_t type)
-{
-    snprintf(bin->name, sizeof(bin->name), "%s", originname);
-    snprintf(bin->path, sizeof(bin->path), "%s", path);
-    bin->filetype = type;
-    bsp_setup_title_pic(dirpath, bin);
-    if (bsp_setup_bin_param(bin) < 0) {
-        return NULL;
-    }
-    return bin;
-}
-
-bsp_bin_t *
-bsp_setup_bin_link (const char *dirpath, bsp_bin_t *bin, const char *path,
-                           const char *originname, bsp_exec_file_type_t type)
-{
-    snprintf(bin->name, sizeof(bin->name), "%s", originname);
-    snprintf(bin->path, sizeof(bin->path), "%s", path);
-    bin->filetype = type;
-    bin->parm.progaddr = 0;
-    bsp_setup_title_pic(dirpath, bin);
-    return bin;
-}
-
-
-static bsp_bin_t *
-boot_alloc_bin_desc (const char *dirpath, const char *path,
-                           const char *originname, bsp_exec_file_type_t type)
-{
-    bsp_bin_t *bin = (bsp_bin_t *)heap_malloc(sizeof(*bin));
-
-    if (type == BIN_FILE) {
-        bin = bsp_setup_bin_desc(dirpath, bin, path, originname, type);
-        assert(bin);
-    } else if (type == BIN_LINK) {
-        bin = bsp_setup_bin_link(dirpath, bin, path, originname, type);
-    }
-    boot_bin_link(bin);
-    return bin;
-}
-
-static void boot_pack_bin_list (bsp_bin_t *head, int cnt)
-{
-    bsp_bin_t *bin = head;
-    boot_bin_packed_array = heap_malloc(sizeof(bsp_bin_t *) * (cnt + 1));
-    assert(boot_bin_packed_array);
-    boot_bin_packed_size = 0;
-
-    while (bin) {
-        boot_bin_packed_array[boot_bin_packed_size] = bin;
-        bin->id = boot_bin_packed_size;
-        bin = bin->next;
-        boot_bin_packed_size++;
-    }
-}
-
-static int b_rebuild_exec_list (bsp_bin_t *head, int cnt)
-{
-    if (boot_bin_packed_array) {
-        heap_free(boot_bin_packed_array);
-    }
-    boot_pack_bin_list(head, cnt);
-    return CMDERR_OK;
-}
-
-static void boot_bin_select_next (int dir)
-{
-    if (dir < 0) {
-        boot_bin_selected--;
-        if (boot_bin_selected < 0) {
-            boot_bin_selected = boot_bin_packed_size - 1;
-        }
-    } else {
-        boot_bin_selected++;
-        if (boot_bin_selected == boot_bin_packed_size) {
-            boot_bin_selected = 0;
-        }
-    }
-}
-
-static void
-boot_bin_get_visible (const bsp_bin_t **binarray, int *pstart,
-                             int *size, int maxsize)
-{
-    int tmp, top, bottom, start, i;
-    int mid = maxsize / 2;
-    assert(boot_bin_packed_size);
-
-    top = (boot_bin_packed_size - boot_bin_selected);
-    if (top > mid) {
-        top = mid;
-    }
-    bottom = boot_bin_selected;
-    if (bottom > mid) {
-        bottom = mid;
-    }
-    tmp = top + bottom;
-    start = boot_bin_selected - bottom;
-
-    *size = tmp;
-    *pstart = mid - bottom;
-    while (i < tmp) {
-        binarray[i++] = boot_bin_packed_array[start++];
-    }
-}
-
-void boot_read_path (const char *path)
-{
-    fobj_t fobj;
-    int dir, bindir;
-    char buf[BOOT_MAX_PATH];
-    char binpath[BOOT_MAX_NAME];
-    d_bool filesfound = 0;
-
-    dir = d_opendir(path);
-    if (dir < 0) {
-        dprintf("%s() : fail\n", __func__);
-    }
-    while (d_readdir(dir, &fobj) >= 0) {
-
-        if (fobj.attr.dir) {
-            fobj_t binobj;
-            snprintf(buf, sizeof(buf), "%s/%s/"BOOT_BIN_DIR_NAME, path, fobj.name);
-
-            bindir = d_opendir(buf);
-            if (bindir < 0) {
-                continue;
-            }
-            while (d_readdir(bindir, &binobj) >= 0) {
-                if (binobj.attr.dir == 0) {
-                    bsp_exec_file_type_t type = bsp_bin_file_compat(binobj.name);
-
-                    if (type != BIN_MAX && type != BIN_FILE) {
-                        snprintf(binpath, sizeof(binpath), "%s/%s", buf, binobj.name);
-                        if (boot_alloc_bin_desc(buf, binpath, binobj.name, type)) {
-                            filesfound++;
-                        }
-                    }
-                }
-            }
-            if (!filesfound) {
-                dprintf("%s() : no exe here : \'%s\'\n", __func__, buf);
-            }
-            d_closedir(bindir);
-        }
-    }
-    d_closedir(dir);
-    dprintf("%s() : Found : %u files\n", __func__, filesfound);
-}
-
-void *bsp_cache_bin_file (const bsp_heap_api_t *heapapi, const char *path, int *binsize)
-{
-    int f;
-    int fsize, size;
-    void *cache;
-
-    fsize = d_open(path, &f, "r");
-    if (f < 0) {
-        dprintf("%s() : failed to open : \'%s\'\n", __func__, path);
-        return NULL;
-    }
-    size = ROUND_UP(fsize, 32);
-    cache = heapapi->malloc(size);
-    assert(cache);
-
-    dprintf("caching bin : dest <0x%p> size [0x%08x]\n", cache, fsize);
-
-    if (d_read(f, cache, fsize) < fsize) {
-        dprintf("%s() : missing part\n", __func__);
-        heapapi->free(cache);
-        cache = NULL;
-    } else {
-        *binsize = fsize;
-    }
-    d_close(f);
-
-    if (cache)
-        dprintf("Cache done : <0x%p> : 0x%08x bytes\n", cache, fsize);
-
-    return cache;
-}
-
-static int b_handle_lnk (const char *path);
-static int b_handle_cmd (const char *path);
-
-int bsp_exec_link (arch_word_t *progaddr, const char *path)
-{
-    return b_handle_lnk(path);
-}
-
-int bsp_exec_cmd (arch_word_t *progaddr, const char *path)
-{
-    return b_handle_cmd(path);
-}
-
-static void __install_status_clbk (const char *msg, int percent)
-{
-    if (win_prog_set(pane_progress, msg, percent)) {
-        gui_draw(&gui, 1);
-        HAL_Delay(10);
-    }
-}
-
-arch_word_t *bsp_install_exec (arch_word_t *progptr, const char *path)
-{
-    void *bindata;
-    int binsize = 0, err = 0;
-    bsp_heap_api_t heap = {.malloc = heap_alloc_shared, .free = heap_free};
-    boot_bin_parm_t parm;
-
-    dprintf("Installing : \'%s\'\n", path);
-
-    bindata = bsp_cache_bin_file(&heap, path, &binsize);
-    if (!bindata) {
-        return NULL;
-    }
-    if (progptr == NULL) {
-        b_setup_bin_param(&parm, bindata, binsize);
-        progptr = (arch_word_t *)parm.progaddr;
-    }
-
-    if (!boot_program_bypas && !bhal_prog_exist(__install_status_clbk, progptr, bindata, binsize / sizeof(arch_word_t))) {
-        err = bhal_load_program(__install_status_clbk, progptr, bindata, binsize / sizeof(arch_word_t));
-    }
-    if (err < 0) {
-        return NULL;
-    }
-    return progptr;
-}
-
-extern void bsp_argc_argv_set (const char *arg);
-extern int bsp_argc_argv_check (const char *arg);
-
-int bsp_start_exec (arch_word_t *progaddr, int argc, const char **argv)
-{
-    dprintf("Starting application... \n");
-
-    bsp_argc_argv_set(argv[0]);
-    if (bsp_argc_argv_check(argv[0]) < 0) {
-        return -1;
-    }
-    bsp_stout_unreg_if(gui_stdout_hook);
-    gui_destroy(&gui);
-    dev_deinit();
-    bhal_execute_app(progaddr);
-    return 0;
-}
-
-static int b_handle_lnk (const char *path)
+int b_execute_link (const char *path)
 {
     int f;
     char strbuf[CMD_MAX_BUF];
@@ -463,32 +109,52 @@ static int b_handle_lnk (const char *path)
     return CMDERR_OK;
 }
 
-static int b_handle_cmd (const char *path)
+int b_execute_cmd (const char *path)
 {
     cmd_exec_dsr("runcmd", path);
     return CMDERR_OK;
 }
 
-static int __b_exec_selected (bsp_bin_t *bin)
+static int
+b_execute_boot (const char *path)
+{
+    return cmd_exec_dsr("boot", path);
+}
+
+static int
+b_execute_app (exec_desc_t *bin)
 {
     int ret = -CMDERR_INVPARM;
-    switch (bin->filetype) {
-        case BIN_FILE: ret = cmd_exec_dsr("boot", bin->path);
-        break;
-        case BIN_LINK: ret = b_handle_lnk(bin->path);
-        break;
-        case BIN_CMD: ret = b_handle_cmd(bin->path);
-        break;
-        default:
-        assert(0);
+
+    if (bin->filetype < BIN_MAX) {
+        ret = b_exec_type_func_tbl[bin->filetype].func(bin->path);
     }
     return ret;
 }
 
-static int b_gui_print_bin_list (pane_t *pane)
+static void
+b_selector_move_cursor (int dir)
+{
+    int max = bres_get_executables_num();
+
+    if (dir < 0) {
+        b_exec_selector_cursor--;
+        if (b_exec_selector_cursor < 0) {
+            b_exec_selector_cursor = max - 1;
+        }
+    } else {
+        b_exec_selector_cursor++;
+        if (b_exec_selector_cursor == max) {
+            b_exec_selector_cursor = 0;
+        }
+    }
+}
+
+static int
+b_gui_print_apps_list (pane_t *pane)
 {
     const int prsize = 20;
-    const bsp_bin_t *binarray[32];
+    const exec_desc_t *binarray[32];
     int start, selected, maxy, size, i, dummy;
     char str[CMD_MAX_BUF];
 
@@ -496,7 +162,7 @@ static int b_gui_print_bin_list (pane_t *pane)
     win_con_get_dim(pane, &dummy, &maxy);
 
     assert(arrlen(binarray) > maxy);
-    boot_bin_get_visible(binarray, &start, &size, maxy);
+    bres_querry_executables_for_range(binarray, &start, b_exec_selector_cursor, &size, maxy);
 
     selected = maxy / 2;
     assert(selected >= start);
@@ -509,7 +175,7 @@ static int b_gui_print_bin_list (pane_t *pane)
     }
     for (i = start; i < start + size; i++) {
         if (i == selected) {
-            snprintf(str, sizeof(str), "%*.*s <---", -prsize, -prsize, binarray[i - start]->name);
+            snprintf(str, sizeof(str), "%*.*s <", -prsize, -prsize, binarray[i - start]->name);
             win_con_printline(pane, i, str, COLOR_RED);
         } else {
             snprintf(str, sizeof(str), "%*.*s", -prsize, -prsize, binarray[i - start]->name);
@@ -520,20 +186,22 @@ static int b_gui_print_bin_list (pane_t *pane)
     return CMDERR_OK;
 }
 
-static int b_console_user_clbk (gevt_t *evt)
+static int
+b_console_user_clbk (gevt_t *evt)
 {
     if (evt) {
-        gui_bsp_sfxplay(&gui, sfx_ids[SFX_MOVE], 100);
+        bsfx_start_sound(SFX_MOVE, 100);
         return 1;
     }
     return 0;
 }
 
-static int b_alert_user_clbk (gevt_t *evt)
+static int
+b_alert_user_clbk (gevt_t *evt)
 {
     if (evt->sym == GUI_KEY_LEFT ||
         evt->sym == GUI_KEY_RIGHT) {
-        gui_bsp_sfxplay(&gui, sfx_ids[SFX_MOVE], 100);
+        bsfx_start_sound(SFX_MOVE, 100);
     }
     return 1;
 }
@@ -541,31 +209,35 @@ static int b_alert_user_clbk (gevt_t *evt)
 static int
 b_alert_decline_clbk (const component_t *com)
 {
-    gui_bsp_sfxplay(&gui, sfx_ids[SFX_NOWAY], 100);
+    bsfx_start_sound(SFX_NOWAY, 100);
     return 1;
 }
 
-static int b_alert_accept_clbk (const component_t *com)
+static int
+b_alert_accept_clbk (const component_t *com)
 {
+extern void (*dev_deinit_callback) (void);
     int ret;
 
-    cd_stop(&boot_cd);
-    gui_bsp_sfxplay(&gui, sfx_ids[SFX_START_APP], 100);
+    bsfx_title_music(0, 0);
+    bsfx_start_sound(SFX_START_APP, 100);
     d_sleep(100);
 
+    gui_pane_set_dirty(&gui, pane_progress);
     gui_select_pane(&gui, pane_progress);
 
-    ret = __b_exec_selected(boot_bin_packed_array[boot_bin_selected]);
+    ret = b_execute_app(bres_get_executable_for_num(b_exec_selector_cursor));
     if (ret != CMDERR_OK) {
-        cd_play_name(&boot_cd, BOOT_STARTUP_MUSIC_PATH);
+        bsfx_title_music(1, 40);
     } else {
+        dev_deinit_callback = b_dev_deinit_callback;
         gui.destroy = 1;
     }
     return ret;
 }
 
 static int
-b_selected_clbk (pane_t *pane, component_t *com, void *user)
+b_gui_input_event_hanlder (pane_t *pane, component_t *com, void *user)
 {
     gevt_t *evt = (gevt_t *)user;
     int dir = -1;
@@ -574,17 +246,17 @@ b_selected_clbk (pane_t *pane, component_t *com, void *user)
         case GUI_KEY_UP:
             dir = 1;
         case GUI_KEY_DOWN:
-            boot_bin_select_next(dir);
-            b_gui_print_bin_list(pane);
-            gui_bsp_sfxplay(&gui, sfx_ids[SFX_MOVE], 100);
+            b_selector_move_cursor(dir);
+            b_gui_print_apps_list(pane);
+            bsfx_start_sound(SFX_MOVE, 100);
         break;
         case GUI_KEY_RETURN:
         {
             char buf[CMD_MAX_BUF];
+            exec_desc_t *bin = bres_get_executable_for_num(b_exec_selector_cursor);
 
-            gui_bsp_sfxplay(&gui, sfx_ids[SFX_WARNING], 100);
-            snprintf(buf, sizeof(buf), "Open :\n\'%s\'\nApplicarion?",
-                     boot_bin_packed_array[boot_bin_selected]->name);
+            bsfx_start_sound(SFX_WARNING, 100);
+            snprintf(buf, sizeof(buf), "Open :\n\'%s\'\nApplicarion?", bin->name);
             win_alert(pane_alert, buf, b_alert_accept_clbk, b_alert_decline_clbk);
         }
         break;
@@ -597,6 +269,14 @@ static int gui_stdout_hook (int argc, const char **argv)
     assert(argc > 0);
     win_con_append(pane_console, argv[0], COLOR_WHITE);
     return 0;
+}
+
+static void b_exec_install_status_clbk (const char *msg, int percent)
+{
+    if (win_prog_set(pane_progress, msg, percent)) {
+        gui_draw(&gui, 1);
+        HAL_Delay(10);
+    }
 }
 
 void boot_gui_preinit (void)
@@ -621,9 +301,9 @@ void boot_gui_preinit (void)
     prop.bcolor = COLOR_AQUAMARINE;
     prop.name = "binselect";
     pane_selector = win_new_console(&gui, &prop, gui.dim.x, gui.dim.y, gui.dim.w / 2, gui.dim.h);
-    win_con_set_clbk(pane_selector, b_selected_clbk);
+    win_con_set_clbk(pane_selector, b_gui_input_event_hanlder);
 
-    pane_alert = win_new_allert(&gui, 400, 300);
+    pane_alert = win_new_allert(&gui, gui.dim.w / 2, 250);
     win_set_user_clbk(pane_alert, b_alert_user_clbk);
 
     dim = pane_alert->dim;
@@ -648,28 +328,39 @@ void boot_gui_preinit (void)
 
 int boot_main (int argc, const char **argv)
 {
-    boot_read_path("");
-    boot_pack_bin_list(boot_bin_head, bin_collected_cnt);
-    b_gui_print_bin_list(pane_selector);
-    cmd_register_i32(&boot_program_bypas, "skipflash");
-    boot_sfx_chart_alloc(&gui);
+    jpeg_init("");
+    boot_gui_preinit();
+
+    bres_exec_scan_path("");
+    b_gui_print_apps_list(pane_selector);
+
+    bsfx_sound_precache();
     dprintf("Ready\n");
 
-    cd_play_name(&boot_cd, BOOT_STARTUP_MUSIC_PATH);
-    cd_volume(&boot_cd, 40);
-
-    while (!gui.destroy) {
+    bsfx_title_music(1, 40);
+    complete_ind_clbk = b_exec_install_status_clbk;
+    while (!gui.destroy)
+    {
         bsp_tickle();
         gui_draw(&gui, 0);
         input_proc_keys(NULL);
     }
-    boot_destr_exec_list();
+    bres_exec_unload();
     bsp_tickle();
     assert(0);
     return 0;
 }
 
-static void _gui_symbolic_event_wrap (gui_t *gui, gevt_t *evt)
+static void b_dev_deinit_callback (void)
+{
+    if (!gui.destroy) {
+        return;
+    }
+    bsp_stout_unreg_if(gui_stdout_hook);
+    gui_destroy(&gui);
+}
+
+static void gui_char_input_event_wrap (gui_t *gui, gevt_t *evt)
 {
     if (evt->e != GUIACT) {
         return;
@@ -677,7 +368,7 @@ static void _gui_symbolic_event_wrap (gui_t *gui, gevt_t *evt)
 
     switch (evt->sym) {
         case GUI_KEY_SELECT:
-            gui_bsp_sfxplay(gui, sfx_ids[SFX_SCROLL], 100);
+            bsfx_start_sound(SFX_SCROLL, 100);
             gui_select_next_pane(gui);
         break;
         default:
@@ -686,57 +377,22 @@ static void _gui_symbolic_event_wrap (gui_t *gui, gevt_t *evt)
     }
 }
 
-static i_event_t *__post_key (i_event_t  *evts, i_event_t *event)
+void boot_deliver_input_event (void *_evt)
 {
-    static uint32_t inpost_tsf = 0;
-    gevt_t evt;
+    gevt_t *evt = (gevt_t *)_evt;
 
-    if (event->state == keydown) {
-        if (d_rlimit_wrap(&inpost_tsf, 300) == 0) {
-            return NULL;
-        }
-    }
-
-    evt.p.x = event->x;
-    evt.p.y = event->y;
-    evt.e = event->state == keydown ? GUIACT : GUIRELEASE;
-    evt.sym = event->sym;
-    evt.symbolic = 0;
-
-    if (event->x == 0 && event->y == 0) {
-        evt.symbolic = 1;
-    }
-
-    if (evt.symbolic) {
-        _gui_symbolic_event_wrap(&gui, &evt);
+    if (evt->symbolic) {
+        gui_char_input_event_wrap(&gui, evt);
     } else {
-        gui_send_event(&gui, &evt);
+        gui_send_event(&gui, evt);
     }
-    return NULL;
 }
 
 static void boot_gui_bsp_init (gui_t *gui)
 {
+#define GUI_FPS (25)
     screen_t s = {0};
     dim_t dim = {0};
-
-    const kbdmap_t kbdmap[JOY_STD_MAX] =
-    {  
-        [JOY_UPARROW]       = {GUI_KEY_UP, 0},
-        [JOY_DOWNARROW]     = {GUI_KEY_DOWN, 0},
-        [JOY_LEFTARROW]     = {GUI_KEY_LEFT, 0},
-        [JOY_RIGHTARROW]    = {GUI_KEY_RIGHT, 0},
-        [JOY_K1]            = {GUI_KEY_1, PAD_FREQ_LOW},
-        [JOY_K4]            = {GUI_KEY_2, 0},
-        [JOY_K3]            = {GUI_KEY_3, 0},
-        [JOY_K2]            = {GUI_KEY_4, PAD_FREQ_LOW},
-        [JOY_K5]            = {GUI_KEY_5, 0},
-        [JOY_K6]            = {GUI_KEY_6, 0},
-        [JOY_K7]            = {GUI_KEY_7, 0},
-        [JOY_K8]            = {GUI_KEY_8, 0},
-        [JOY_K9]            = {GUI_KEY_RETURN, 0},
-        [JOY_K10]           = {GUI_KEY_SELECT, PAD_FREQ_LOW},
-    };
 
     gui_bsp_api_t bspapi =
     {
@@ -745,19 +401,14 @@ static void boot_gui_bsp_init (gui_t *gui)
                 .alloc = heap_alloc_shared,
                 .free = heap_free,
             },
-        .sfx =
-            {
-                .alloc = bsp_open_wave_sfx,
-                .release = bsp_release_wave_sfx,
-                .play = bsp_play_wave_sfx,
-                .stop = bsp_stop_wave_sfx,
-            },
     };
 
     vid_wh(&s);
     dim.w = s.width;
     dim.h = s.height;
 
-    gui_init(gui, "gui", 25, &dim, &bspapi);
-    input_soft_init(__post_key, kbdmap);
+    gui_init(gui, "gui", GUI_FPS, &dim, &bspapi);
+extern int boot_input_init (void);
+    boot_input_init();
+#undef GUI_FPS
 }

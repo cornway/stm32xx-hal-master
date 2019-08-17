@@ -62,6 +62,7 @@ typedef struct bsp_debug_api_s {
 
 #else /*BSP_INDIR_API*/
 int serial_init (void);
+void serial_deinit (void);
 void serial_putc (char c);
 char serial_getc (void);
 int bsp_serial_send (char *data, size_t cnt);

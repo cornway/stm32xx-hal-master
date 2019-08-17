@@ -9,7 +9,7 @@
 
 typedef struct bspmod_s {
     struct bspmod_s *next;
-    bsp_bin_t bin;
+    exec_desc_t bin;
 
     const void *api;
     int apisize;
@@ -81,7 +81,7 @@ static d_bool bspmod_check_mod_allowed (bspmod_t *modchk)
 void *bspmod_insert (const bsp_heap_api_t *heap, const char *path, const char *name)
 {
     bspmod_t *mod;
-    bsp_bin_t *bin;
+    exec_desc_t *bin;
     bsp_exec_file_type_t bintype;
     void *rawptr;
     int err = -1;
@@ -91,7 +91,7 @@ void *bspmod_insert (const bsp_heap_api_t *heap, const char *path, const char *n
         return NULL;
     }
 
-    bintype = bsp_bin_file_compat(name);
+    bintype = bsp_bin_file_fmt_supported(name);
 
     if (bintype != BIN_FILE) {
         return NULL;
@@ -107,12 +107,12 @@ void *bspmod_insert (const bsp_heap_api_t *heap, const char *path, const char *n
         return NULL;
     }
 
-    rawptr = bsp_cache_bin_file(heap, bin->path, (int *)&bin->parm.size);
+    rawptr = bres_cache_file_2_mem(heap, bin->path, (int *)&bin->parm.size);
 
     if (rawptr) {
         err = 0;
-        if (!bhal_prog_exist(NULL, (arch_word_t *)bin->parm.progaddr, rawptr, bin->parm.size)) {
-            err = bhal_load_program(NULL, (arch_word_t *)bin->parm.progaddr,
+        if (!bhal_bin_check_in_mem(NULL, (arch_word_t *)bin->parm.progaddr, rawptr, bin->parm.size)) {
+            err = bhal_bin_2_mem_load(NULL, (arch_word_t *)bin->parm.progaddr,
                                      rawptr, bin->parm.size);
         }
     }

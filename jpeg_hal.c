@@ -88,7 +88,9 @@ typedef struct {
 static jpeg_hal_ctxt_t jpeg_hal_ctxt = {0};
 
 /* Private function prototypes -----------------------------------------------*/
-/* Private functions ---------------------------------------------------------*/
+int JPEG_Decode_DMA(JPEG_HandleTypeDef *hjpeg, void *data, uint32_t size, uint32_t DestAddress);
+uint32_t JPEG_OutputHandler(JPEG_HandleTypeDef *hjpeg);
+void JPEG_InputHandler(JPEG_HandleTypeDef *hjpeg);
 
 static void *bytestream_move (byte_stream_t *stream, uint32_t *len)
 {
@@ -102,7 +104,7 @@ static void *bytestream_move (byte_stream_t *stream, uint32_t *len)
     return stream->ptr + oldpos;
 }
 
-int jpeg__hal_decode (jpeg_info_t *info, void *tempbuf, void *data, uint32_t size)
+int JPEG_Decode_HAL (jpeg_info_t *info, void *tempbuf, void *data, uint32_t size)
 {
     int err, done;
 
@@ -118,7 +120,7 @@ int jpeg__hal_decode (jpeg_info_t *info, void *tempbuf, void *data, uint32_t siz
 
     heap_free(jpeg_hal_ctxt.outtab[0].DataBuffer);
 
-    JPEG_Info(info);
+    JPEG_Info_HAL(info);
     JPEG_Abort(&jpeg_hal_ctxt.hal_jpeg);
     return 0;
 }
@@ -226,7 +228,7 @@ void JPEG_InputHandler(JPEG_HandleTypeDef *hjpeg)
 {
   if(jpeg_hal_ctxt.intab[jpeg_hal_ctxt.inwrite_idx].State == JPEG_BUFFER_EMPTY)
   {
-    int bufsize = CHUNK_SIZE_IN;
+    uint32_t bufsize = CHUNK_SIZE_IN;
 
     jpeg_hal_ctxt.intab[jpeg_hal_ctxt.inwrite_idx].DataBuffer =
                                                 bytestream_move(&jpeg_hal_ctxt.instream, &bufsize);
@@ -431,16 +433,16 @@ void HAL_JPEG_MspInit(JPEG_HandleTypeDef *hjpeg)
     
 }
 
-int HAL_JPEG_UserInit (void)
+int JPEG_UserInit_HAL (void)
 {
     JPEG_InitColorTables();
 
     /* Init the HAL JPEG driver */
     jpeg_hal_ctxt.hal_jpeg.Instance = JPEG;
-    HAL_JPEG_Init(&jpeg_hal_ctxt.hal_jpeg);
+    return HAL_JPEG_Init(&jpeg_hal_ctxt.hal_jpeg) == HAL_OK ? 0 : -1;
 }
 
-int JPEG_Info (jpeg_info_t *info)
+int JPEG_Info_HAL (jpeg_info_t *info)
 {
     JPEG_ConfTypeDef JPEG_InfoHandle;
 

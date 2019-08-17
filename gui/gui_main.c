@@ -1,4 +1,5 @@
-#include <stm32f769i_discovery_lcd.h>
+#include <string.h>
+
 #include <gui.h>
 #include <jpeg.h>
 #include <misc_utils.h>
@@ -7,11 +8,22 @@
 #include <heap.h>
 #include <bsp_cmd.h>
 
-typedef struct {
-    dim_t activebox;
-    dim_t dirtybox;
-    uint8_t dirty;
-} gui_int_t; /*internal usage*/
+extern void gui_rect_fill_HAL (component_t *com, dim_t *rect, rgba_t color);
+extern void gui_com_fill_HAL (component_t *com, rgba_t color);
+extern int gui_draw_string_HAL (component_t *com, int line,
+                                rgba_t textcolor, const char *str, int txtmode);
+extern void gui_get_font_prop_HAL (fontprop_t *prop, const void *_font);
+extern const void *gui_get_font_4_size_HAL (gui_t *gui, int size, int bestmatch);
+
+void gui_get_font_prop (fontprop_t *prop, const void *font)
+{
+    gui_get_font_prop_HAL(prop, font);
+}
+
+const void *gui_get_font_4_size (gui_t *gui, int size, int bestmatch)
+{
+    return gui_get_font_4_size_HAL(gui, size, bestmatch);
+}
 
 #define gui_error(fmt, args ...) \
     if (gui->dbglvl >= DBG_ERR) {dprintf("%s() [fatal] : "fmt, __func__, args);}
@@ -22,190 +34,17 @@ typedef struct {
 #define gui_info(fmt, args ...) \
     if (gui->dbglvl >= DBG_INFO) {dprintf("%s() : "fmt, __func__, args);}
 
-
 #define G_TEXT_MAX 256
+
+typedef struct {
+    dim_t activebox;
+    dim_t dirtybox;
+    uint8_t dirty;
+} gui_int_t; /*internal usage*/
 
 static d_bool __gui_draw_allowed (gui_t *gui);
 
 static gui_int_t gui_int = {{0}};
-
-void dim_extend (dim_t *dest, dim_t *ref)
-{
-    int box_dest[4] = {dest->x, dest->y, dest->x + dest->w, dest->y + dest->h};
-    int box_ref[4] = {ref->x, ref->y, ref->x + ref->w, ref->y + ref->h};
-    int durty = 0;
-
-    if (box_ref[0] < box_dest[0]) {
-        box_dest[2] += box_dest[0] - box_ref[0];
-        box_dest[0] = box_ref[0];
-        durty = 1;
-    }
-    if (box_ref[1] < box_dest[1]) {
-        box_dest[2] += box_dest[1] - box_ref[1];
-        box_dest[1] = box_ref[1];
-        durty = 1;
-    }
-    if (box_ref[2] > box_dest[2]) {
-        box_dest[2] = box_ref[2];
-        durty = 1;
-    }
-    if (box_ref[3] > box_dest[3]) {
-        box_dest[3] = box_ref[3];
-        durty = 1;
-    }
-    if (!durty) {
-        return;
-    }
-    dest->x = box_dest[0];
-    dest->y = box_dest[1];
-    dest->w = box_dest[2] - dest->x;
-    dest->h = box_dest[3] - dest->y;
-}
-
-d_bool dim_check_intersect (dim_t *durty, dim_t *dim)
-{
-    int tmp,
-        max_x = durty->x + durty->w,
-        max_y = durty->y + durty->h;
-
-    if (!max_x || !max_y) {
-        return d_false;
-    }
-    if (dim->x > max_x ||
-        dim->y > max_y) {
-        return d_false;
-    }
-    tmp = (dim->x + dim->w) - durty->x;
-    if (tmp < 0) {
-        return d_false;
-    }
-    tmp = (dim->y + dim->h) - durty->y;
-    if (tmp < 0) {
-        return d_false;
-    }
-    return d_true;
-}
-
-d_bool dim_check (const dim_t *d, const point_t *p)
-{
-    int x0 = p->x - d->x;
-    if (x0 < 0) {
-        return d_false;
-    }
-    if (x0 > d->w) {
-        return d_false;
-    }
-    int y0 = p->y - d->y;
-    if (y0 < 0) {
-        return d_false;
-    }
-    if (y0 > d->h) {
-        return d_false;
-    }
-    return d_true;
-}
-
-static d_bool dim_check_overlap (const dim_t *d, const dim_t *mask)
-{
-    if (mask->x > d->x) {
-        return d_false;
-    }
-    if (mask->w + mask->x < d->w + d->x) {
-        return d_false;
-    }
-    if (mask->y > d->y) {
-        return d_false;
-    }
-    if (mask->h + mask->y < d->h + d->y) {
-        return d_false;
-    }
-    return d_true;
-}
-
-static void dim_trunc (dim_t *d, const dim_t *s)
-{
-    if (d->x > s->w) {
-          d->x = s->w;
-    }
-    if (d->x + d->w > s->w) {
-          d->w = s->w - d->x;
-    }
-    if (d->y > s->h) {
-          d->y = s->h;
-    }
-    if (d->y + d->h > s->h) {
-          d->h = s->h - d->y;
-    }
-}
-
-void dim_place (dim_t *d, const dim_t *s)
-{
-    dim_t tmp = {0, 0, s->w, s->h};
-    dim_trunc(d, &tmp);
-    d->x = d->x + s->x;
-    d->y = d->y + s->y;
-}
-
-void dim_tolocal (dim_t *d, const dim_t *s)
-{
-    d->x = d->x - s->x;
-    d->y = d->y - s->y;
-    dim_trunc(d, s);
-}
-
-void dim_tolocal_p (point_t *d, const dim_t *s)
-{
-    d->x = d->x - s->x;
-    d->y = d->y - s->y;
-}
-
-void dim_get_origin (point_t *d, const dim_t *s)
-{
-    d->x = s->x + (s->w / 2);
-    d->y = s->y + (s->h / 2);
-}
-
-void dim_set_origin (dim_t *d, const point_t *s)
-{
-    d->x = s->x - d->w / 2;
-    d->y = s->y - d->h / 2;
-}
-
-void dim_set_right (dim_t *d, dim_t *s)
-{
-    int x = s->x - d->w;
-    int y = s->y + (s->h / 2);
-
-    d->x = x;
-    d->y = y - (d->h / 2);
-}
-
-void dim_set_left (dim_t *d, dim_t *s)
-{
-    int x = s->x + s->w;
-    int y = s->y + (s->h / 2);
-
-    d->x = x;
-    d->y = y - (d->h / 2);
-}
-
-void dim_set_top (dim_t *d, dim_t *s)
-{
-    int x = s->x + (s->w / 2);
-    int y = s->y + s->h;
-
-    d->x = x - (d->w / 2);
-    d->y = y;
-}
-
-void dim_set_bottom (dim_t *d, dim_t *s)
-{
-    int x = s->x + (s->w / 2);
-    int y = s->y - d->h;
-
-    d->x = x - (d->w / 2);
-    d->y = y;
-}
 
 #define GUI_LINK(parent, item)     \
 do  {                             \
@@ -213,7 +52,8 @@ do  {                             \
     (parent)->head = (item);       \
 } while (0)
 
-static component_t *gui_iterate_all (gui_t *gui, void *user, int (*h) (component_t *com, void *user))
+component_t *
+gui_iterate_all (gui_t *gui, void *user, int (*h) (component_t *com, void *user))
 {
     if (h == NULL) {
         return NULL;
@@ -247,11 +87,6 @@ gui_set_dirty (gui_t *gui, dim_t *dim)
     gui_int->dirty = 1;
 }
 
-void gui_com_set_dirty (gui_t *gui, component_t *com)
-{
-    gui_set_dirty(gui, &com->dim);
-}
-
 static inline d_bool
 gui_is_com_durty (gui_t *gui, component_t *com)
 {
@@ -276,6 +111,16 @@ gui_mark_dirty (gui_t *gui)
     gui_int->dirty = 0;
 }
 
+void gui_com_set_dirty (gui_t *gui, component_t *com)
+{
+    gui_set_dirty(gui, &com->dim);
+}
+
+void gui_pane_set_dirty (gui_t *gui, pane_t *pane)
+{
+    gui_set_dirty(gui, &pane->dim);
+}
+
 static inline void
 gui_post_draw (gui_t *gui)
 {
@@ -285,53 +130,6 @@ gui_post_draw (gui_t *gui)
     d_memzero(&gui_int->activebox, sizeof(gui_int->activebox));
 }
 
-/*HAL api*/
-/*=======================================================================================*/
-
-void
-gui_rect_fill_HAL (component_t *com, dim_t *rect, rgba_t color)
-{
-    dim_t d = *rect;
-    dim_place(&d, &com->dim);
-    BSP_LCD_SetTextColor(color);
-    BSP_LCD_FillRect(d.x, d.y, d.w, d.h);
-    gui_set_dirty(com->parent->parent, &d);
-}
-
-void
-gui_com_fill_HAL (component_t *com, rgba_t color)
-{
-    BSP_LCD_SetTextColor(color);
-    BSP_LCD_FillRect(com->dim.x, com->dim.y, com->dim.w, com->dim.h);
-    gui_set_dirty(com->parent->parent, &com->dim);
-}
-
-static int
-gui_draw_string_HAL (component_t *com, int line,
-                              rgba_t textcolor, const char *str, Text_AlignModeTypdef txtmode)
-{
-    void *font = BSP_LCD_GetFont();
-    int ret;
-    dim_t dim;
-
-    d_memcpy(&dim, &com->dim, sizeof(dim));
-
-    if (font != (sFONT *)com->font) {
-        BSP_LCD_SetFont((sFONT *)com->font);
-    }
-    BSP_LCD_SetTextColor(textcolor);
-    ret = BSP_LCD_DisplayStringAt(dim.x, dim.y + LINE(line),
-                                  dim.w, dim.h, (uint8_t *)str, txtmode);
-    if (font != (sFONT *)com->font) {
-        BSP_LCD_SetFont(font);
-    }
-    gui_set_dirty(com->parent->parent, &dim);
-    return ret;
-}
-
-/*=======================================================================================*/
-
-
 void gui_init (gui_t *gui, const char *name, uint8_t framerate,
                 dim_t *dim, gui_bsp_api_t *bspapi)
 {
@@ -339,7 +137,7 @@ void gui_init (gui_t *gui, const char *name, uint8_t framerate,
 
     d_memzero(gui, sizeof(*gui));
 
-    gui->font = gui_get_font_4_size(gui, 20, 1);
+    gui->font = gui_get_font_4_size_HAL(gui, 20, 1);
 
     gui->dim.x = dim->x;
     gui->dim.y = dim->y;
@@ -376,41 +174,6 @@ void gui_destroy (gui_t *gui)
         pane = pane->next;
     }
     gui->destroy = 0;
-}
-
-void gui_get_font_prop (fontprop_t *prop, const void *_font)
-{
-    const sFONT *font = (const sFONT *)_font;
-
-    prop->w = font->Width;
-    prop->h = font->Height;
-}
-
-const void *gui_get_font_4_size (gui_t *gui, int size, int bestmatch)
-{
-    int err, besterr = size, i;
-    const void *best = NULL;
-
-    static const sFONT *fonttbl[] =
-        {&Font8, &Font12, &Font16, &Font20, &Font24};
-
-    for (i = 0; i < arrlen(fonttbl); i++) {
-        err = size - fonttbl[i]->Height;
-        if (err == 0) {
-            best = fonttbl[i];
-            break;
-        }
-        if (bestmatch) {
-            if (err < 0) {
-                err = -err;
-            }
-            if (besterr > err) {
-                besterr = err;
-                best = fonttbl[i];
-            }
-        }
-    }
-    return best;
 }
 
 pane_t *gui_create_pane (gui_t *gui, const char *name, int extra)
@@ -474,16 +237,6 @@ void gui_set_pic (component_t *com, rawpic_t *pic, int top)
     }
 }
 
-static void __gui_set_comp_def_sfx (component_t *com)
-{
-    gui_sfx_t *sfx = &com->sfx;
-
-    sfx->sfx_cantdothis = -1;
-    sfx->sfx_close = -1;
-    sfx->sfx_open = -1;
-    sfx->sfx_other = -1;
-}
-
 component_t *gui_create_comp (gui_t *gui, const char *name, const char *text)
 {
     int namelen = strlen(name);
@@ -501,7 +254,6 @@ component_t *gui_create_comp (gui_t *gui, const char *name, const char *text)
     if (text && text[0]) {
         gui_print(com, "%s", text);
     }
-    __gui_set_comp_def_sfx(com);
     return com;
 
 }
@@ -525,7 +277,6 @@ void gui_set_prop (component_t *c, prop_t *prop)
     c->bcolor = prop->bcolor;
     c->ispad = prop->ispad;
     c->userdraw = prop->user_draw;
-    c->sfx = prop->sfx;
     if (prop->fontprop.font) {
         c->font = prop->fontprop.font;
     }
@@ -546,12 +297,12 @@ gui_com_select_color (component_t *com)
 #undef APPLY_GLOW
 }
 
-static inline void gui_com_clear (component_t *com)
+void gui_com_clear (component_t *com)
 {
     gui_com_fill_HAL(com, com->bcolor);
 }
 
-static inline void gui_com_fill (component_t *com, rgba_t color)
+void gui_com_fill (component_t *com, rgba_t color)
 {
     gui_com_fill_HAL(com, color);
 }
@@ -589,12 +340,18 @@ int gui_apendxy (component_t *com, int x, int y, const char *fmt, ...)
 
 int gui_draw_string (component_t *com, int line, rgba_t textcolor, const char *str)
 {
-    return gui_draw_string_HAL(com, line, textcolor, str, LEFT_MODE);
+    return gui_draw_string_HAL(com, line, textcolor, str, GUI_LEFT_ALIGN);
 }
 
 int gui_draw_string_c (component_t *com, int line, rgba_t textcolor, const char *str)
 {
-    return gui_draw_string_HAL(com, line, textcolor, str, CENTER_MODE);
+    return gui_draw_string_HAL(com, line, textcolor, str, GUI_CENTER_ALIGN);
+}
+
+void gui_rect_fill (component_t *com, dim_t *rect, rgba_t color)
+{
+    gui_rect_fill_HAL(com, rect, color);
+    gui_set_dirty(com->parent->parent, rect);
 }
 
 static int
@@ -706,6 +463,7 @@ void gui_draw (gui_t *gui, int force)
         return;
     }
     assert(selected);
+    gui_mark_dirty(gui);
     if (gui_pane_draw(gui, selected)) {
         gui_post_draw(gui);
     }

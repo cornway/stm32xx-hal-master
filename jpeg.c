@@ -10,7 +10,7 @@
 
 int jpeg_init (const char *conf)
 {
-    return HAL_JPEG_UserInit();
+    return JPEG_UserInit_HAL();
 }
 
 void *jpeg_cache (const char *path, uint32_t *size)
@@ -40,7 +40,7 @@ void jpeg_release (void *p)
 
 int jpeg_decode (jpeg_info_t *info, void *tempbuf, void *data, uint32_t size)
 {
-    return jpeg__hal_decode(info, tempbuf, data, size);
+    return JPEG_Decode_HAL(info, tempbuf, data, size);
 }
 
 void *jpeg_2_rawpic (const char *path, void *tmpbuf, uint32_t bufsize)

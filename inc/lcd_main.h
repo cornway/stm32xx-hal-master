@@ -82,6 +82,8 @@ void vid_direct (screen_t *s);
 void vid_vsync (int mode);
 void vid_ptr_align (int *x, int *y);
 int vid_priv_ctl (int c, void *v);
+
+int vid_set_keying (uint32_t color);
 #endif
 
 enum {

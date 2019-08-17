@@ -119,7 +119,7 @@ __heap_realloc (void *x, int32_t size)
     return __heap_malloc(size, 1);
 }
 
-void heap_leak_check (void)
+void heap_dump (void)
 {
     arch_word_t heap_mem, heap_size, heap_size_left;
 
@@ -161,12 +161,12 @@ void heap_init (void)
 
 void heap_deinit (void)
 {
-    heap_leak_check();
+    heap_dump();
 }
 
 #ifdef BOOT
 
-void *heap_alloc_shared (int _size)
+void *heap_alloc_shared (uint32_t _size)
 {
     mchunk_t *p = NULL;
     int size = _size + sizeof(mchunk_t);

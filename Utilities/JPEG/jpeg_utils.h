@@ -123,11 +123,9 @@ HAL_StatusTypeDef JPEG_GetEncodeColorConvertFunc(JPEG_ConfTypeDef *pJpegInfo, JP
   * @}
   */ 
 
-int JPEG_Decode_DMA(JPEG_HandleTypeDef *hjpeg, void *data, uint32_t size, uint32_t DestAddress);
-uint32_t JPEG_OutputHandler(JPEG_HandleTypeDef *hjpeg);
-void JPEG_InputHandler(JPEG_HandleTypeDef *hjpeg);
-int HAL_JPEG_UserInit (void);
-int JPEG_Info (jpeg_info_t *info);
+int JPEG_UserInit_HAL (void);
+int JPEG_Info_HAL (jpeg_info_t *info);
+int JPEG_Decode_HAL (jpeg_info_t *info, void *tempbuf, void *data, uint32_t size);
 
 #endif /* __JPEG_UTILS_H */
 

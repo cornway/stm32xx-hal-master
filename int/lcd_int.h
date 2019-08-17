@@ -34,11 +34,12 @@ typedef struct {
 typedef void (*screen_update_handler_t) (screen_t *in);
 
 lcd_layers_t screen_hal_set_layer (lcd_wincfg_t *cfg);
-int screen_hal_init (int init, uint8_t clockpresc);
+int screen_hal_init (int init);
 void screen_hal_attach (lcd_wincfg_t *cfg);
 void *screen_hal_set_config (lcd_wincfg_t *cfg, int x, int y,
                                             int w, int h, uint8_t colormode);
 void screen_hal_set_clut (lcd_wincfg_t *cfg, void *_buf, int size, int layer);
+int screen_hal_set_keying (lcd_wincfg_t *cfg, uint32_t color, int layer);
 void screen_hal_sync (lcd_wincfg_t *cfg, int wait);
 int screen_hal_copy (lcd_wincfg_t *cfg, copybuf_t *copybuf, uint8_t pix_bytes);
 int screen_hal_scale_h8_2x2 (lcd_wincfg_t *cfg, copybuf_t *copybuf, int interleave);

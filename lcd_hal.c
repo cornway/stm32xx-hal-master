@@ -22,7 +22,6 @@ typedef struct screen_hal_ctxt_s {
     copybuf_t *bufq;
     uint8_t busy;
     uint8_t poll;
-    uint8_t prescaler;
     uint8_t state;
 } screen_hal_ctxt_t;
 
@@ -101,14 +100,19 @@ void screen_hal_set_clut (lcd_wincfg_t *cfg, void *_buf, int size, int layer)
     HAL_LTDC_EnableCLUT(GET_VHAL_LTDC(cfg), layer);
 }
 
-int screen_hal_init (int init, uint8_t clockpresc)
+int screen_hal_set_keying (lcd_wincfg_t *cfg, uint32_t color, int layer)
+{
+    BSP_LCD_SetColorKeying(layer, color);
+    return 0;
+}
+
+int screen_hal_init (int init)
 {
     uint32_t status;
 
     d_memset(&screen_hal_ctxt, 0, sizeof(screen_hal_ctxt));
     if (init) {
 
-        screen_hal_ctxt.prescaler = clockpresc;
         status = BSP_LCD_Init();
         assert(!status);
 
@@ -118,8 +122,10 @@ int screen_hal_init (int init, uint8_t clockpresc)
         BSP_LCD_SetBrightness(100);
     } else {
         BSP_LCD_SetBrightness(0);
+        BSP_LCD_DeInitEx();
         HAL_Delay(1000);
     }
+    return 0;
 }
 
 void screen_hal_attach (lcd_wincfg_t *cfg)
@@ -506,16 +512,14 @@ static void screen_copybuf_split (screen_hal_ctxt_t *ctxt, copybuf_t *buf, int p
 int screen_hal_clock_cfg (screen_hal_ctxt_t *ctxt)
 {
     RCC_PeriphCLKInitTypeDef PeriphClkInitStruct;
-    uint8_t prescaler = ctxt->prescaler;
-
-    if (!prescaler)
-        prescaler = 1;
-
+    
+    assert(0);
     PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_LTDC;
-    PeriphClkInitStruct.PLLSAI.PLLSAIN = 384 / prescaler;
+    PeriphClkInitStruct.PLLSAI.PLLSAIN = 384;
     PeriphClkInitStruct.PLLSAI.PLLSAIR = 7;
     PeriphClkInitStruct.PLLSAIDivR = RCC_PLLSAIDIVR_2;
     HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct);
+    return 0;
 }
 
 void DMA2D_IRQHandler(void)

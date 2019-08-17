@@ -58,7 +58,7 @@ static inline win_t *WIN_HANDLE_CHECK (void *pane, WIN_TYPE type)
     return win;
 }
 
-void win_set_user_clbk (pane_t *pane, win_user_hdlr_t clbk)
+void win_set_user_clbk (void *pane, win_user_hdlr_t clbk)
 {
     win_t *win = WIN_HANDLE(pane);
     win->user_clbk = clbk;
@@ -205,7 +205,6 @@ pane_t *win_new_allert (gui_t *gui, int w, int h)
 
     prop.bcolor = COLOR_LBLUE;
     prop.fcolor = COLOR_WHITE;
-    prop.sfx.sfx_close = -1;
     gui_set_prop(com, &prop);
 
     com = gui_create_comp(gui, "accept", "YES");
@@ -230,7 +229,6 @@ pane_t *win_new_allert (gui_t *gui, int w, int h)
     alert->com_no = com;
 
     gui_set_prop(com, &prop);
-    prop.sfx.sfx_close = -1;
 
     com = win_new_border(gui);
     gui_set_comp(pane, com, w / 2 - border.w / 2, h - btnsize, border.w, btnsize);
@@ -264,6 +262,7 @@ int win_alert (pane_t *pane, const char *text,
     alert->yes = accept;
     alert->no = decline;
     gui_print(com, "%s", text);
+    gui_pane_set_dirty(pane->parent, pane);
     gui_select_pane(pane->parent, pane);
     return 0;
 }
@@ -587,7 +586,7 @@ win_con_clean_line (component_t *com, fontprop_t *fprop, con_line_t *line, int l
 {
     if (line->pos) {
         dim_t dim = {0, linenum * fprop->h, line->pos * fprop->w, fprop->h};
-        gui_rect_fill_HAL(com, &dim, com->bcolor);
+        gui_rect_fill(com, &dim, com->bcolor);
     }
 }
 
@@ -710,7 +709,7 @@ int win_prog_set (pane_t *pane, const char *text, int percent)
     gui_com_set_dirty(pane->parent, win->bar);
     gui_print(win->bar, "%02.03i%%", percent);
     win->percent = percent;
-
+    gui_set_repaint(pane, 1);
     return 1;
 }
 
@@ -726,18 +725,18 @@ static int win_prog_repaint (pane_t *pane, component_t *com, void *user)
     int compl, left;
 
     if (win->percent == 100) {
-        gui_com_fill_HAL(com, COLOR_GREEN);
+        gui_com_fill(com, COLOR_GREEN);
     } else if (win->percent >= 0) {
         compl = (dim.w * win->percent) / 100;
         left = dim.w - compl;
 
         dim.w = compl;
-        gui_rect_fill_HAL(com, &dim, COLOR_GREEN);
+        gui_rect_fill(com, &dim, COLOR_GREEN);
         dim.x = compl;
         dim.w = left;
-        gui_rect_fill_HAL(com, &dim, COLOR_WHITE);
+        gui_rect_fill(com, &dim, COLOR_WHITE);
     } else {
-        gui_com_fill_HAL(com, COLOR_RED);
+        gui_com_fill(com, COLOR_RED);
     }
     return 1;
 } 

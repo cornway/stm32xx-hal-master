@@ -2,6 +2,15 @@
 #include <misc_utils.h>
 #include <debug.h>
 
+#include "../gui/colors.h"
+
+/*Must be up-to-date with HAL routines!!!*/
+enum {
+    GUI_CENTER_ALIGN = 0x1,
+    GUI_RIGHT_ALIGN = 0x2,
+    GUI_LEFT_ALIGN = 0x3,
+};
+
 typedef uint32_t rgba_t;
 
 #define GUI_MAX_NAME 16
@@ -39,12 +48,6 @@ typedef enum {
 } gui_obj_type_t;
 
 typedef struct {
-    int sfx_open, sfx_close;
-    int sfx_cantdothis;
-    int sfx_other;
-} gui_sfx_t;
-
-typedef struct {
     int x, y, w, h;
 } dim_t;
 
@@ -71,7 +74,6 @@ typedef struct prop_s {
     rgba_t fcolor, bcolor;
     d_bool ispad;
     d_bool user_draw;
-    gui_sfx_t sfx;
     const char *name;
 } prop_t;
 
@@ -82,7 +84,6 @@ struct {                                \
     rgba_t bcolor, fcolor;              \
     void *ctxt, *user;                  \
     dim_t dim;                          \
-    gui_sfx_t sfx;                      \
     uint16_t type:  6,                  \
              ispad:   1,                \
              userdraw: 1;               \
@@ -129,15 +130,9 @@ typedef struct pane_s {
 
 typedef struct gui_bsp_api_s {
     struct mem_s {
-        void *(*alloc) (int);
+        void *(*alloc) (uint32_t);
         void (*free) (void *);
     } mem;
-    struct sfx_s {
-        int (*alloc) (const char *name);
-        void (*release) (int);
-        int (*play) (int, uint8_t);
-        int (*stop) (int);
-    } sfx;
 } gui_bsp_api_t;
 
 #define gui_bsp_alloc(gui, size) \
@@ -145,18 +140,6 @@ typedef struct gui_bsp_api_s {
 
 #define gui_bsp_free(gui, ptr) \
     (gui)->bspapi.mem.free(ptr)
-
-#define gui_bsp_sfxalloc(gui, name) \
-    (gui)->bspapi.sfx.alloc(name)
-
-#define gui_bsp_sfxrelease(gui, num) \
-    (gui)->bspapi.sfx.release
-
-#define gui_bsp_sfxplay(gui, num, vol) \
-    (gui)->bspapi.sfx.play(num, vol)
-
-#define gui_bsp_sfxstop(gui, num) \
-    (gui)->bspapi.sfx.stop(num)
 
 typedef struct gui_s {
     dim_t dim;
@@ -195,19 +178,22 @@ typedef struct app_gui_api_s {
 
 #else /*BSP_INDIR_API*/
 
-#endif /*BSP_INDIR_API*/
+#endif
 
 #define gui_print(com, args...) gui_printxy(com, 0, 0, args)
 
 d_bool dim_check (const dim_t *d, const point_t *p);
 void dim_place (dim_t *d, const dim_t *s);
 void dim_tolocal (dim_t *d, const dim_t *s);
+void dim_tolocal_p (point_t *d, const dim_t *s);
 void dim_get_origin (point_t *d, const dim_t *s);
 void dim_set_origin (dim_t *d, const point_t *s);
 void dim_set_right (dim_t *d, dim_t *s);
 void dim_set_left (dim_t *d, dim_t *s);
 void dim_set_top (dim_t *d, dim_t *s);
 void dim_set_bottom (dim_t *d, dim_t *s);
+void dim_extend (dim_t *dest, dim_t *ref);
+d_bool dim_check_intersect (dim_t *durty, dim_t *dim);
 
 void gui_init (gui_t *gui, const char *name, uint8_t framerate,
                 dim_t *dim, gui_bsp_api_t *bspapi);
@@ -223,18 +209,17 @@ void gui_set_pic (component_t *com, rawpic_t *pic, int top);
 component_t *gui_create_comp (gui_t *gui, const char *name, const char *text);
 void gui_set_comp (pane_t *pane, component_t *c, int x, int y, int w, int h);
 void gui_set_prop (component_t *c, prop_t *prop);
-void gui_get_font_prop (fontprop_t *prop, const void *_font);
-const void *gui_get_font_4_size (gui_t *gui, int size, int bestmatch);
 
 void gui_set_text (component_t *com, const char *text, int x, int y);
 void gui_printxy (component_t *com, int x, int y, const char *fmt, ...) PRINTF_ATTR(4, 5);
 int gui_apendxy (component_t *com, int x, int y, const char *fmt, ...) PRINTF_ATTR(4, 5);
 int gui_draw_string (component_t *com, int line, rgba_t textcolor, const char *str);
 int gui_draw_string_c (component_t *com, int line, rgba_t textcolor, const char *str);
-void gui_rect_fill_HAL (component_t *com, dim_t *rect, rgba_t color);
+
+void gui_rect_fill (component_t *com, dim_t *rect, rgba_t color);
+void gui_com_fill (component_t *com, rgba_t color);
 
 void gui_com_clear (component_t *com);
-void gui_com_fill_HAL (component_t *com, rgba_t color);
 void gui_draw (gui_t *gui, int force);
 int gui_send_event (gui_t *gui, gevt_t *evt);
 void gui_wakeup_com (gui_t *gui, component_t *com);
@@ -246,30 +231,20 @@ pane_t *gui_select_next_pane (gui_t *gui);
 component_t *gui_set_focus (pane_t *pane, component_t *com, component_t *prev);
 component_t *gui_set_next_focus (gui_t *gui);
 void gui_com_set_dirty (gui_t *gui, component_t *com);
+void gui_pane_set_dirty (gui_t *gui, pane_t *pane);
 
-#define COLOR_WHITE (GFX_RGBA8888(0xffU, 0xffU, 0xffU, 0xffU))
-#define COLOR_BLACK (GFX_RGBA8888(0x00U, 0x00U, 0x00U, 0xffU))
-#define COLOR_YELLOW (GFX_RGBA8888(0x7fU, 0x7fU, 0x00U, 0xffU))
-#define COLOR_RED (GFX_RGBA8888(0xffU, 0x00U, 0x00U, 0xffU))
-#define COLOR_GREEN (GFX_RGBA8888(0x00U, 0xffU, 0x00U, 0xffU))
-#define COLOR_BLUE (GFX_RGBA8888(0x00U, 0x00U, 0xffU, 0xffU))
-#define COLOR_LBLUE (GFX_RGBA8888(0x80U, 0x80U, 0xffU, 0xffU))
-#define COLOR_GREY (GFX_RGBA8888(0x80U, 0x80U, 0x80U, 0xffU))
-#define COLOR_DGREY (GFX_RGBA8888(0x40U, 0x40U, 0x40U, 0xffU))
-#define COLOR_LGREY (GFX_RGBA8888(0xC0U, 0xC0U, 0xC0U, 0xffU))
-#define COLOR_AQUAMARINE (GFX_RGBA8888(0x7FU, 0xFFU, 0xD4U, 0xffU))
+void gui_get_font_prop (fontprop_t *prop, const void *font);
+const void *gui_get_font_4_size (gui_t *gui, int size, int bestmatch);
+
 typedef int (*win_alert_hdlr_t) (const component_t *);
 typedef int (*win_user_hdlr_t) (gevt_t *);
 
-void win_con_set_clbk (void *_pane, comp_handler_t h);
-void win_set_user_clbk (pane_t *pane, win_user_hdlr_t clbk);
+void win_con_set_clbk (void *pane, comp_handler_t h);
+void win_set_user_clbk (void *pane, win_user_hdlr_t clbk);
 
 pane_t *win_new_allert (gui_t *gui, int w, int h);
 int win_alert (pane_t *pane, const char *text,
                   win_alert_hdlr_t accept, win_alert_hdlr_t decline);
-
-#define WIN_ALERT_ACCEPT(pane, text, accept) win_alert(pane, text, NULL, accept, NULL)
-#define WIN_ALERT_DECLINE(pane, text, decline) win_alert(pane, text, decline, NULL, decline)
 
 int win_close_allert (pane_t *pane);
 

@@ -71,7 +71,7 @@ typedef struct cmd_keyval_s {
 cmd_func_t bsp_stdin_unstash (cmd_func_t);
 cmd_func_t bsp_stdin_stash (cmd_func_t);
 int bsp_exec_link (arch_word_t *, const char *);
-int boot_cmd_handle (int , const char **);
+int boot_char_cmd_handler (int , const char **);
 
 void cmd_parm_load_str (cmd_keyval_t *kv, const char *str);
 void cmd_parm_load_val (cmd_keyval_t *kv, const char *str);

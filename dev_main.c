@@ -8,6 +8,7 @@
 #include <lcd_main.h>
 #include <audio_main.h>
 #include <input_main.h>
+#include <debug.h>
 #include <dev_io.h>
 #include <debug.h>
 #include <nvic.h>
@@ -179,9 +180,14 @@ void CPU_CACHE_Disable (void)
     SCB_InvalidateICache();
 }
 
+void (*dev_deinit_callback) (void) = NULL;
+
 void dev_deinit (void)
 {
-    irqmask_t irq = NVIC_IRQ_MASK;
+    if (dev_deinit_callback) {
+        dev_deinit_callback();
+        dev_deinit_callback = NULL;
+    }
     dprintf("%s() :\n", __func__);
     bsp_stdin_unreg_if(con_echo);
 
@@ -191,7 +197,7 @@ void dev_deinit (void)
     profiler_deinit();
     input_bsp_deinit();
     vid_deinit();
-    heap_leak_check();
+    heap_dump();
     serial_deinit();
 
     irq_destroy();
@@ -258,10 +264,6 @@ int dev_main (void)
     dev_init();
 
     VID_PreConfig();
-#if defined(BOOT)
-    jpeg_init();
-    boot_gui_preinit();
-#endif
 #if BSP_INDIR_API
 extern char **bsp_argc_argv_get (int *argc);
     sys_user_attach(&user_api);

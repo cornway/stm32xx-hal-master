@@ -75,7 +75,7 @@ static const cmd_func_map_t cmd_func_tbl[] =
     {"list",        __cmd_fs_print_dir},
     {"cat",         cmd_intutil_cat},
 #if defined(BOOT)
-    {"bin",         boot_cmd_handle},
+    {"bin",         boot_char_cmd_handler},
 #endif
     {"nop",         cmd_util_nop},
 };
@@ -678,8 +678,7 @@ int cmd_execute (const char *cmd, int len)
     char buf[CMD_MAX_BUF];
 
     if (len <= 0) {
-        dprintf("%s() : empty buffer\n", __func__);
-        return -CMDERR_INVPARM;
+        len = strlen(cmd);
     }
     if (len > sizeof(buf)) {
         dprintf("%s() : too many characters\n", __func__);

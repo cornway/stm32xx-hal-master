@@ -11,12 +11,13 @@
 #define IRAM2 __attribute__ ((section ("iram2")))
 
 typedef struct bsp_heap_api_s {
-     void *(*malloc) (int size);
+     void *(*malloc) (uint32_t size);
      void (*free) (void *p);
 } bsp_heap_api_t;
 
 void heap_init (void);
-void *heap_alloc_shared (int size);
+void heap_deinit (void);
+void *heap_alloc_shared (uint32_t size);
 int heap_avail (void);
 void *heap_malloc (int size);
 void *heap_realloc (void *x, int32_t size);

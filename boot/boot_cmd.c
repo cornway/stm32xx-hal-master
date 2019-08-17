@@ -5,9 +5,6 @@
 #include "int/boot_int.h"
 #include <dev_io.h>
 
-
-extern bsp_bin_t *boot_bin_head;
-
 int g_boot_log_level = -1;
 
 static void __bin_cmd_dump (arch_word_t addr, arch_word_t bytescnt, const char *path)
@@ -126,7 +123,7 @@ static int bin_cmd_mem_set (int argc, const char **argv)
     if (!sscanf(argv[1], "%x", &size)) {
         dprintf("fail to parse size : \'%s\'", argv[1]);
     }
-    bhal_set_mem(NULL, (arch_word_t *)addr, size / sizeof(arch_word_t), value);
+    bhal_set_mem_with_value(NULL, (arch_word_t *)addr, size / sizeof(arch_word_t), value);
     return argc;
 }
 
@@ -187,7 +184,7 @@ static int bin_cmd_remove (int argc, const char **argv)
 
 int bin_install (int argc, const char **argv)
 {
-    arch_word_t *progptr = NULL;
+    arch_word_t *progptr = NULL, progbytes;
     const char *path = argv[0];
 
     if (argc < 1) {
@@ -202,7 +199,7 @@ int bin_install (int argc, const char **argv)
         argc--;
     }
     argc--;
-    progptr = bsp_install_exec(progptr, path);
+    progptr = bhal_install_executable(complete_ind_clbk, progptr, &progbytes, path);
 
     return argc;
 }
@@ -219,7 +216,7 @@ int bin_execute (int argc, const char **argv)
     const char *argvbuf[CMD_MAX_ARG];
     char apparg[CMD_MAX_BUF] = {0};
     char binpath[CMD_MAX_PATH] = {0};
-    arch_word_t *progptr = NULL;
+    arch_word_t *progptr = NULL, progbytes;
     arch_word_t useraddr = (arch_word_t)NULL;
 
     cmd_keyval_t kvarr[] = 
@@ -252,19 +249,18 @@ int bin_execute (int argc, const char **argv)
 
     if (doinstall) {
         bsp_exec_file_type_t type;
-        type = bsp_bin_file_compat(binpath);
+        type = bsp_bin_file_fmt_supported(binpath);
         switch (type) {
             case BIN_FILE:
-                progptr = bsp_install_exec(progptr, binpath);
-                if (progptr) {
-                    err = CMDERR_OK;
-                }
+                progptr = bhal_install_executable(complete_ind_clbk, progptr, &progbytes, binpath);
+                err = (progptr && progbytes) ? CMDERR_OK : CMDERR_NOCORE;
+                complete_ind_clbk = NULL;
             break;
             case BIN_LINK:
-                return bsp_exec_link(NULL, binpath);
+                return b_execute_link(binpath);
             break;
             case BIN_CMD:
-                return bsp_exec_cmd(NULL, binpath);
+                return b_execute_cmd(binpath);
             break;
             default:
                 assert(0);
@@ -273,7 +269,7 @@ int bin_execute (int argc, const char **argv)
 
     if (err == CMDERR_OK) {
         argvbuf[0] = apparg;
-        bsp_start_exec(progptr, 1, &argvbuf[0]);
+        bhal_start_application(progptr, progbytes, 1, &argvbuf[0]);
     }
     return err;
 }
@@ -282,7 +278,7 @@ static int boot_intutil_log (int argc, const char **argv);
 
 static const cmd_func_map_t boot_cmd_map [] =
 {
-    {"print", boot_print_bin_list},
+    {"print", bres_dump_exec_list},
     {"dump",  bin_cmd_dump},
     {"memset", bin_cmd_mem_set},
     {"copy",  bin_cmd_copy},
@@ -292,7 +288,7 @@ static const cmd_func_map_t boot_cmd_map [] =
     {"log",   boot_intutil_log},
 };
 
-int boot_cmd_handle (int argc, const char **argv)
+int boot_char_cmd_handler (int argc, const char **argv)
 {
     int i = 0;
     if (argc < 1) {
@@ -324,7 +320,7 @@ int boot_log (int dummy, const char *fmt, ...)
     va_start (argptr, fmt);
     size = vsnprintf(buf, sizeof(buf), fmt, argptr);
     if (boot_log_use_console) {
-        size = dprintf(buf);
+        size = dprintf("%s", buf);
     } else {
         size = d_printf(boot_log_stream, buf);
     }

@@ -1,39 +1,3 @@
-/**
-  ******************************************************************************
-  * @file    DMA2D/DMA2D_MemToMemWithBlending/Src/main.c
-  * @author  MCD Application Team
-  * @brief   This example provides a description of how to configure
-  *          DMA2D peripheral in Memory to Memory with Blending transfer mode
-  ******************************************************************************
-  * @attention
-  *
-  * <h2><center>&copy; COPYRIGHT(c) 2016 STMicroelectronics</center></h2>
-  *
-  * Redistribution and use in source and binary forms, with or without modification,
-  * are permitted provided that the following conditions are met:
-  *   1. Redistributions of source code must retain the above copyright notice,
-  *      this list of conditions and the following disclaimer.
-  *   2. Redistributions in binary form must reproduce the above copyright notice,
-  *      this list of conditions and the following disclaimer in the documentation
-  *      and/or other materials provided with the distribution.
-  *   3. Neither the name of STMicroelectronics nor the names of its contributors
-  *      may be used to endorse or promote products derived from this software
-  *      without specific prior written permission.
-  *
-  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-  * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-  * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-  * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-  *
-  ******************************************************************************
-  */
-
 /* Includes ------------------------------------------------------------------*/
 
 #if defined(BSP_DRIVER)
@@ -85,7 +49,7 @@ const uint32_t screen_mode2pixdeep[GFX_COLOR_MODE_MAX] =
 
 int vid_init (void)
 {
-    return screen_hal_init(1, 2);
+    return screen_hal_init(1);
 }
 
 static void vid_release (lcd_wincfg_t *cfg)
@@ -107,10 +71,15 @@ static void vid_release (lcd_wincfg_t *cfg)
 void vid_deinit (void)
 {
     dprintf("%s() :\n", __func__);
-    screen_hal_init(0, 0);
+    screen_hal_init(0);
     vid_release(lcd_active_cfg);
     lcd_active_cfg = NULL;
-    BSP_LCD_DeInitEx();
+}
+
+int vid_set_keying (uint32_t color)
+{
+    screen_hal_set_keying(lcd_active_cfg, color, LCD_BACKGROUND);
+    screen_hal_set_keying(lcd_active_cfg, color, LCD_FOREGROUND);
 }
 
 void vid_wh (screen_t *s)
@@ -329,7 +298,7 @@ int vid_copy (screen_t *dest, screen_t *src)
 {
     copybuf_t copybuf = {NULL, *dest, *src};
     vid_vsync(0);
-    screen_hal_copy(lcd_active_cfg, &copybuf, screen_mode2pixdeep[lcd_active_cfg->config.colormode]);
+    return screen_hal_copy(lcd_active_cfg, &copybuf, screen_mode2pixdeep[lcd_active_cfg->config.colormode]);
 }
 
 typedef uint8_t pix8_t;
