@@ -64,7 +64,5 @@ extern const lcd_layers_t layer_switch[LCD_MAX_LAYER];
 extern const uint32_t screen_mode2pixdeep[GFX_COLOR_MODE_MAX];
 extern lcd_wincfg_t *lcd_active_cfg;
 
-int vid_copy (screen_t *dest, screen_t *src);
-
 #endif /*__LCD_INT_H__*/
 

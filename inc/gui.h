@@ -38,6 +38,7 @@ typedef struct {
     uint16_t w, h;
     uint8_t colormode;
     uint8_t alpha;
+    uint8_t sprite: 1;
 } rawpic_t;
 
 typedef enum {

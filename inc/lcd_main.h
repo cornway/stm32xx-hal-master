@@ -1,7 +1,8 @@
 #ifndef _LCD_MAIN_H
 #define _LCD_MAIN_H
 
-#include "gfx.h"
+#include <gfx.h>
+#include <gfx2d_mem.h>
 #include <bsp_api.h>
 
 /*---------------------------------------------------------------------*
@@ -15,14 +16,6 @@
 /*---------------------------------------------------------------------*
  *  type declarations                                                  *
  *---------------------------------------------------------------------*/
-
-typedef struct {
-    void *buf;
-    int x, y;
-    int width, height;
-    uint8_t colormode;
-    uint8_t alpha;
-} screen_t;
 
 typedef struct {
     void *(*malloc) (uint32_t);
@@ -47,7 +40,7 @@ typedef struct bsp_video_api_s {
     int (*win_cfg) (screen_conf_t *);
     void (*set_clut) (void *, uint32_t);
     void (*update) (screen_t *);
-    void (*direct) (screen_t *);
+    void (*direct) (int, int, screen_t *);
     void (*vsync) (int);
     void (*input_align) (int *, int *);
 } bsp_video_api_t;
@@ -78,19 +71,13 @@ uint32_t vid_mem_avail (void);
 int vid_config (screen_conf_t *);
 void vid_set_clut (void *palette, uint32_t clut_num_entries);
 void vid_update (screen_t *in);
-void vid_direct (screen_t *s);
+void vid_direct (int x, int y, screen_t *s, int laynum);
 void vid_vsync (int mode);
 void vid_ptr_align (int *x, int *y);
-int vid_priv_ctl (int c, void *v);
 
+int vid_copy (screen_t *dest, screen_t *src);
 int vid_set_keying (uint32_t color);
+int vid_gfx2d_direct (int x, int y, gfx_2d_buf_t *src, int laynum);
 #endif
-
-enum {
-    VCTL_NOP,
-    VCTL_VRAM_ALLOC,
-    VCTL_VRAM_COPY,
-    VCTL_MAX,
-};
 
 #endif /*_LCD_MAIN_H*/

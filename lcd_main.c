@@ -10,15 +10,13 @@
 #include <heap.h>
 #include <bsp_sys.h>
 
-extern void *Sys_HeapAllocFb (int *size);
+static void screen_copy_1x1_SW (screen_t *in);
+static void screen_copy_1x1_HW (screen_t *in);
+static void screen_copy_2x2_HW (screen_t *in);
+static void screen_copy_2x2_8bpp (screen_t *in);
+static void screen_copy_3x3_8bpp (screen_t *in);
 
-static void screen_update_no_scale (screen_t *in);
-static void screen_update_1x1_fast (screen_t *in);
-static void screen_update_2x2_fast (screen_t *in);
-static void screen_update_2x2_8bpp (screen_t *in);
-static void screen_update_3x3_8bpp (screen_t *in);
-
-static screen_update_handler_t screen_update_handle;
+static screen_update_handler_t screen_update_handle = NULL;
 
 int bsp_lcd_width = -1;
 int bsp_lcd_height = -1;
@@ -80,6 +78,7 @@ int vid_set_keying (uint32_t color)
 {
     screen_hal_set_keying(lcd_active_cfg, color, LCD_BACKGROUND);
     screen_hal_set_keying(lcd_active_cfg, color, LCD_FOREGROUND);
+    return 0;
 }
 
 void vid_wh (screen_t *s)
@@ -138,19 +137,19 @@ static screen_update_handler_t vid_set_scaler (int scale, uint8_t colormode)
         switch (scale) {
             case 1:
                 if (lcd_active_cfg->config.hwaccel) {
-                    h = screen_update_1x1_fast;
+                    h = screen_copy_1x1_HW;
                 } else {
-                    h = screen_update_no_scale;
+                    h = screen_copy_1x1_SW;
                 }
             case 2:
                 if (lcd_active_cfg->config.hwaccel) {
-                    h = screen_update_2x2_fast;
+                    h = screen_copy_2x2_HW;
                 } else {
-                    h = screen_update_2x2_8bpp;
+                    h = screen_copy_2x2_8bpp;
                 }
             break;
             case 3:
-                h = screen_update_3x3_8bpp;
+                h = screen_copy_3x3_8bpp;
             break;
 
             default:
@@ -160,7 +159,7 @@ static screen_update_handler_t vid_set_scaler (int scale, uint8_t colormode)
     } else {
         switch (scale) {
             default:
-                h = screen_update_no_scale;
+                h = screen_copy_1x1_SW;
             break;
         }
     }
@@ -246,15 +245,20 @@ void vid_vsync (int mode)
     profiler_exit();
 }
 
-void vid_get_ready_screen (screen_t *screen)
+void vid_get_screen (screen_t *screen, int laynum)
 {
     screen->width = lcd_active_cfg->w;
     screen->height = lcd_active_cfg->h;
-    screen->buf = (void *)lcd_active_cfg->lay_mem[lcd_active_cfg->ready_lay_idx];
+    screen->buf = (void *)lcd_active_cfg->lay_mem[laynum];
     screen->x = 0;
     screen->y = 0;
     screen->colormode = lcd_active_cfg->config.colormode;
     screen->alpha = 0xff;
+}
+
+void vid_get_ready_screen (screen_t *screen)
+{
+    vid_get_screen(screen, lcd_active_cfg->ready_lay_idx);
 }
 
 void vid_set_clut (void *palette, uint32_t clut_num_entries)
@@ -277,10 +281,23 @@ void vid_update (screen_t *in)
     }
 }
 
-void vid_direct (screen_t *s)
+void vid_direct (int x, int y, screen_t *s, int laynum)
 {
     screen_t screen;
-    vid_get_ready_screen(&screen);
+
+    vid_vsync(1);
+    if (lcd_active_cfg->config.laynum <= laynum) {
+        
+    }
+    if (laynum < 0) {
+        vid_get_ready_screen(&screen);
+    } else {
+        vid_get_screen(&screen, laynum);
+    }
+    screen.x = x;
+    screen.y = y;
+    screen.alpha = 0xff;
+    screen.colormode = s->colormode;
     vid_copy(&screen, s);
 }
 
@@ -294,42 +311,57 @@ void vid_print_info (void)
     dprintf("memory= <0x%p> 0x%08x bytes\n", lcd_active_cfg->fb_mem, lcd_active_cfg->fb_size);
 }
 
-int vid_copy (screen_t *dest, screen_t *src)
+static void
+vid_copy_SW (screen_t *dest, screen_t *src)
 {
-    copybuf_t copybuf = {NULL, *dest, *src};
-    vid_vsync(0);
-    return screen_hal_copy(lcd_active_cfg, &copybuf, screen_mode2pixdeep[lcd_active_cfg->config.colormode]);
+    d_memcpy(dest->buf, src->buf, src->width * src->height);
 }
 
-typedef uint8_t pix8_t;
-
-typedef struct {
-    pix8_t a[4];
-} scanline8_t;
-
-typedef union {
-    uint32_t w;
-    scanline8_t sl;
-} scanline8_u;
-
-#define W_STEP8 (sizeof(scanline8_t) / sizeof(pix8_t))
-#define DST_NEXT_LINE8(x, w, lines) (((x) + (lines) * ((w) / sizeof(scanline8_u))))
-
-typedef struct {
-    scanline8_u a[2];
-} pix_outx2_t;
-
-static void screen_update_no_scale (screen_t *in)
+static int
+vid_copy_HW (screen_t *dest, screen_t *src)
 {
+    copybuf_t copybuf = {NULL, *dest, *src};
+    uint8_t colormode = lcd_active_cfg->config.colormode;
+
+    vid_vsync(0);
+    return screen_hal_copy(lcd_active_cfg, &copybuf, screen_mode2pixdeep[colormode]);
+}
+
+int vid_copy (screen_t *dest, screen_t *src)
+{
+    if (lcd_active_cfg->config.hwaccel) {
+        return vid_copy_HW(dest, src);
+    }
+    vid_copy_SW(dest, src);
+    return 0;
+}
+
+int vid_gfx2d_direct (int x, int y, gfx_2d_buf_t *src, int laynum)
+{
+    gfx_2d_buf_t dest;
     screen_t screen;
 
     vid_vsync(1);
     vid_get_ready_screen(&screen);
 
-    d_memcpy(screen.buf, in->buf, in->width * in->height);
+    screen.x = x;
+    screen.y = y;
+    __screen_to_gfx2d(&dest, &screen);
+    return screen_gfx8888_copy(lcd_active_cfg, &dest, src);
 }
 
-static void screen_update_1x1_fast (screen_t *in)
+static void
+screen_copy_1x1_SW (screen_t *in)
+{
+    screen_t screen;
+
+    vid_vsync(1);
+    vid_get_ready_screen(&screen);
+    vid_copy(&screen, in);
+}
+
+static void
+screen_copy_1x1_HW (screen_t *in)
 {
     screen_t screen;
     copybuf_t copybuf;
@@ -342,7 +374,8 @@ static void screen_update_1x1_fast (screen_t *in)
     screen_hal_copy(lcd_active_cfg, &copybuf, 1);
 }
 
-static void screen_update_2x2_fast (screen_t *in)
+static void
+screen_copy_2x2_HW (screen_t *in)
 {
     screen_t screen;
     copybuf_t copybuf;
@@ -357,178 +390,32 @@ static void screen_update_2x2_fast (screen_t *in)
     screen_hal_scale_h8_2x2(lcd_active_cfg, &copybuf, lcd_active_cfg->config.hwaccel > 1);
 }
 
-static void screen_update_2x2_8bpp (screen_t *in)
+static void
+screen_copy_2x2_8bpp (screen_t *in)
 {
-    pix_outx2_t *d_y0;
-    pix_outx2_t *d_y1;
-    pix_outx2_t pix;
-    pix8_t *rawptr;
-    int s_y, i;
-    scanline8_t *scanline;
-    scanline8_u d_yt0, d_yt1;
     screen_t screen;
+    gfx_2d_buf_t dest, src;
 
     vid_vsync(1);
     vid_get_ready_screen(&screen);
 
-    d_y0 = (pix_outx2_t *)screen.buf;
-    d_y1 = DST_NEXT_LINE8(d_y0, in->width, 1);
-
-    rawptr = (pix8_t *)in->buf;
-    for (s_y = 0; s_y < (in->width * in->height); s_y += in->width) {
-
-        scanline = (scanline8_t *)&rawptr[s_y];
-
-        for (i = 0; i < in->width; i += W_STEP8) {
-
-            d_yt0.sl = *scanline++;
-            d_yt1    = d_yt0;
-
-            d_yt0.sl.a[3] = d_yt0.sl.a[1];
-            d_yt0.sl.a[2] = d_yt0.sl.a[1];
-            d_yt0.sl.a[1] = d_yt0.sl.a[0];
-
-            d_yt1.sl.a[0] = d_yt1.sl.a[2];
-            d_yt1.sl.a[1] = d_yt1.sl.a[2];
-            d_yt1.sl.a[2] = d_yt1.sl.a[3];
-
-            pix.a[0] = d_yt0;
-            pix.a[1] = d_yt1;
-
-            *d_y0++     = pix;
-            *d_y1++     = pix;
-        }
-        d_y0 = DST_NEXT_LINE8(d_y0, in->width, 1);
-        d_y1 = DST_NEXT_LINE8(d_y1, in->width, 1);
-    }
+    __screen_to_gfx2d(&dest, &screen);
+    __screen_to_gfx2d(&src, in);
+    gfx2d_scale2x2_8bpp(&dest, &src);
 }
 
-typedef struct {
-    scanline8_u a[3];
-} pix_outx3_t;
-
-static void screen_update_3x3_8bpp(screen_t *in)
+static void
+screen_copy_3x3_8bpp(screen_t *in)
 {
-    pix_outx3_t *d_y0, *d_y1, *d_y2;
-    pix_outx3_t pix;
-    pix8_t *rawptr;
-    int s_y, i;
-    scanline8_t *scanline;
-    scanline8_u d_yt0, d_yt1, d_yt2;
     screen_t screen;
+    gfx_2d_buf_t dest, src;
 
-    screen_hal_sync(lcd_active_cfg, 1);
+    vid_vsync(1);
     vid_get_ready_screen(&screen);
 
-    d_y0 = (pix_outx3_t *)screen.buf;
-    d_y1 = DST_NEXT_LINE8(d_y0, in->width, 1);
-    d_y2 = DST_NEXT_LINE8(d_y1, in->width, 1);
-    rawptr = (pix8_t *)in->buf;
-    for (s_y = 0; s_y < (in->width * in->height); s_y += in->width) {
-
-        scanline = (scanline8_t *)&rawptr[s_y];
-
-        for (i = 0; i < in->width; i += W_STEP8) {
-
-            d_yt0.sl = *scanline++;
-            d_yt1    = d_yt0;
-            d_yt2    = d_yt1;
-
-            d_yt2.sl.a[2] = d_yt0.sl.a[3];
-            d_yt2.sl.a[1] = d_yt0.sl.a[3];
-
-            d_yt2.sl.a[0] = d_yt0.sl.a[2];
-            d_yt1.sl.a[3] = d_yt0.sl.a[2];
-
-            d_yt1.sl.a[0] = d_yt0.sl.a[1];
-            d_yt0.sl.a[3] = d_yt0.sl.a[1];
-
-            d_yt0.sl.a[2] = d_yt0.sl.a[0];
-            d_yt0.sl.a[1] = d_yt0.sl.a[0];
-            pix.a[0] = d_yt0;
-            pix.a[1] = d_yt1;
-            pix.a[2] = d_yt2;
-#if 0/* (GFX_COLOR_MODE == GFX_COLOR_MODE_RGB565)*/
-            fatal_error("%s() : needs fix\n");
-            pix = d_yt0.w;
-            *d_y0++     = pix;
-            *d_y1++     = pix;
-            *d_y2++     = pix;
-
-            pix = d_yt1.w;
-#endif
-            *d_y0++     = pix;
-            *d_y1++     = pix;
-            *d_y2++     = pix;
-        }
-
-        d_y0 = DST_NEXT_LINE8(d_y0, in->width, 2);
-        d_y1 = DST_NEXT_LINE8(d_y1, in->width, 2);
-        d_y2 = DST_NEXT_LINE8(d_y2, in->width, 2);
-    }
-}
-
-static int vid_priv_vram_alloc (lcd_wincfg_t *cfg, screen_alloc_t *alloc, arch_word_t *ptr, arch_word_t *size);
-static int vid_priv_vram_copy (lcd_wincfg_t *cfg, screen_t screen[2]);
-
-int vid_priv_ctl (int c, void *v)
-{
-    int ret = 0;
-    switch (c) {
-        case VCTL_VRAM_ALLOC:
-        {
-            arch_word_t *data = (arch_word_t *)v;
-            screen_alloc_t *alloc = (screen_alloc_t *)&data[0];
-
-            ret = vid_priv_vram_alloc(lcd_active_cfg, alloc, &data[1], &data[2]);
-        }
-        break;
-        case VCTL_VRAM_COPY:
-        {
-            screen_t *s = (screen_t *)v;
-            ret = vid_priv_vram_copy(lcd_active_cfg, s);
-        }
-        break;
-        default:
-            dprintf("%s() : unknown ctl id [%i]", __func__, c);
-            ret = -1;
-        break;
-    }
-    return ret;
-}
-
-static int vid_priv_vram_alloc (lcd_wincfg_t *cfg, screen_alloc_t *alloc,
-                                        arch_word_t *ptr, arch_word_t *size)
-{
-    lcd_wincfg_t cfgtmp = {0};
-
-    if (cfg->usermem) {
-        heap_free(cfg->usermem);
-        cfg->usermem = NULL;
-    }
-    cfg->usermem = screen_alloc_fb(alloc, &cfgtmp, cfg->w, cfg->h,
-                    screen_mode2pixdeep[cfg->config.colormode], 1);
-    *ptr = (arch_word_t)cfgtmp.usermem;
-    *size = cfgtmp.fb_size;
-    return 0;
-}
-
-static int vid_priv_vram_copy (lcd_wincfg_t *cfg, screen_t screen[2])
-{
-    copybuf_t copybuf = {NULL, screen[0], screen[1]};
-
-    if (copybuf.src.buf == NULL) {
-        vid_get_ready_screen(&copybuf.src);
-    } else if (copybuf.dest.buf == NULL) {
-        vid_get_ready_screen(&copybuf.dest);
-    }
-
-    return screen_hal_copy(cfg, &copybuf, screen_mode2pixdeep[copybuf.dest.colormode]);
-}
-
-int vid_priv_updown (int up)
-{
-    return 0;
+    __screen_to_gfx2d(&dest, &screen);
+    __screen_to_gfx2d(&src, in);
+    gfx2d_scale3x3_8bpp(&dest, &src);
 }
 
 #endif

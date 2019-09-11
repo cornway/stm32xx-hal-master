@@ -260,7 +260,9 @@ void input_bsp_deinit (void)
 {
     dprintf("%s() :\n", __func__);
     user_handler = NULL;
-    BSP_TS_DeInit();
+    if (input_is_touch_avail()) {
+        BSP_TS_DeInit();
+    }
     joypad_bsp_deinit();
 }
 

@@ -364,21 +364,20 @@ gui_rawpic_draw (component_t *com, rawpic_t *pic)
     dim_get_origin(&p, &com->dim);
     dim_set_origin(&d, &p);
 
-    vid_get_ready_screen(&dest);
-
-    dest.x = d.x;
-    dest.y = d.y;
-
     src.x = 0;
     src.y = 0;
     src.width = pic->w;
     src.height = pic->h;
     src.buf = pic->data;
-    src.colormode = GFX_COLOR_MODE_SCREEN;
+    src.colormode = GFX_COLOR_MODE_AUTO;
     src.alpha = pic->alpha;
 
-    vid_copy(&dest, &src);
-    vid_vsync(0);
+    if (pic->sprite) {
+        /*second plane for chroma keyed*/
+        vid_direct(d.x, d.y, &src, 1);
+    } else {
+        vid_direct(d.x, d.y, &src, -1);
+    }
     return 0;
 }
 
