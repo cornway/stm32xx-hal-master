@@ -21,8 +21,8 @@ typedef union {
     scanline8_t sl;
 } scanline8_u;
 
-#define W_STEP8 (sizeof(scanline8_t) / sizeof(pix8_t))
-#define DST_NEXT_LINE8(x, w, lines) (((x) + (lines) * ((w) / sizeof(scanline8_u))))
+#define GFXBUF_BYTES_STEP_8bpp (sizeof(scanline8_t) / sizeof(pix8_t))
+#define GFXBUF_NEXT_SCALED_LINE_8bpp(x, w, lines) (((x) + (lines) * ((w) / sizeof(scanline8_t))))
 
 typedef struct {
     scanline8_u a[2];
@@ -39,15 +39,16 @@ gfx2d_scale2x2_8bpp (gfx_2d_buf_t *dest, gfx_2d_buf_t *src)
     pix8_t *rawptr;
     int s_y, i;
 
-    d_y0 = (pix_outx2_t *)dest->buf;
-    d_y1 = DST_NEXT_LINE8(d_y0, dest->wtotal, 1);
-
     rawptr = (pix8_t *)src->buf;
+
+    d_y0 = (pix_outx2_t *)dest->buf;
+    d_y1 = GFXBUF_NEXT_SCALED_LINE_8bpp(d_y0, src->wtotal, 1);
+
     for (s_y = 0; s_y < (src->wtotal * src->htotal); s_y += src->wtotal) {
 
         scanline = (scanline8_t *)&rawptr[s_y];
 
-        for (i = 0; i < src->w; i += W_STEP8) {
+        for (i = 0; i < src->w; i += GFXBUF_BYTES_STEP_8bpp) {
 
             d_yt0.sl = *scanline++;
             d_yt1    = d_yt0;
@@ -66,8 +67,8 @@ gfx2d_scale2x2_8bpp (gfx_2d_buf_t *dest, gfx_2d_buf_t *src)
             *d_y0++     = pix;
             *d_y1++     = pix;
         }
-        d_y0 = DST_NEXT_LINE8(d_y0, dest->wtotal, 1);
-        d_y1 = DST_NEXT_LINE8(d_y1, dest->wtotal, 1);
+        d_y0 = GFXBUF_NEXT_SCALED_LINE_8bpp(d_y0, src->wtotal, 1);
+        d_y1 = GFXBUF_NEXT_SCALED_LINE_8bpp(d_y1, src->wtotal, 1);
     }
 }
 
@@ -85,15 +86,16 @@ gfx2d_scale3x3_8bpp (gfx_2d_buf_t *dest, gfx_2d_buf_t *src)
     pix8_t *rawptr;
     int s_y, i;
 
-    d_y0 = (pix_outx3_t *)dest->buf;
-    d_y1 = DST_NEXT_LINE8(d_y0, dest->wtotal, 1);
-    d_y2 = DST_NEXT_LINE8(d_y1, dest->wtotal, 1);
     rawptr = (pix8_t *)src->buf;
+    d_y0 = (pix_outx3_t *)dest->buf;
+    d_y1 = GFXBUF_NEXT_SCALED_LINE_8bpp(d_y0, src->wtotal, 1);
+    d_y2 = GFXBUF_NEXT_SCALED_LINE_8bpp(d_y1, src->wtotal, 1);
+
     for (s_y = 0; s_y < (src->wtotal * src->htotal); s_y += src->wtotal) {
 
         scanline = (scanline8_t *)&rawptr[s_y];
 
-        for (i = 0; i < src->w; i += W_STEP8) {
+        for (i = 0; i < src->w; i += GFXBUF_BYTES_STEP_8bpp) {
 
             d_yt0.sl = *scanline++;
             d_yt1    = d_yt0;
@@ -119,10 +121,9 @@ gfx2d_scale3x3_8bpp (gfx_2d_buf_t *dest, gfx_2d_buf_t *src)
             *d_y2++     = pix;
         }
 
-        d_y0 = DST_NEXT_LINE8(d_y0, dest->wtotal, 2);
-        d_y1 = DST_NEXT_LINE8(d_y1, dest->wtotal, 2);
-        d_y2 = DST_NEXT_LINE8(d_y2, dest->wtotal, 2);
+        d_y0 = GFXBUF_NEXT_SCALED_LINE_8bpp(d_y0, src->wtotal, 2);
+        d_y1 = GFXBUF_NEXT_SCALED_LINE_8bpp(d_y1, src->wtotal, 2);
+        d_y2 = GFXBUF_NEXT_SCALED_LINE_8bpp(d_y2, src->wtotal, 2);
     }
 }
-
 
