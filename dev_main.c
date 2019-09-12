@@ -123,7 +123,7 @@ static void SystemClock_Config(void)
     RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
     RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
     RCC_OscInitStruct.PLL.PLLM = 25;
-    RCC_OscInitStruct.PLL.PLLN = 432;
+    RCC_OscInitStruct.PLL.PLLN = 400;
     RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
     RCC_OscInitStruct.PLL.PLLQ = 8;
     RCC_OscInitStruct.PLL.PLLR = 7;
@@ -161,7 +161,7 @@ static void SystemClock_Config(void)
     RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
     RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-    ret = HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_7);
+    ret = HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_6);
     if(ret != HAL_OK)
         clock_fault();
 }
@@ -234,6 +234,7 @@ int dev_init (void)
     vid_init();
     cmd_register_i32(&g_dev_debug_level, "dbglvl");
     cmd_register_i32(&g_serial_rx_eof, "set_rxeof");
+    mpu_init();
     return 0;
 }
 

@@ -21,9 +21,10 @@ typedef struct {
     void *hal_ctxt;
     screen_conf_t config;
     uint16_t w, h;
-    void *usermem;
+    void *extmem;
     void *fb_mem;
     void *lay_mem[LCD_MAX_LAYER];
+    uint32_t extmem_size;
     uint32_t fb_size;
     uint32_t lay_size;
     lcd_layers_t ready_lay_idx;

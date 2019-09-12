@@ -3,11 +3,13 @@
 #if defined(BSP_DRIVER)
 
 #include "int/lcd_int.h"
+#include "gui/colors.h"
 
 #include <lcd_main.h>
 #include <misc_utils.h>
 #include <debug.h>
 #include <heap.h>
+#include <mpu.h>
 #include <bsp_sys.h>
 
 static void screen_copy_1x1_SW (screen_t *in);
@@ -50,20 +52,28 @@ int vid_init (void)
     return screen_hal_init(1);
 }
 
+static void vid_mpu_release (lcd_wincfg_t *cfg)
+{
+    if (cfg->fb_mem) {
+        mpu_unlock((arch_word_t)cfg->fb_mem, cfg->fb_size + cfg->extmem_size);
+    }
+}
+
 static void vid_release (lcd_wincfg_t *cfg)
 {
-    if (cfg && cfg->fb_mem) {
+    if (NULL == cfg) {
+        return;
+    }
+    if (cfg->fb_mem) {
         d_memset(cfg->fb_mem, 0, cfg->fb_size);
         heap_free(cfg->fb_mem);
     }
-    if (cfg) {
-        if (cfg->usermem) {
-            heap_free(cfg->usermem);
-            d_memset(cfg->usermem, 0, cfg->lay_size);
-        }
-        d_memset(cfg, 0, sizeof(*cfg));
+    if (cfg->extmem) {
+        heap_free(cfg->extmem);
+        d_memset(cfg->extmem, 0, cfg->lay_size);
     }
-    cfg = NULL;
+    vid_mpu_release(cfg);
+    d_memset(cfg, 0, sizeof(*cfg));
 }
 
 void vid_deinit (void)
@@ -89,39 +99,58 @@ void vid_wh (screen_t *s)
 }
 
 static void *
-screen_alloc_fb (screen_alloc_t *alloc, lcd_wincfg_t *cfg,
+vid_alloc_fb_mem (screen_alloc_t *alloc, lcd_wincfg_t *cfg,
                        uint32_t w, uint32_t h, uint32_t pixel_deep, uint32_t layers_cnt)
 {
-    int fb_size;
-    int i = layers_cnt;
+    const uint32_t lay_mem_align = 64;
+    const uint32_t lay_mem_size = (w * h * pixel_deep) + lay_mem_align;
+    uint32_t fb_size, i;
     uint8_t *fb_mem;
 
     assert(layers_cnt <= LCD_MAX_LAYER);
 
-    fb_size = ((w + 1) * h) * pixel_deep * layers_cnt;
+    fb_size = lay_mem_size * layers_cnt;
 
     if (cfg->fb_mem) {
-        heap_free(cfg->fb_mem);
+        assert(0);
     }
+
     fb_mem = alloc->malloc(fb_size);
     if (!fb_mem) {
         dprintf("%s() : failed to alloc %u bytes\n", __func__, fb_size);
         return NULL;
     }
-    d_memset(fb_mem, 0, fb_size);
+    /*To prevent lcd panel 'in-burning', or 'ghosting' etc.. -
+      lets fill fb with white color
+    */
+    d_memset(fb_mem, COLOR_WHITE, fb_size);
 
-    cfg->fb_size = fb_size;
     cfg->fb_mem = fb_mem;
+    cfg->fb_size = fb_size;
     cfg->lay_size = fb_size / layers_cnt;
     cfg->config.laynum = layers_cnt;
     cfg->w = w;
     cfg->h = h;
 
     for (i = 0; i < layers_cnt; i++) {
-        cfg->lay_mem[i] = fb_mem;
-        fb_mem = fb_mem + cfg->lay_size;
+        cfg->lay_mem[i] = (uint8_t *)(ROUND_UP((arch_word_t)fb_mem, lay_mem_align));
+        fb_mem = fb_mem + cfg->lay_size + lay_mem_align;
     }
 
+    i = fb_size;
+    if (mpu_lock((arch_word_t)cfg->fb_mem, &fb_size, "-xcbs") < 0) {
+        dprintf("%s() : MPU config failed, less perf. will be obtained\n", __func__);
+    }
+    if (i != fb_size) {
+
+        assert(i < fb_size);
+        i = fb_size - i;
+        dprintf("%s() : MPU requested more space, by [0x%08x] bytes, allocate it\n",
+                __func__, i);
+        cfg->extmem = alloc->malloc(i);
+        cfg->extmem_size = i;
+        assert(cfg->extmem);
+    }
     return cfg->fb_mem;
 }
 
@@ -220,7 +249,7 @@ int vid_config (screen_conf_t *conf)
     lcd_x_size_var = w;
     lcd_y_size_var = h;
 
-    if (!screen_alloc_fb(&conf->alloc, cfg, w, h, screen_mode2pixdeep[conf->colormode], conf->laynum)) {
+    if (!vid_alloc_fb_mem(&conf->alloc, cfg, w, h, screen_mode2pixdeep[conf->colormode], conf->laynum)) {
         return -1;
     }
 
