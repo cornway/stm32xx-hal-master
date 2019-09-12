@@ -23,6 +23,7 @@ typedef struct screen_hal_ctxt_s {
     uint8_t busy;
     uint8_t poll;
     uint8_t state;
+    uint8_t waitreload;
 } screen_hal_ctxt_t;
 
 #define GET_VHAL_CTXT(cfg) ((screen_hal_ctxt_t *)((lcd_wincfg_t *)(cfg))->hal_ctxt)
@@ -31,35 +32,31 @@ typedef struct screen_hal_ctxt_s {
 #define GET_VHAL_HALCFG(cfg) ((LCD_LayerCfgTypeDef *)GET_VHAL_CTXT(cfg)->hal_cfg)
 #define VHAL_PIX_FMT(cfg, num) (GET_VHAL_LTDC(cfg)->LayerCfg[num].PixelFormat)
 
-/*FIXME!!!*/
-int screen_hal_get_lcd_clock_presc (void)
-{
-    if (EXEC_REGION_DRIVER()) {
-        return 2;
-    }
-    return 1;
-}
+void DMA2D_XferCpltCallback (struct __DMA2D_HandleTypeDef * hdma2d);
 
 lcd_layers_t screen_hal_set_layer (lcd_wincfg_t *cfg)
 {
+    lcd_layers_t nextlay;
+
     switch (cfg->ready_lay_idx) {
         case LCD_BACKGROUND:
             BSP_LCD_SelectLayer(LCD_BACKGROUND);
             BSP_LCD_SetTransparency(LCD_FOREGROUND, GFX_OPAQUE);
             BSP_LCD_SetTransparency(LCD_BACKGROUND, GFX_TRANSPARENT);
-            return LCD_BACKGROUND;
+            nextlay = LCD_BACKGROUND;
         break;
         case LCD_FOREGROUND:
             BSP_LCD_SelectLayer(LCD_FOREGROUND);
             BSP_LCD_SetTransparency(LCD_BACKGROUND, GFX_OPAQUE);
             BSP_LCD_SetTransparency(LCD_FOREGROUND, GFX_TRANSPARENT);
-            return LCD_FOREGROUND;
+            nextlay = LCD_FOREGROUND;
         break;
         default:
+            assert(0);
         break;
     }
-    assert(0);
-    return LCD_FOREGROUND;
+
+    return nextlay;
 }
 
 static screen_hal_ctxt_t screen_hal_ctxt = {{0}};
@@ -88,8 +85,6 @@ static const uint32_t screen_mode2fmt_map[] =
 static void screen_dma2d_irq_hdlr (screen_hal_ctxt_t *ctxt);
 static void screen_copybuf_split (screen_hal_ctxt_t *ctxt, copybuf_t *buf, int parts);
 static int screen_hal_copy_next (screen_hal_ctxt_t *ctxt);
-static int screen_hal_clock_cfg (screen_hal_ctxt_t *ctxt);
-
 
 void screen_hal_set_clut (lcd_wincfg_t *cfg, void *_buf, int size, int layer)
 {
@@ -176,8 +171,12 @@ screen_hal_set_config (lcd_wincfg_t *cfg, int x, int y, int w, int h, uint8_t co
 
 static inline void __screen_hal_vsync (lcd_wincfg_t *cfg)
 {
-    if (cfg->poll) {
+    if (GET_VHAL_CTXT(lcd_active_cfg)->poll) {
         while ((LTDC->CDSR & LTDC_CDSR_VSYNCS)) {}
+    } else {
+        while (GET_VHAL_CTXT(lcd_active_cfg)->waitreload) {
+            HAL_Delay(1);
+        }
     }
 }
 
@@ -227,8 +226,6 @@ static int screen_update_direct (lcd_wincfg_t *cfg, screen_t *psrc)
         return ret;
     }
 }
-
-void DMA2D_XferCpltCallback (struct __DMA2D_HandleTypeDef * hdma2d);
 
 static DMA2D_HandleTypeDef *
 __screen_hal_copy_setup
@@ -555,19 +552,6 @@ static void screen_copybuf_split (screen_hal_ctxt_t *ctxt, copybuf_t *buf, int p
     }
 }
 
-int screen_hal_clock_cfg (screen_hal_ctxt_t *ctxt)
-{
-    RCC_PeriphCLKInitTypeDef PeriphClkInitStruct;
-    
-    assert(0);
-    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_LTDC;
-    PeriphClkInitStruct.PLLSAI.PLLSAIN = 384;
-    PeriphClkInitStruct.PLLSAI.PLLSAIR = 7;
-    PeriphClkInitStruct.PLLSAIDivR = RCC_PLLSAIDIVR_2;
-    HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct);
-    return 0;
-}
-
 void DMA2D_IRQHandler(void)
 {
     HAL_DMA2D_IRQHandler(GET_VHAL_DMA2D(lcd_active_cfg));
@@ -588,6 +572,6 @@ void BSP_LCD_LTDC_IRQHandler (void)
 
 void HAL_LTDC_ReloadEventCallback(LTDC_HandleTypeDef *hltdc)
 {
-    lcd_active_cfg->waitreload = 0;
+    GET_VHAL_CTXT(lcd_active_cfg)->waitreload = 0;
 }
 

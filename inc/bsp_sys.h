@@ -26,6 +26,8 @@ typedef struct bsp_sytem_api_s {
 
 #if BSP_INDIR_API
 
+#define bsp_drv_init      BSP_SYS_API(dev.init)
+
 #define sys_init          BSP_SYS_API(dev.init)
 #define dev_hal_init        BSP_SYS_API(hal_init)
 #define sys_deinit        BSP_SYS_API(dev.deinit)
@@ -58,9 +60,8 @@ void sys_user_free (void *p);
 int  sys_user_attach (bsp_user_api_t *api);
 
 int dev_hal_init (void);
-int dev_init (void);
+int bsp_drv_init (void);
 void dev_deinit (void);
-
 
 #endif /*BSP_INDIR_API*/
 

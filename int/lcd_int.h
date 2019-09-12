@@ -22,14 +22,12 @@ typedef struct {
     screen_conf_t config;
     uint16_t w, h;
     void *extmem;
-    void *fb_mem;
+    void *raw_mem;
     void *lay_mem[LCD_MAX_LAYER];
     uint32_t extmem_size;
     uint32_t fb_size;
     uint32_t lay_size;
     lcd_layers_t ready_lay_idx;
-    __IO uint8_t waitreload;
-    uint8_t poll;
 } lcd_wincfg_t;
 
 typedef void (*screen_update_handler_t) (screen_t *in);
@@ -44,8 +42,6 @@ int screen_hal_set_keying (lcd_wincfg_t *cfg, uint32_t color, int layer);
 void screen_hal_sync (lcd_wincfg_t *cfg, int wait);
 int screen_hal_copy (lcd_wincfg_t *cfg, copybuf_t *copybuf, uint8_t pix_bytes);
 int screen_hal_scale_h8_2x2 (lcd_wincfg_t *cfg, copybuf_t *copybuf, int interleave);
-
-int screen_hal_get_lcd_clock_presc (void);
 
 static inline void screen_hal_layreload (lcd_wincfg_t *cfg)
 {

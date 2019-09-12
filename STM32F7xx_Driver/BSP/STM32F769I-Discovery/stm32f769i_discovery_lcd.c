@@ -294,10 +294,9 @@ int BSP_LCD_UseHDMI (void)
 uint8_t BSP_LCD_InitEx(LCD_OrientationTypeDef orientation)
 {
   DSI_PLLInitTypeDef dsiPllInit;
-  const int clk_presc = screen_hal_get_lcd_clock_presc();
-  //static RCC_PeriphCLKInitTypeDef  PeriphClkInitStruct;
-  /*FIXME : !!!! 27429 / 2 -> 27429*/
-  uint32_t LcdClock  = 27429 / clk_presc; /*!< LcdClk = 27429 kHz */
+  RCC_PeriphCLKInitTypeDef  PeriphClkInitStruct;
+
+  uint32_t LcdClock  = 27429;/*!< LcdClk = 27429 kHz */
   uint16_t read_id = 0;
 
   uint32_t laneByteClk_kHz = 0;
@@ -453,14 +452,12 @@ uint8_t BSP_LCD_InitEx(LCD_OrientationTypeDef orientation)
     * PLLLCDCLK = PLLSAI_VCO Output/PLLSAIR = 384 MHz / 7 = 54.85 MHz 
     * LTDC clock frequency = PLLLCDCLK / LTDC_PLLSAI_DIVR_2 = 54.85 MHz / 2 = 27.429 MHz 
     */
-  /*
-  Moved to SystemClock_Config();
   PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_LTDC;
   PeriphClkInitStruct.PLLSAI.PLLSAIN = 384;
   PeriphClkInitStruct.PLLSAI.PLLSAIR = 7;
   PeriphClkInitStruct.PLLSAIDivR = RCC_PLLSAIDIVR_2;
   HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct);
-  */
+
   /* Background value */
   hltdc_discovery.Init.Backcolor.Blue = 0;
   hltdc_discovery.Init.Backcolor.Green = 0;

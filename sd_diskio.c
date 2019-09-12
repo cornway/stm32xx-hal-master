@@ -179,51 +179,63 @@ DSTATUS SD_status(BYTE lun)
 #error "Unsupported mode"
 #endif
 
-static uint8_t sd_local_buf[_MAX_SS] ALIGN(4);
-
 DRESULT SD_Uread(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 {
+    DRESULT result = RES_OK;
     uint8_t ret = MSD_OK;
     DWORD end = sector + count;
+    uint32_t *abuf = heap_malloc(_MIN_SS);
 
+    if (!abuf) {
+        return RES_NOTRDY;
+    }
+    assert(PTR_ALIGNED(abuf, sizeof(arch_word_t)));
     for (; sector < end;) {
-        ret = BSP_SD_ReadBlocks((uint32_t *)sd_local_buf,
-                                (uint32_t)sector,
+        ret = BSP_SD_ReadBlocks(abuf, (uint32_t)sector,
                                 SD_BLOCK_SECTOR_CNT,
                                 SD_TIMEOUT);
         if (ret == MSD_OK) {
-           while(BSP_SD_GetCardState()!= MSD_OK) {} 
+           while(BSP_SD_GetCardState()!= MSD_OK) {}
         } else {
-           return RES_ERROR;
+           result = RES_ERROR;
+           break;
         }
-        d_memcpy(buff, sd_local_buf, _MIN_SS);
+        d_memcpy(buff, abuf, _MIN_SS);
         sector += 1;
         buff += _MIN_SS;
     }
-    return RES_OK;
+    heap_free(abuf);
+    return result;
 }
 
 #endif /*SD_UNALIGNED_WA*/
 
 #if SD_MODE_DMA_RO
 
-
 DRESULT SD_UreadDma (BYTE lun, BYTE *buff, DWORD sector, UINT count)
 {
+    DRESULT result = RES_OK;
     uint8_t ret = MSD_OK;
     DWORD end = sector + count;
+    uint32_t *abuf = heap_malloc(_MIN_SS);
 
+    if (!abuf) {
+        return RES_NOTRDY;
+    }
+    assert(PTR_ALIGNED(abuf, sizeof(arch_word_t)));
     for (; sector < end;) {
-        ret = BSP_SD_ReadBlocks_DMA((uint32_t *)sd_local_buf, (uint32_t)sector, 1);
+        ret = BSP_SD_ReadBlocks_DMA(abuf, (uint32_t)sector, 1);
         if (ret == MSD_OK) {
            while(BSP_SD_GetCardState()!= MSD_OK) {} 
         } else {
-           return RES_ERROR;
+           result = RES_ERROR;
+            break;
         }
-        d_memcpy(buff, sd_local_buf, _MIN_SS);
+        d_memcpy(buff, abuf, _MIN_SS);
         sector += 1;
         buff += _MIN_SS;
     }
+    heap_free(abuf);
     return RES_OK;
 }
 
@@ -433,22 +445,29 @@ static DRESULT __SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 
 static DRESULT SD_UWrite (BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 {
-    DRESULT res;
+    DRESULT res = RES_OK;
     DWORD end = sector + count;
+    uint32_t *abuf = heap_malloc(_MIN_SS);
+
+    if (!abuf) {
+        return RES_NOTRDY;
+    }
+    assert(PTR_ALIGNED(abuf, sizeof(arch_word_t)));
 
     for (; sector < end;) {
-        d_memcpy(sd_local_buf, buff, _MIN_SS);
-        res = __SD_write(lun, sd_local_buf, sector, 1);
+        d_memcpy(abuf, buff, _MIN_SS);
+        res = __SD_write(lun, (BYTE *)abuf, sector, 1);
         if (res == RES_OK) {
            while(BSP_SD_GetCardState()!= MSD_OK) {}
         } else {
-           return RES_ERROR;
+           res = RES_ERROR;
+           break;
         }
-        
         sector += 1;
         buff += _MIN_SS;
     }
-    return RES_OK;
+    heap_free(abuf);
+    return res;
 }
 
 #endif /*SD_UNALIGNED_WA*/

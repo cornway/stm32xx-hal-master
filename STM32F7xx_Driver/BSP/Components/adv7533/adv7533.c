@@ -261,6 +261,7 @@ static int ADV7533_EDID_Read_Begin (void)
     adv7533_wait_intr(-1, RDY_INTR_BP);
 
     ret = __write_group(ADV7533_MAIN_I2C_ADDR, 0xC9, 0, 0x13, 0x13, -1);
+    HAL_Delay(500);
 
     return ret;
 }
@@ -277,12 +278,8 @@ static int ADV7533_EDID_Read_End (void)
 static int ADV7533_Read_EDID (uint32_t size, uint8_t *edid_buf)
 {
     uint8_t edid_addr;
-    if (!edid_buf)
-        return -1;
 
     ADV7533_EDID_Read_Begin();
-    HAL_Delay(500);
-    dprintf("%s: size %d\n", __func__, size);
 
     edid_addr = HDMI_IO_Read(ADV7533_MAIN_I2C_ADDR, 0x43);
 
@@ -290,10 +287,11 @@ static int ADV7533_Read_EDID (uint32_t size, uint8_t *edid_buf)
 
     HDMI_IO_Read_Buf(edid_addr, 0x00, edid_buf, size);
 
-    _dump_hex("EDID", edid_buf, size);
+    dbg_eval(DBG_INFO) {
+        _dump_hex("EDID", edid_buf, size);
+    }
 
     ADV7533_EDID_Read_End();
-
     return size;
 }
 

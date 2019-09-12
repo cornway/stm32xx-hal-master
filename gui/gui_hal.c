@@ -27,13 +27,13 @@ int gui_draw_string_HAL (component_t *com, int line,
 
     d_memcpy(&dim, &com->dim, sizeof(dim));
 
-    if (font != (sFONT *)com->font) {
+    if (font != com->font) {
         BSP_LCD_SetFont((sFONT *)com->font);
     }
     BSP_LCD_SetTextColor(textcolor);
-    ret = BSP_LCD_DisplayStringAt(dim.x, dim.y + LINE(line),
+    ret = BSP_LCD_DisplayStringAt(dim.x, dim.y + LINE(line) + (LINE(1) / 2),
                                   dim.w, dim.h, (uint8_t *)str, (Text_AlignModeTypdef)txtmode);
-    if (font != (sFONT *)com->font) {
+    if (font != com->font) {
         BSP_LCD_SetFont(font);
     }
     return ret;

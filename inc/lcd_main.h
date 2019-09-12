@@ -17,6 +17,13 @@
  *  type declarations                                                  *
  *---------------------------------------------------------------------*/
 
+typedef enum {
+    VID_CACHE_NORMAL,
+    VID_CACHE_NONE,
+    VID_CACHE_WTWA,
+    VID_CACHE_WBNWA,
+} vid_cachealgo_t;
+
 typedef struct {
     void *(*malloc) (uint32_t);
     void (*free) (void *);
@@ -30,7 +37,8 @@ typedef struct {
     uint8_t colormode;
     uint8_t clockpresc;
     uint8_t hwaccel: 2,
-            reserved: 6;
+            cachealgo: 2,
+            reserved: 4;
 } screen_conf_t;
 
 typedef struct bsp_video_api_s {
@@ -51,14 +59,14 @@ typedef struct bsp_video_api_s {
 
 #define vid_init            BSP_VID_API(dev.init)
 #define vid_deinit          BSP_VID_API(dev.deinit)
-#define vid_config          BSP_VID_API(dev.conf)
+#define vid_priv_config     BSP_VID_API(dev.conf)
 #define vid_info            BSP_VID_API(dev.info)
 #define vid_priv_ctl        BSP_VID_API(dev.priv)
 #define vid_wh              BSP_VID_API(get_wh)
 #define vid_mem_avail       BSP_VID_API(mem_avail)
 #define vid_config          BSP_VID_API(win_cfg)
 #define vid_set_clut        BSP_VID_API(set_clut)
-#define vid_update           BSP_VID_API(update)
+#define vid_update          BSP_VID_API(update)
 #define vid_direct          BSP_VID_API(direct)
 #define vid_vsync           BSP_VID_API(vsync)
 #define vid_ptr_align       BSP_VID_API(input_align)
@@ -76,7 +84,7 @@ void vid_vsync (int mode);
 void vid_ptr_align (int *x, int *y);
 
 int vid_copy (screen_t *dest, screen_t *src);
-int vid_set_keying (uint32_t color);
+int vid_set_keying (uint32_t color, int layer);
 int vid_gfx2d_direct (int x, int y, gfx_2d_buf_t *src, int laynum);
 #endif
 

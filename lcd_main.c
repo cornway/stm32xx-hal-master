@@ -18,12 +18,12 @@ static void screen_copy_2x2_HW (screen_t *in);
 static void screen_copy_2x2_8bpp (screen_t *in);
 static void screen_copy_3x3_8bpp (screen_t *in);
 
-static screen_update_handler_t screen_update_handle = NULL;
+static screen_update_handler_t vid_scaler_handler = NULL;
 
 int bsp_lcd_width = -1;
 int bsp_lcd_height = -1;
 
-lcd_wincfg_t lcd_def_cfg;
+static lcd_wincfg_t lcd_def_cfg;
 lcd_wincfg_t *lcd_active_cfg = NULL;
 
 const lcd_layers_t layer_switch[LCD_MAX_LAYER] =
@@ -34,9 +34,9 @@ const lcd_layers_t layer_switch[LCD_MAX_LAYER] =
 
 static const char *screen_mode2txt_map[] =
 {
-    [GFX_COLOR_MODE_CLUT] = "LTDC_L8",
-    [GFX_COLOR_MODE_RGB565] = "LTDC_RGB565",
-    [GFX_COLOR_MODE_RGBA8888] = "LTDC_ARGB8888",
+    [GFX_COLOR_MODE_CLUT] = "*CLUT L8*",
+    [GFX_COLOR_MODE_RGB565] = "*RGB565*",
+    [GFX_COLOR_MODE_RGBA8888] = "*ARGB8888*",
 };
 
 const uint32_t screen_mode2pixdeep[GFX_COLOR_MODE_MAX] =
@@ -46,7 +46,6 @@ const uint32_t screen_mode2pixdeep[GFX_COLOR_MODE_MAX] =
     [GFX_COLOR_MODE_RGBA8888]   = 4,
 };
 
-
 int vid_init (void)
 {
     return screen_hal_init(1);
@@ -54,8 +53,8 @@ int vid_init (void)
 
 static void vid_mpu_release (lcd_wincfg_t *cfg)
 {
-    if (cfg->fb_mem) {
-        mpu_unlock((arch_word_t)cfg->fb_mem, cfg->fb_size + cfg->extmem_size);
+    if (cfg->raw_mem) {
+        mpu_unlock((arch_word_t)cfg->raw_mem, cfg->fb_size + cfg->extmem_size);
     }
 }
 
@@ -64,13 +63,13 @@ static void vid_release (lcd_wincfg_t *cfg)
     if (NULL == cfg) {
         return;
     }
-    if (cfg->fb_mem) {
-        d_memset(cfg->fb_mem, 0, cfg->fb_size);
-        heap_free(cfg->fb_mem);
+    if (cfg->raw_mem) {
+        d_memset(cfg->raw_mem, 0, cfg->fb_size);
+        heap_free(cfg->raw_mem);
     }
     if (cfg->extmem) {
+        d_memset(cfg->extmem, 0, cfg->extmem_size);
         heap_free(cfg->extmem);
-        d_memset(cfg->extmem, 0, cfg->lay_size);
     }
     vid_mpu_release(cfg);
     d_memset(cfg, 0, sizeof(*cfg));
@@ -84,10 +83,12 @@ void vid_deinit (void)
     lcd_active_cfg = NULL;
 }
 
-int vid_set_keying (uint32_t color)
+int vid_set_keying (uint32_t color, int layer)
 {
-    screen_hal_set_keying(lcd_active_cfg, color, LCD_BACKGROUND);
-    screen_hal_set_keying(lcd_active_cfg, color, LCD_FOREGROUND);
+    if (layer >= lcd_active_cfg->config.laynum || layer < 0) {
+        return -1;
+    }
+    screen_hal_set_keying(lcd_active_cfg, color, (lcd_layers_t)layer);
     return 0;
 }
 
@@ -99,19 +100,20 @@ void vid_wh (screen_t *s)
 }
 
 static void *
-vid_alloc_fb_mem (screen_alloc_t *alloc, lcd_wincfg_t *cfg,
+vid_create_framebuffer (screen_alloc_t *alloc, lcd_wincfg_t *cfg,
                        uint32_t w, uint32_t h, uint32_t pixel_deep, uint32_t layers_cnt)
 {
     const uint32_t lay_mem_align = 64;
     const uint32_t lay_mem_size = (w * h * pixel_deep) + lay_mem_align;
     uint32_t fb_size, i;
     uint8_t *fb_mem;
+    const char *mpu_conf = NULL;
 
     assert(layers_cnt <= LCD_MAX_LAYER);
 
     fb_size = lay_mem_size * layers_cnt;
 
-    if (cfg->fb_mem) {
+    if (cfg->raw_mem) {
         assert(0);
     }
 
@@ -125,40 +127,53 @@ vid_alloc_fb_mem (screen_alloc_t *alloc, lcd_wincfg_t *cfg,
     */
     d_memset(fb_mem, COLOR_WHITE, fb_size);
 
-    cfg->fb_mem = fb_mem;
+    cfg->raw_mem = fb_mem;
     cfg->fb_size = fb_size;
-    cfg->lay_size = fb_size / layers_cnt;
     cfg->config.laynum = layers_cnt;
     cfg->w = w;
     cfg->h = h;
 
     for (i = 0; i < layers_cnt; i++) {
         cfg->lay_mem[i] = (uint8_t *)(ROUND_UP((arch_word_t)fb_mem, lay_mem_align));
-        fb_mem = fb_mem + cfg->lay_size + lay_mem_align;
+        fb_mem = fb_mem + lay_mem_align + (fb_size / layers_cnt);
+    }
+
+    switch (cfg->config.cachealgo) {
+        case VID_CACHE_NONE:
+            /*Non-cacheable*/
+            mpu_conf = "-xscb";
+        break;
+        case VID_CACHE_WTWA:
+            /*Write through, no write allocate*/
+            mpu_conf = "-xsb";
+        break;
+        case VID_CACHE_WBNWA:
+            /*Write-back, no write allocate*/
+            mpu_conf = "-xs";
+        break;
     }
 
     i = fb_size;
-    if (mpu_lock((arch_word_t)cfg->fb_mem, &fb_size, "-xcbs") < 0) {
-        dprintf("%s() : MPU config failed, less perf. will be obtained\n", __func__);
-    }
-    if (i != fb_size) {
+    if (mpu_conf && mpu_lock((arch_word_t)cfg->raw_mem, &fb_size, mpu_conf) < 0) {
+        dprintf("%s() : MPU region config failed\n", __func__);
+    } else if (i != fb_size) {
 
         assert(i < fb_size);
         i = fb_size - i;
-        dprintf("%s() : MPU requested more space, by [0x%08x] bytes, allocate it\n",
+        dprintf("%s() : MPU region requires extra space(padding) +[0x%08x] bytes, allocating\n",
                 __func__, i);
         cfg->extmem = alloc->malloc(i);
         cfg->extmem_size = i;
         assert(cfg->extmem);
     }
-    return cfg->fb_mem;
+    return cfg->raw_mem;
 }
 
 void vid_ptr_align (int *x, int *y)
 {
 }
 
-static screen_update_handler_t vid_set_scaler (int scale, uint8_t colormode)
+static screen_update_handler_t vid_get_scaler (int scale, uint8_t colormode)
 {
     screen_update_handler_t h = NULL;
 
@@ -195,7 +210,7 @@ static screen_update_handler_t vid_set_scaler (int scale, uint8_t colormode)
     return h;
 }
 
-static lcd_wincfg_t *vid_get_config (lcd_wincfg_t *cfg)
+static lcd_wincfg_t *vid_new_winconfig (lcd_wincfg_t *cfg)
 {
     if (!cfg) {
         cfg = &lcd_def_cfg;
@@ -236,7 +251,7 @@ int vid_config (screen_conf_t *conf)
     int x, y, w, h;
     lcd_wincfg_t *cfg;
 
-    cfg = vid_get_config(NULL);
+    cfg = vid_new_winconfig(lcd_active_cfg);
     if ((lcd_wincfg_t *)cfg == lcd_active_cfg) {
         return 0;
     }
@@ -244,24 +259,25 @@ int vid_config (screen_conf_t *conf)
     lcd_active_cfg->config = *conf;
     scale = vid_set_win_size(conf->res_x, conf->res_y, bsp_lcd_width, bsp_lcd_height, &x, &y, &w, &h);
 
-    screen_update_handle = vid_set_scaler(scale, conf->colormode);
+    vid_scaler_handler = vid_get_scaler(scale, conf->colormode);
 
     lcd_x_size_var = w;
     lcd_y_size_var = h;
 
-    if (!vid_alloc_fb_mem(&conf->alloc, cfg, w, h, screen_mode2pixdeep[conf->colormode], conf->laynum)) {
+    if (!vid_create_framebuffer(&conf->alloc, cfg, w, h, screen_mode2pixdeep[conf->colormode], conf->laynum)) {
         return -1;
     }
 
-    screen_hal_set_config(cfg, x, y, w, h, conf->colormode);
-
-    return 0;
+    if (screen_hal_set_config(cfg, x, y, w, h, conf->colormode)) {
+        return 0;
+    }
+    return -1;
 }
 
 uint32_t vid_mem_avail (void)
 {
     assert(lcd_active_cfg);
-    return ((lcd_active_cfg->lay_size * lcd_active_cfg->config.laynum) / 1024);
+    return ((lcd_active_cfg->fb_size) / 1024);
 }
 
 void vid_vsync (int mode)
@@ -306,7 +322,7 @@ void vid_update (screen_t *in)
     if (in == NULL) {
         vid_vsync(1);
     } else {
-        screen_update_handle(in);
+        vid_scaler_handler(in);
     }
 }
 
@@ -334,10 +350,11 @@ void vid_print_info (void)
 {
     assert(lcd_active_cfg);
 
+    dprintf("Video :\n");
     dprintf("width=%4.3u height=%4.3u\n", lcd_active_cfg->w, lcd_active_cfg->h);
-    dprintf("layers=%u, color mode=<%s>\n",
+    dprintf("layers = %u, color mode = %s \n",
              lcd_active_cfg->config.laynum, screen_mode2txt_map[lcd_active_cfg->config.colormode]);
-    dprintf("memory= <0x%p> 0x%08x bytes\n", lcd_active_cfg->fb_mem, lcd_active_cfg->fb_size);
+    dprintf("framebuffer = <0x%p> 0x%08x bytes\n", lcd_active_cfg->raw_mem, lcd_active_cfg->fb_size);
 }
 
 static void

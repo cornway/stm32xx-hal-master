@@ -191,7 +191,7 @@ bspapi_t *bsp_api_attach (void)
     BSP_CD_API(getvol)      = cd_getvol;
     BSP_CD_API(playing)     = cd_playing;
 
-    BSP_SYS_API(dev.init)   = dev_init;
+    BSP_SYS_API(dev.init)   = bsp_drv_init;
     BSP_SYS_API(dev.deinit) = dev_deinit_stub;
     BSP_SYS_API(dev.conf)   = dev_conf_stub;
     BSP_SYS_API(dev.info)   = dev_info_stub;

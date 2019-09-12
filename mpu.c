@@ -1,21 +1,23 @@
 #include "main.h"
-#include "misc_utils.h"
-#include "arch.h"
-#include "mpu.h"
+#include <misc_utils.h>
+#include <mpu.h>
 #include <string.h>
 #include <bsp_sys.h>
+#include <debug.h>
 
 #define MPU_REG_POOL_MAX (MPU_REGION_NUMBER7 + 1)
 
 typedef struct {
 
     MPU_Region_InitTypeDef init;
+    arch_word_t size;
     d_bool alloced;
 } mpu_reg_t;
 
 static mpu_reg_t mpu_reg_pool[MPU_REG_POOL_MAX];
 
 static uint32_t size_to_mpu_size (uint32_t *size_p);
+static int __mpu_unlock (int id);
 
 static mpu_reg_t *mpu_alloc_reg (int *id)
 {
@@ -37,7 +39,25 @@ static void mpu_release_reg (mpu_reg_t *reg)
 
 void mpu_init (void)
 {
-    memset(mpu_reg_pool, 0, sizeof(mpu_reg_pool));
+    d_memset(mpu_reg_pool, 0, sizeof(mpu_reg_pool));
+}
+
+void mpu_deinit (void)
+{
+    MPU_Region_InitTypeDef *initptr;
+    int i;
+
+    for (i = 0; i < MPU_REG_POOL_MAX; i++) {
+        if (mpu_reg_pool[i].alloced) {
+            initptr = &mpu_reg_pool[i].init;
+
+            dprintf("%s() : unlocked region : <%p> - <%p>\n",
+                    __func__, (void *)initptr->BaseAddress,
+                    (void *)(initptr->BaseAddress + mpu_reg_pool[i].size));
+            __mpu_unlock(i);
+        }
+    }
+    d_memset(mpu_reg_pool, 0, sizeof(mpu_reg_pool));
 }
 
 int mpu_lock (arch_word_t addr, arch_word_t *size, const char *mode)
@@ -115,6 +135,7 @@ int mpu_lock (arch_word_t addr, arch_word_t *size, const char *mode)
     reg->init.AccessPermission = MPU_REGION_FULL_ACCESS;
     reg->init.SubRegionDisable = 0;
     reg->init.Size = size_to_mpu_size(size);
+    reg->size = *size;
 
     HAL_MPU_Disable();
     HAL_MPU_ConfigRegion(&reg->init);
@@ -123,16 +144,9 @@ int mpu_lock (arch_word_t addr, arch_word_t *size, const char *mode)
     return reg->init.Number;
 }
 
-int mpu_unlock (arch_word_t addr, arch_word_t size)
+static int __mpu_unlock (int id)
 {
-    int id = mpu_read(addr, size);
     mpu_reg_t *reg;
-
-    if (id < 0) {
-        dprintf("%s() : Unable to find MPU region : <%p> - <%p>\n",
-                __func__, (void *)addr, (void *)size);
-        return id;
-    }
 
     reg = &mpu_reg_pool[id];
     reg->init.Enable = MPU_REGION_DISABLE;
@@ -143,6 +157,19 @@ int mpu_unlock (arch_word_t addr, arch_word_t size)
 
     mpu_release_reg(reg);
     return 0;
+}
+
+int mpu_unlock (arch_word_t addr, arch_word_t size)
+{
+    int id = mpu_read(addr, size);
+
+    if (id < 0) {
+        dprintf("%s() : Unable to find MPU region : <%p> - <%p>\n",
+                __func__, (void *)addr, (void *)(addr + size));
+        return id;
+    }
+
+    return __mpu_unlock(id);
 }
 
 static int mpu_search (arch_word_t addr, arch_word_t size)

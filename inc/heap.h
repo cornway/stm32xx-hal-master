@@ -10,6 +10,8 @@
 #define IRAM __attribute__ ((section ("iram")))
 #define IRAM2 __attribute__ ((section ("iram2")))
 
+#define PTR_ALIGNED(p, a) ((a) && ((arch_word_t)(p) % (a) == 0))
+
 typedef struct bsp_heap_api_s {
      void *(*malloc) (uint32_t size);
      void (*free) (void *p);
@@ -17,11 +19,11 @@ typedef struct bsp_heap_api_s {
 
 void heap_init (void);
 void heap_deinit (void);
-void *heap_alloc_shared (uint32_t size);
+void *heap_alloc_shared (size_t size);
 int heap_avail (void);
-void *heap_malloc (int size);
-void *heap_realloc (void *x, int32_t size);
-void *heap_calloc (int32_t size);
+void *heap_malloc (size_t size);
+void *heap_realloc (void *x, size_t size);
+void *heap_calloc (size_t size);
 void heap_free (void *p);
 
 #endif /*__HEAP_H__*/
