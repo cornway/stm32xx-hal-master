@@ -1,11 +1,12 @@
                     EXPORT EnableFPU
                     EXPORT SystemSoftReset
-                    EXPORT upcall                  [WEAK]
-;                    EXPORT VMBOOT                  [WEAK]
-                    EXPORT __arch_get_stack
-                    EXPORT __arch_get_heap
-                    EXPORT __arch_asmgoto
-                    EXPORT __arch_get_shared
+                    EXPORT __arch_sysio_call        [WEAK]
+                    EXPORT __arch_get_stack         [WEAK]
+                    EXPORT __arch_get_heap          [WEAK]
+                    EXPORT __arch_asmgoto           [WEAK]
+                    EXPORT __arch_get_shared        [WEAK]
+
+                    EXPORT SVC_Handler
 
                     IMPORT Stack_Mem
                     IMPORT Stack_Size
@@ -13,9 +14,10 @@
                     IMPORT Heap_Size
                     IMPORT Shared_Mem
                     IMPORT Shared_Size
+                    IMPORT __arch_svc_handler
                 
                     MACRO 
-$label              WRAP $DEST
+$label              CPU_SAVE $DEST
                 
                     CPSID   I
                     DMB
@@ -53,11 +55,15 @@ $label.BRL          CPSIE   I
                     AREA    |.text|, CODE, READONLY
 
                     ALIGN
-upcall              PROC
+__arch_sysio_call   PROC
                     SWI     0x02
                     BX      LR
                     ENDP
                     ALIGN
+                        
+SVC_Handler         PROC   
+SVC_Handler_        WRAP __arch_svc_handler
+                    ENDP 
                         
 ;VMBOOT              PROC  
 ;                    CPSID   I
@@ -72,17 +78,9 @@ upcall              PROC
 ;                    ENDP
                         
 ;SysTick_Handler     PROC 
-;SYS_TICK_           WRAP VMTick                
+;SYS_TICK_           WRAP VMTick
 ;                    ENDP  
-                        
-;PendSV_Handler      PROC  
 
-;                    ENDP  
-                        
-;SVC_Handler         PROC   
-;SVC_HANDLE_         WRAP VMSvc
-;                    ENDP 
-                    
 ;HardFault_Handler   PROC  
 ;HARD_FAULT_         WRAP VMHardFault   
 ;                    ENDP 
@@ -154,11 +152,7 @@ __arch_get_shared   PROC
 __arch_asmgoto      PROC
                     BX R0
                     B   .
-                    ENDP
-                    END
-                       
-                
-                
+                    ENDP  
                 
                 
                 

@@ -688,27 +688,20 @@ int cmd_execute (const char *cmd, int len)
     return bsp_inout_forward(buf, len, '<');
 }
 
-
-#if defined(BOOT)
-
 static int cmd_mod_insert (int argc, const char **argv)
 {
     arch_word_t progaddr;
-    const bsp_heap_api_t heap =
-    {
-        heap_alloc_shared,
-        heap_free,
-    };
+    const bsp_heap_api_t heap = { heap_malloc, heap_free, };
+    const bsp_heap_api_t *heapptr = &heap;
 
     if (argc < 2) {
-        dprintf("usage : /path/to/file <load address 0x0xxx..>");
+        dprintf("usage : </path/to/dir> <filename> ... <-sram>");
         return -CMDERR_NOARGS;
     }
-    if (!sscanf(argv[1], "%x", &progaddr)) {
-        return -CMDERR_INVPARM;
+    if (argc == 3 && !strcmp(argv[2], "-sram")) {
+        heapptr = NULL;
     }
-
-    bspmod_insert(&heap, argv[0], argv[1]);
+    bspmod_insert(heapptr, argv[0], argv[1]);
 
     return argc - 2;
 }
@@ -716,30 +709,25 @@ static int cmd_mod_insert (int argc, const char **argv)
 static int cmd_mod_probe (int argc, const char **argv)
 {
     if (argc < 1) {
-        dprintf("usage : /path/to/file <load address 0x0xxx..>");
+        dprintf("usage : <name> <argc> <argv>");
         return -CMDERR_NOARGS;
     }
-
-    if (bspmod_probe(argv[0]) < 0) {
+    if (bspmod_probe(argv[0], argc - 1, &argv[1]) < 0) {
         return -CMDERR_INVPARM;
     }
-
-    return argc - 1;
+    return 0;
 }
 
 static int cmd_mod_rm (int argc, const char **argv)
 {
     if (argc < 1) {
-        dprintf("usage : <mod name>");
+        dprintf("usage : <name>");
         return -CMDERR_NOARGS;
     }
-
-    bspmod_remove(argv[0]);
+    bspmod_remove(heap_free, argv[0]);
 
     return argc - 1;
 }
-
-#endif /*BOOT*/
 
 static int cmd_intutil_cat (int argc, const char **argv)
 {

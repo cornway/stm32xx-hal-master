@@ -10,17 +10,17 @@
 _EXTERN "C" void *vmalloc (UINT_T size);
 _EXTERN "C" void vmfree (void *p);
 
-_EXTERN "C" _VALUES_IN_REGS ARG_STRUCT_T upcall (ARG_STRUCT_T arg);
+_EXTERN "C" ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t upcall (arch_sysio_arg_t arg);
 _EXTERN "C" void SystemSoftReset (void);
 
-_STATIC _VALUES_IN_REGS ARG_STRUCT_T DISPATCH (ARG_STRUCT_T ARG);
-_STATIC _VALUES_IN_REGS ARG_STRUCT_T DISPATCH_SVC (ARG_STRUCT_T arg);
-_STATIC _VALUES_IN_REGS ARG_STRUCT_T VMRUN ();
+_STATIC ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t DISPATCH (arch_sysio_arg_t ARG);
+_STATIC ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t DISPATCH_SVC (arch_sysio_arg_t arg);
+_STATIC ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t VMRUN ();
 _STATIC WORD_T SET_LINK (THREAD *t);
 _STATIC THREAD *GET_READY ();
-_STATIC void SET_STACK (THREAD *t, ARG_STRUCT_T arg);
+_STATIC void SET_STACK (THREAD *t, arch_sysio_arg_t arg);
 _STATIC THREAD *PICK_READY ();
-_STATIC _VALUES_IN_REGS ARG_STRUCT_T UPDATE (THREAD *t);
+_STATIC ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t UPDATE (THREAD *t);
 
 
 
@@ -33,9 +33,9 @@ BYTE_T preemtSwitchEnabled = 1;
 _STATIC MUTEX_FACTORY mutexFactory;
 _STATIC TIMER_FACTORY timerFactory;
 
-_VALUES_IN_REGS ARG_STRUCT_T VMINIT ()
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t VMINIT ()
 {
-    ARG_STRUCT_T ret = {0, 0, 0, 0};
+    arch_sysio_arg_t ret = {0, 0, 0, 0};
     static THREAD *t = (THREAD *)NULL;
     
     machInitCore();
@@ -64,12 +64,12 @@ _VALUES_IN_REGS ARG_STRUCT_T VMINIT ()
     return ret;
 }
 
-_VALUES_IN_REGS ARG_STRUCT_T VMBREAK (UINT_T ret)
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t VMBREAK (UINT_T ret)
 {
     if (CUR_THREAD->ID == IDLE_THREAD_ID) {
         for (;;) {}
     }
-    ARG_STRUCT_T arg = {VMAPI_EXIT, ret, 0, 0};
+    arch_sysio_arg_t arg = {VMAPI_EXIT, ret, 0, 0};
     return upcall(arg);
 }
 
@@ -90,7 +90,7 @@ _STATIC WORD_T SET_LINK (THREAD *t)
     }
 }
 
-_STATIC void SET_STACK (THREAD *t, ARG_STRUCT_T arg)
+_STATIC void SET_STACK (THREAD *t, arch_sysio_arg_t arg)
 {
     if ((arg.LINK & EXC_RETURN_USE_FPU_BM) == 0) { /**/
         /*FPU pending*/
@@ -102,9 +102,9 @@ _STATIC void SET_STACK (THREAD *t, ARG_STRUCT_T arg)
     
 }
 
-_STATIC _VALUES_IN_REGS ARG_STRUCT_T UPDATE (THREAD *t)
+_STATIC ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t UPDATE (THREAD *t)
 {
-    ARG_STRUCT_T ret = {0, 0, 0, 0};
+    arch_sysio_arg_t ret = {0, 0, 0, 0};
     ret.LINK = SET_LINK(t); /*set link register value*/
     ret.CONTROL = t->PRIVILEGE;
     ret.FRAME = t->CPU_FRAME;
@@ -140,9 +140,9 @@ _STATIC THREAD *PICK_READY ()
     return t;
 }
 
-_STATIC _VALUES_IN_REGS ARG_STRUCT_T VMRUN ()
+_STATIC ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t VMRUN ()
 {
-    ARG_STRUCT_T ret = {0, 0, 0, 0};
+    arch_sysio_arg_t ret = {0, 0, 0, 0};
     
     CUR_THREAD = IDLE_THREAD;
     
@@ -151,12 +151,12 @@ _STATIC _VALUES_IN_REGS ARG_STRUCT_T VMRUN ()
     return ret;
 }
 
-_STATIC _VALUES_IN_REGS ARG_STRUCT_T DISPATCH (ARG_STRUCT_T arg)
+_STATIC ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t DISPATCH (arch_sysio_arg_t arg)
 {
     uWTick++;
     
     THREAD *t = CUR_THREAD;
-    ARG_STRUCT_T ret = {0, 0, 0, 0};
+    arch_sysio_arg_t ret = {0, 0, 0, 0};
     
     timerFactory.tick_ms();
     
@@ -186,7 +186,7 @@ _STATIC _VALUES_IN_REGS ARG_STRUCT_T DISPATCH (ARG_STRUCT_T arg)
     return UPDATE(CUR_THREAD);
 }
 
-_VALUES_IN_REGS ARG_STRUCT_T DISPATCH_SVC (ARG_STRUCT_T arg)
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t DISPATCH_SVC (arch_sysio_arg_t arg)
 {
 
     SET_STACK(CUR_THREAD, arg);
@@ -196,7 +196,7 @@ _VALUES_IN_REGS ARG_STRUCT_T DISPATCH_SVC (ARG_STRUCT_T arg)
     call_struct.R2 - attribute 0;
     call_struct.R2 - attribute 1;
     */
-    ARG_STRUCT_T call_struct = {0, 0, 0, 0};
+    arch_sysio_arg_t call_struct = {0, 0, 0, 0};
     CPU_STACK_FRAME *frame = CUR_THREAD->CPU_FRAME;
     
     
@@ -210,7 +210,7 @@ _VALUES_IN_REGS ARG_STRUCT_T DISPATCH_SVC (ARG_STRUCT_T arg)
     /*frame->cpuStack.R2 - attribute 2*/
     /*frame->cpuStack.R3 - error code*/
     
-    ARG_STRUCT_T ret;
+    arch_sysio_arg_t ret;
     ret.POINTER = arg.POINTER;
     ret.LINK    = arg.LINK;
     ret.ERROR   = arg.ERROR;
@@ -477,32 +477,32 @@ _VALUES_IN_REGS ARG_STRUCT_T DISPATCH_SVC (ARG_STRUCT_T arg)
 
 
 extern "C"
-_VALUES_IN_REGS ARG_STRUCT_T VMTick (ARG_STRUCT_T arg)
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t VMTick (arch_sysio_arg_t arg)
 {
     return DISPATCH(arg);
 }
 
 extern "C"
-_VALUES_IN_REGS ARG_STRUCT_T VMInit (ARG_STRUCT_T arg)
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t VMInit (arch_sysio_arg_t arg)
 {
-    ARG_STRUCT_T ret = {arg.R0, arg.R1, arg.R2, arg.R3};
+    arch_sysio_arg_t ret = {arg.R0, arg.R1, arg.R2, arg.R3};
     return ret;
 }
 
 extern "C"
-_VALUES_IN_REGS ARG_STRUCT_T VMStart ()
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t VMStart ()
 {
     return VMRUN();
 }
 
 extern "C"
-_VALUES_IN_REGS ARG_STRUCT_T VMSvc (ARG_STRUCT_T arg)
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t VMSvc (arch_sysio_arg_t arg)
 {
     return DISPATCH_SVC(arg);
 }
 
 extern "C"
-_VALUES_IN_REGS ARG_STRUCT_T VMHardFault (ARG_STRUCT_T arg)
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t VMHardFault (arch_sysio_arg_t arg)
 {
     for (;;) {
         

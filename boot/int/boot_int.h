@@ -46,11 +46,11 @@ int bhal_start_application (arch_word_t *progaddr, arch_word_t progbytes,
 int b_execute_link (const char *path);
 int b_execute_cmd (const char *path);
 
-void *bres_cache_file_2_mem (const bsp_heap_api_t *heapapi, const char *path, int *binsize);
+void *bres_cache_file_2_mem (void *(*alloc)(size_t), const char *path, int *binsize);
 exec_desc_t *bsp_setup_bin_desc (const char *dirpath, exec_desc_t *bin, const char *path,
                                         const char *originname, bsp_exec_file_type_t type);
 int bsp_setup_bin_param (exec_desc_t *bin);
-int bhal_bin_2_mem_load (complete_ind_t cplth, arch_word_t *progaddr,
+int bhal_bin_2_mem_load (complete_ind_t cplth, void *progaddr,
                                 void *progdata, size_t progsize);
 int bhal_set_mem_with_value (complete_ind_t cplth, arch_word_t *progaddr,
                                       size_t progsize, arch_word_t value);
@@ -58,7 +58,7 @@ bsp_exec_file_type_t bsp_bin_file_fmt_supported (const char *in);
 d_bool bhal_bin_check_in_mem (complete_ind_t cplth, arch_word_t *progaddr,
                                       void *progdata, size_t progsize);
 void bhal_execute_application (void *addr);
-int bhal_execute_module (arch_word_t addr);
+int bhal_execute_module (void *entry);
 
 int boot_char_cmd_handler (int argc, const char **argv);
 

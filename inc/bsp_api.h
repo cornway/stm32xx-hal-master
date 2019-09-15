@@ -2,7 +2,6 @@
 #define __BSP_API_H__
 
 #include <arch.h>
-
 #include <nvic.h>
 
 #if defined(MODULE)

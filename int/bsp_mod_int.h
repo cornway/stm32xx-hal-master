@@ -25,16 +25,16 @@ typedef struct bsp_mod_api_s {
 #define bspmod_insert            BSP_MOD_API(insert)
 #define bspmod_remove            BSP_MOD_API(remove)
 #define bspmod_probe             BSP_MOD_API(probe)
-#define bspmod_register_api      BSP_MOD_API(register_api)
-#define bspmod_get_api           BSP_MOD_API(get_api)
 
 #else /*BSP_INDIR_API*/
 
 void *bspmod_insert (const bsp_heap_api_t *, const char *, const char *);
-int bspmod_remove (const char *);
-int bspmod_probe (const char *name);
-int bspmod_register_api (const char *, const void *, int);
-const void *bspmod_get_api (const char *name, int *apisize);
+int bspmod_remove (void (*_free) (void *), const char *);
+int bspmod_probe (const char *name, int argc, const char **argv);
+void *bspmod_get_sym (void *_mod, const char *name);
+
+#define bspmod_get_func(mod, func) \
+    bspmod_get_sym(_mod, #func)
 
 #endif /*BSP_INDIR_API*/
 

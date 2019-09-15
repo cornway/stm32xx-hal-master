@@ -20,7 +20,7 @@ enum {
     VM_DUP_CALL,
 };
         
-_VALUES_IN_REGS ARG_STRUCT_T VMINIT ();
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t VMINIT ();
 
         
 #ifndef __cplusplus

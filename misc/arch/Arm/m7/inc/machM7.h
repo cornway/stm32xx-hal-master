@@ -1,16 +1,15 @@
-#ifndef __MACH_M4_H__
-#define __MACH_M4_H__
+#ifndef __MACH_M7_H__
+#define __MACH_M7_H__
 
 #include <stdint.h>
+#include "main.h"
 
 #ifdef __cplusplus
     extern "C" {
 #endif
 
 #ifdef __ARMCC_VERSION
-        
 
-        
 #else
 #error "UNKNOWN COMPILER!"
 #endif        
@@ -25,14 +24,15 @@ typedef uint8_t       arch_byte_t;
 #define INT64_T       int64_t
 #define UINT64_T      uint64_t
 
+#define CPU_CHACHELINE (32)
 
 #define V_PREPACK
 #define V_POSTPACK __attribute__((packed))
 #define PACKED __packed
 
-#define _VALUES_IN_REGS     __value_in_regs
+#define ARCH_VAL_IN_REGS_ATTR     __value_in_regs
 
-#define _WEAK __weak      
+#define _WEAK __weak
         
 #define _STATIC static
 
@@ -81,7 +81,7 @@ typedef uint8_t       arch_byte_t;
 
 typedef INT32_T (*v_callback_t) (arch_word_t, void *);
 
-typedef V_PREPACK struct {
+typedef struct {
     arch_word_t EXC_RET;
     arch_word_t R11; /*user top*/
     arch_word_t R10;
@@ -102,7 +102,7 @@ typedef V_PREPACK struct {
     
 } CPU_STACK; /*stack frame implementation for no fpu context store*/
 
-typedef V_PREPACK struct {
+typedef struct {
     arch_word_t S16[16];
     arch_word_t EXC_RET;
     arch_word_t R11;
@@ -139,7 +139,7 @@ typedef V_PREPACK struct {
     arch_word_t PSR;         /*XPSR*/
 } CALL_CONTROL_CPU_STACK;
 
-typedef V_PREPACK struct {
+typedef struct {
     arch_word_t RESERVED0[16];       /*S16 - S31*/
     arch_word_t EXC_RET;
     arch_word_t RESERVED[8];         /*R10 - R4*/
@@ -156,8 +156,8 @@ typedef V_PREPACK struct {
 
 #pragma anon_unions
 
-typedef V_PREPACK struct {
-  V_PREPACK union {
+typedef struct {
+    union {
         CPU_STACK      cpuStack;
         CPU_STACK_FPU  cpuStackFpu;
       
@@ -166,59 +166,42 @@ typedef V_PREPACK struct {
     };
 } CPU_STACK_FRAME;
 
-typedef V_PREPACK struct {
-   V_PREPACK union {
-        V_PREPACK struct {
-           arch_word_t R0;
-           arch_word_t R1;
-           arch_word_t R2;
-           arch_word_t R3;
+typedef struct {
+    union {
+        struct {
+           arch_word_t r0, r1, r2, r3;
         };
-        V_PREPACK struct {
-           arch_word_t POINTER;
-           arch_word_t CONTROL;
-           arch_word_t LINK;
-           arch_word_t ERROR;
+        struct {
+           arch_word_t ptr;
+           arch_word_t ctrl;
+           arch_word_t lr;
+           arch_word_t error;
         };
-        V_PREPACK struct {
-           arch_word_t PAD[3];
-           arch_hword_t CTL;
-           arch_hword_t IRQ;
-        };
-        V_PREPACK struct {
-           CPU_STACK_FRAME *FRAME;
-        };
-    };
-} ARG_STRUCT_T;
+    }
+} arch_sysio_arg_t;
 
-
-#define vm_ctxt_set_reg(frm, type, reg, val) \
-        do { \
-                        if (frm != NULL) { \
-                            if ((type & EXC_RETURN_USE_FPU_BM) == 0) \
-                                 frm->callControlFpu.reg = val; \
-                            else \
-                                 frm->callControl.reg = val; \
-                        } \
-         } while (0)
+#define arch_cpu_ctxt_set_reg(frm, type, reg, val) \
+do {                                               \
+    if ((type & EXC_RETURN_USE_FPU_BM) == 0)       \
+         frm->callControlFpu.reg = val;            \
+    else                                           \
+         frm->callControl.reg = val;               \
+} while (0)
             
-#define vm_ctxt_get_reg(frm, type, reg, var) \
-        do { \
-            if (frm != NULL) { \
-                if ((type & EXC_RETURN_USE_FPU_BM) == 0) \
-                        var = frm->callControlFpu.reg; \
-                    else \
-                        var = frm->callControl.reg; \
-            } else var = 0; \
-        } while (0)
+#define arch_cpu_ctxt_get_reg(frm, type, reg, var) \
+do {                                         \
+    if ((type & EXC_RETURN_USE_FPU_BM) == 0) \
+        var = frm->callControlFpu.reg;       \
+    else                                     \
+        var = frm->callControl.reg;          \
+} while (0)
 
 #define THREAD_SET_REG(t, reg, val) \
-    vm_ctxt_set_reg(t->CPU_FRAME, t->USE_FPU, reg, val)
+    arch_cpu_ctxt_set_reg(t->CPU_FRAME, t->USE_FPU, reg, val)
                                 
 #define THREAD_GET_REG(t, reg, var) \
-    vm_ctxt_get_reg(t->CPU_FRAME, t->USE_FPU, reg, var)
+    arch_cpu_ctxt_get_reg(t->CPU_FRAME, t->USE_FPU, reg, var)
 
-        
 typedef struct {
     arch_word_t ACTLR;   /*Auxiliary Control Register                            */
     arch_word_t CPUID;   /*CPUID Base Register                                   */
@@ -239,51 +222,53 @@ typedef struct {
     arch_word_t MMAR;    /*MemManage Fault Address Register                      */
     arch_word_t BFAR;    /*BusFault Address Register                             */
     arch_word_t AFSR;    /*Auxiliary Fault Status Register                       */
-} SCB_M4_TypeDef;   /*system control block for cortex m4 core               */
+} SCB_M7_TypeDef;   /*system control block for cortex m4 core               */
 
+#define arch_get_stack __arch_get_stack
+#define arch_get_heap __arch_get_heap
+#define arch_asmgoto __arch_asmgoto
+#define arch_get_shared __arch_get_shared
 
-void mach_m4_init_core_callback (void);
-
-typedef void (*cpu_exc_handler_t) (void);
-
-#pragma import import_mach_m4_systick_handler
-#pragma import import_mach_m4_psv_handler
-#pragma import import_mach_m4_svc_handler
-#pragma import import_mach_m4_start_handler
-#pragma import import_mach_m4_run_handler
-
-_EXTERN void export_mach_m4_swrst (void);
-_EXTERN _VALUES_IN_REGS ARG_STRUCT_T vm_init (void); /*from vm.cpp*/
-_EXTERN _VALUES_IN_REGS ARG_STRUCT_T export_mach_m4_boot (void);
-_EXTERN _VALUES_IN_REGS ARG_STRUCT_T export_mach_m4_svc (ARG_STRUCT_T);
-
-#define arch_tick_alias                 export_mach_m4_sys_tick
-#define arch_pend_alias                 export_mach_m4_psv
-#define arch_hard_fault_alias           export_mach_m4_hard
-#define arch_fpu_en_alias               export_mach_m4_fpu_en
-#define arch_swrst_alias                export_mach_m4_swrst
-#define arch_upcall_alias               export_mach_m4_svc
-#define arch_boot_alias                 export_mach_m4_boot
+extern void __arch_get_stack (void *sp, void *size);
+extern void __arch_get_heap (void *sp, void *size);
+extern void __arch_get_shared (void *sp, void *size);
+extern void __arch_asmgoto (arch_word_t addr) __attribute__((noreturn));
 
 static inline arch_word_t __msp (void)
 {
     arch_word_t sp;
     __asm
     {
-        mov sp, msp
+        MRS     sp, MSP
     }
     return sp;
+}
+
+static inline void __msp_set (arch_word_t sp)
+{
+    __asm
+    {
+        MSR     MSP, sp
+    }
+}
+
+static inline arch_word_t __psp (void)
+{
+    return __current_sp();
+}
+
+static inline arch_word_t __pc (void)
+{
+    return __current_pc();
+}
+
+static inline arch_word_t __lr (void)
+{
+    return __return_address();
 }
 
 #ifdef __cplusplus
     }
 #endif
 
-
-
-    
-#endif /*__MACH_M4_H__*/
-
-
-/*End of file*/
-
+#endif /*__MACH_M7_H__*/

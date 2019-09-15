@@ -112,7 +112,7 @@ typedef _PACKED struct {
 
 
 
-_VALUES_IN_REGS ARG_STRUCT_T VMBREAK (UINT_T ret);
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t VMBREAK (UINT_T ret);
 
 void t_init_core (void);
 void t_destroy (THREAD *t);

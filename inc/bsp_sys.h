@@ -85,7 +85,7 @@ typedef enum {
     EXEC_INVAL,
 } exec_mem_type_t;
 
-exec_mem_type_t __bhal_get_memory_type (arch_word_t addr);
+exec_mem_type_t bsp_which_memory (arch_word_t addr);
 
 #if defined(BOOT)
 extern exec_region_t g_exec_region;
@@ -104,5 +104,6 @@ const char *bsp_argv_get (int num);
 
 void bsp_argc_argv_set (const char *arg);
 int bsp_argc_argv_check (const char *arg);
+char *bsp_sys_cmd_get (char *buf, int len);
 
 #endif /*__BSP_SYS_H__*/

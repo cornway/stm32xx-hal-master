@@ -8,43 +8,43 @@
 #include "vmapi_call.h"
 
 
-_EXTERN "C" _VALUES_IN_REGS ARG_STRUCT_T upcall (ARG_STRUCT_T a);
-_EXTERN "C" _VALUES_IN_REGS ARG_STRUCT_T VMBOOT();
-_EXTERN _VALUES_IN_REGS ARG_STRUCT_T VMINIT();
+_EXTERN "C" ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t upcall (arch_sysio_arg_t a);
+_EXTERN "C" ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t VMBOOT();
+_EXTERN ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t VMINIT();
 
-_WEAK INT_T VMAPI_ErrorHandler (WORD_T from, _VALUES_IN_REGS ARG_STRUCT_T arg);
+_WEAK INT_T VMAPI_ErrorHandler (WORD_T from, ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t arg);
 
 
 namespace vm {
 
-_VALUES_IN_REGS ARG_STRUCT_T init ();
-_VALUES_IN_REGS ARG_STRUCT_T start (); 
-_VALUES_IN_REGS ARG_STRUCT_T restart (); 
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t init ();
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t start (); 
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t restart (); 
     
-_VALUES_IN_REGS ARG_STRUCT_T sleep (UINT_T delay);
-_VALUES_IN_REGS ARG_STRUCT_T yield (void);
-_VALUES_IN_REGS ARG_STRUCT_T create (THREAD_HANDLE *th);
-_VALUES_IN_REGS ARG_STRUCT_T create (_CALLBACK callback, const char *name, WORD_T stack, WORD_T prio, WORD_T size, void *arg);
-_VALUES_IN_REGS ARG_STRUCT_T call (_CALLBACK callback, const char *name, WORD_T stack, WORD_T prio, WORD_T size, void *arg);
-_VALUES_IN_REGS ARG_STRUCT_T create_drv (DRIVER_HANDLER *dh);
-_VALUES_IN_REGS ARG_STRUCT_T lock (UINT_T id);   
-_VALUES_IN_REGS ARG_STRUCT_T unlock (UINT_T id);      
-_VALUES_IN_REGS ARG_STRUCT_T notify (const char *name);   
-_VALUES_IN_REGS ARG_STRUCT_T wait_notify ();  
-_VALUES_IN_REGS ARG_STRUCT_T notify_wait (const char *name);   
-_VALUES_IN_REGS ARG_STRUCT_T sync (const char *name);       
-_VALUES_IN_REGS ARG_STRUCT_T wait (THREAD_COND_T cond);
-_VALUES_IN_REGS ARG_STRUCT_T wait_event (const char *event_name);
-_VALUES_IN_REGS ARG_STRUCT_T fire_event (const char *event_name);   
-_VALUES_IN_REGS ARG_STRUCT_T mail (char *name, MAIL_HANDLE *mail);
-_VALUES_IN_REGS ARG_STRUCT_T wait_mail ();
-_VALUES_IN_REGS ARG_STRUCT_T timer (WORD_T *dest, WORD_T id);
-_VALUES_IN_REGS ARG_STRUCT_T timer_remove (WORD_T id);
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t sleep (UINT_T delay);
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t yield (void);
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t create (THREAD_HANDLE *th);
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t create (_CALLBACK callback, const char *name, WORD_T stack, WORD_T prio, WORD_T size, void *arg);
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t call (_CALLBACK callback, const char *name, WORD_T stack, WORD_T prio, WORD_T size, void *arg);
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t create_drv (DRIVER_HANDLER *dh);
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t lock (UINT_T id);   
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t unlock (UINT_T id);      
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t notify (const char *name);   
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t wait_notify ();  
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t notify_wait (const char *name);   
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t sync (const char *name);       
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t wait (THREAD_COND_T cond);
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t wait_event (const char *event_name);
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t fire_event (const char *event_name);   
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t mail (char *name, MAIL_HANDLE *mail);
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t wait_mail ();
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t timer (WORD_T *dest, WORD_T id);
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t timer_remove (WORD_T id);
 
-_VALUES_IN_REGS ARG_STRUCT_T critical ();
-_VALUES_IN_REGS ARG_STRUCT_T end_critical ();
-_VALUES_IN_REGS ARG_STRUCT_T exit (UINT_T ret);   
-_VALUES_IN_REGS ARG_STRUCT_T fault (const char *cause); 
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t critical ();
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t end_critical ();
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t exit (UINT_T ret);   
+ARCH_VAL_IN_REGS_ATTR arch_sysio_arg_t fault (const char *cause); 
 void reset (); 
   
 };
@@ -53,7 +53,7 @@ void reset ();
 #define _XCALL(ret, callback, size, arg) \
 WORD_T ret; \
 do { \
-    ARG_STRUCT_T callback##_ret = vm::call(callback, #callback, VM_DEF_THREAD_HEAP_SIZE, VM_THREAD_DEF_PRIORITY, size, arg); \
+    arch_sysio_arg_t callback##_ret = vm::call(callback, #callback, VM_DEF_THREAD_HEAP_SIZE, VM_THREAD_DEF_PRIORITY, size, arg); \
     if (callback##_ret.ERROR != VM_OK) { \
         VMAPI_ErrorHandler(VMAPI_CALL, callback##_ret); \
     } else { \
@@ -66,7 +66,7 @@ do { \
 #define __XCALL(ret, stack, callback, size, arg) \
 WORD_T ret; \
 do { \
-    ARG_STRUCT_T callback##_ret = vm::call(callback, #callback, stack, VM_THREAD_DEF_PRIORITY, size, arg); \
+    arch_sysio_arg_t callback##_ret = vm::call(callback, #callback, stack, VM_THREAD_DEF_PRIORITY, size, arg); \
     if (callback##_ret.ERROR != VM_OK) { \
         VMAPI_ErrorHandler(VMAPI_CALL, callback##_ret); \
     } else { \

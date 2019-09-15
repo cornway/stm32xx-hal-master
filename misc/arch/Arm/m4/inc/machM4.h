@@ -1,50 +1,51 @@
-#ifndef CONTEXT_SWITCHING
-#define CONTEXT_SWITCHING
+#ifndef __MACH_M4_H__
+#define __MACH_M4_H__
 
 #include <stdint.h>
+#include "main.h"
 
 #ifdef __cplusplus
     extern "C" {
 #endif
 
-#define WORD_T      uint32_t
-#define HWORD_T     uint16_t
-#define BYTE_T      uint8_t
+#ifdef __ARMCC_VERSION
 
-#define UINT_T      uint32_t
-#define INT_T       int32_t
-        
-#ifndef _PACKED
-#define _PACKED  __packed
-#endif   
-
-#ifndef _VALUES_IN_REGS       
-#define _VALUES_IN_REGS     __value_in_regs
-#endif  
-
-#ifndef _WEAK
-#define _WEAK __weak
+#else
+#error "UNKNOWN COMPILER!"
 #endif        
         
-#ifndef _STATIC
+typedef uint64_t      arch_dword_t;
+typedef uint32_t      arch_word_t;
+typedef uint16_t      arch_hword_t;
+typedef uint8_t       arch_byte_t; 
+
+#define UINT32_T      uint32_t
+#define INT32_T       int32_t
+#define INT64_T       int64_t
+#define UINT64_T      uint64_t
+
+#define CPU_CHACHELINE (32)
+
+#define V_PREPACK
+#define V_POSTPACK __attribute__((packed))
+#define PACKED __packed
+
+#define ARCH_VAL_IN_REGS_ATTR     __value_in_regs
+
+#define _WEAK __weak
+        
 #define _STATIC static
-#endif
 
-#ifndef _EXTERN
 #define _EXTERN extern
-#endif
 
+#define _UNUSED(a) a __attribute__((unused))
 
-#ifndef _UNUSED
-#define _UNUSED(a)
-#endif
+#define VOID
 
+#define VM_FORCE_UPDATE 1
 
-#pragma import VMTick   
-#pragma import StackSwitchPSV   
-#pragma import VMSvc
-#pragma import VMInit
-#pragma import VMStart
+#define VM_CALL_FROM_USER   0
+#define VM_CALL_FROM_IRQ    1
 
 #define CPU_PRIV_ACCESS 0
 #define CPU_UNPRIV_ACCESS 1
@@ -65,8 +66,8 @@
 #define EXC_RETURN_HANDLER_GM   (0xfU)
 #define EXC_RETURN_HANDLER_VAL  (0x1)
 
-#define FPU_STACK_SIZE      (33 * sizeof(WORD_T))
-#define CPU_STACK_SIZE      (17 * sizeof(WORD_T))
+#define FPU_STACK_SIZE      (33 * sizeof(arch_word_t))
+#define CPU_STACK_SIZE      (17 * sizeof(arch_word_t))
     
 #define STACK_ALLIGN        (8U)
     
@@ -78,85 +79,85 @@
 #define CPU_ACCESS_LEVEL_3 (CPU_USE_MSP | CPU_PRIV_ACCESS)
 
 
-typedef INT_T (*_CALLBACK) (WORD_T, void *);
+typedef INT32_T (*v_callback_t) (arch_word_t, void *);
 
-typedef _PACKED struct {
-    WORD_T EXC_RET;
-    WORD_T R11; /*user top*/
-    WORD_T R10;
-    WORD_T R9;
-    WORD_T R8;
-    WORD_T R7;
-    WORD_T R6;
-    WORD_T R5;
-    WORD_T R4; /*irq top*/
-    WORD_T R0; 
-    WORD_T R1;
-    WORD_T R2;
-    WORD_T R3;
-    WORD_T R12;
-    WORD_T LR;
-    WORD_T PC;
-    WORD_T XPSR; /*pre irq top*/
+typedef struct {
+    arch_word_t EXC_RET;
+    arch_word_t R11; /*user top*/
+    arch_word_t R10;
+    arch_word_t R9;
+    arch_word_t R8;
+    arch_word_t R7;
+    arch_word_t R6;
+    arch_word_t R5;
+    arch_word_t R4; /*irq top*/
+    arch_word_t R0; 
+    arch_word_t R1;
+    arch_word_t R2;
+    arch_word_t R3;
+    arch_word_t R12;
+    arch_word_t LR;
+    arch_word_t PC;
+    arch_word_t XPSR; /*pre irq top*/
     
 } CPU_STACK; /*stack frame implementation for no fpu context store*/
 
-typedef _PACKED struct {
-    WORD_T S16[16];
-    WORD_T EXC_RET;
-    WORD_T R11;
-    WORD_T R10;
-    WORD_T R9;
-    WORD_T R8;
-    WORD_T R7;
-    WORD_T R6;
-    WORD_T R5;
-    WORD_T R4;
-    WORD_T R0;
-    WORD_T R1;
-    WORD_T R2;
-    WORD_T R3;
-    WORD_T R12;
-    WORD_T LR;
-    WORD_T PC;
-    WORD_T XPSR;
-    WORD_T S[16];
-    WORD_T FPSCR;
+typedef struct {
+    arch_word_t S16[16];
+    arch_word_t EXC_RET;
+    arch_word_t R11;
+    arch_word_t R10;
+    arch_word_t R9;
+    arch_word_t R8;
+    arch_word_t R7;
+    arch_word_t R6;
+    arch_word_t R5;
+    arch_word_t R4;
+    arch_word_t R0;
+    arch_word_t R1;
+    arch_word_t R2;
+    arch_word_t R3;
+    arch_word_t R12;
+    arch_word_t LR;
+    arch_word_t PC;
+    arch_word_t XPSR;
+    arch_word_t S[16];
+    arch_word_t FPSCR;
 } CPU_STACK_FPU; /*stack frame implementation for lazy fpu context store*/
 
 
-typedef _PACKED struct {
-    WORD_T EXC_RET;
-    WORD_T RESERVED[8]; /*R10 - R4*/
-    WORD_T POINTER;     /*R0*/
-    WORD_T OPTION_A;    /*R1*/
-    WORD_T OPTION_B;    /*R2*/
-    WORD_T ERROR;       /*R3*/ 
-    WORD_T PAD;         /* */
-    WORD_T LINK;        /*Lr*/
-    WORD_T PC;          /*PC*/
-    WORD_T PSR;         /*XPSR*/
+typedef V_PREPACK struct {
+    arch_word_t EXC_RET;
+    arch_word_t RESERVED[8]; /*R10 - R4*/
+    arch_word_t POINTER;     /*R0*/
+    arch_word_t OPTION_A;    /*R1*/
+    arch_word_t OPTION_B;    /*R2*/
+    arch_word_t ERROR;       /*R3*/ 
+    arch_word_t PAD;         /* */
+    arch_word_t LINK;        /*Lr*/
+    arch_word_t PC;          /*PC*/
+    arch_word_t PSR;         /*XPSR*/
 } CALL_CONTROL_CPU_STACK;
 
-typedef _PACKED struct {
-    WORD_T RESERVED0[16];       /*S16 - S31*/
-    WORD_T EXC_RET;
-    WORD_T RESERVED[8];         /*R10 - R4*/
-    WORD_T POINTER;             /*R0*/
-    WORD_T OPTION_A;            /*R1*/
-    WORD_T OPTION_B;            /*R2*/
-    WORD_T ERROR;               /*R3*/ 
-    WORD_T PAD;                 /* */
-    WORD_T LINK;                /*Lr*/
-    WORD_T PC;                  /*PC*/
-    WORD_T PSR;                 /*XPSR*/
+typedef struct {
+    arch_word_t RESERVED0[16];       /*S16 - S31*/
+    arch_word_t EXC_RET;
+    arch_word_t RESERVED[8];         /*R10 - R4*/
+    arch_word_t POINTER;             /*R0*/
+    arch_word_t OPTION_A;            /*R1*/
+    arch_word_t OPTION_B;            /*R2*/
+    arch_word_t ERROR;               /*R3*/ 
+    arch_word_t PAD;                 /* */
+    arch_word_t LINK;                /*Lr*/
+    arch_word_t PC;                  /*PC*/
+    arch_word_t PSR;                 /*XPSR*/
 } CALL_CONTROL_CPU_FPU_STACK;
 
 
 #pragma anon_unions
 
-typedef _PACKED struct {
-  _PACKED union {
+typedef struct {
+    union {
         CPU_STACK      cpuStack;
         CPU_STACK_FPU  cpuStackFpu;
       
@@ -165,95 +166,121 @@ typedef _PACKED struct {
     };
 } CPU_STACK_FRAME;
 
-typedef _PACKED struct {
-   _PACKED union {
-        _PACKED struct {
-           WORD_T R0;
-           WORD_T R1;
-           WORD_T R2;
-           WORD_T R3; /*!*/
+typedef struct {
+    union {
+        struct {
+           arch_word_t R0;
+           arch_word_t R1;
+           arch_word_t R2;
+           arch_word_t R3;
         };
-        _PACKED struct {
-           WORD_T POINTER;
-           WORD_T CONTROL;
-           WORD_T LINK;
-           WORD_T ERROR; /*!*/
+        struct {
+           arch_word_t POINTER;
+           arch_word_t CONTROL;
+           arch_word_t LINK;
+           arch_word_t ERROR;
         };
-        _PACKED struct {
+        struct {
+           arch_word_t PAD[3];
+           arch_hword_t CTL;
+           arch_hword_t IRQ;
+        };
+        struct {
            CPU_STACK_FRAME *FRAME;
         };
     };
-} ARG_STRUCT_T;
+} arch_sysio_arg_t;
 
-#define THREAD_SET_REG(THREAD, REG, VAL) \
-        do { \
-            if (THREAD->USE_FPU == 0) { \
-                THREAD->CPU_FRAME->callControl.REG = VAL; \
-            } else { \
-                THREAD->CPU_FRAME->callControlFpu.REG = VAL; \
-            } \
-        } while (0)
+
+#define arch_cpu_ctxt_set_reg(frm, type, reg, val) \
+do {                                               \
+    if ((type & EXC_RETURN_USE_FPU_BM) == 0)       \
+         frm->callControlFpu.reg = val;            \
+    else                                           \
+         frm->callControl.reg = val;               \
+} while (0)
             
-#define THREAD_GET_REG(THREAD, REG, VAR) \
-        do { \
-            if (THREAD->USE_FPU == 0) { \
-                VAR = THREAD->CPU_FRAME->callControl.REG; \
-            } else { \
-                VAR = THREAD->CPU_FRAME->callControlFpu.REG; \
-            } \
-        while (0)
+#define arch_cpu_ctxt_get_reg(frm, type, reg, var) \
+do {                                         \
+    if ((type & EXC_RETURN_USE_FPU_BM) == 0) \
+        var = frm->callControlFpu.reg;       \
+    else                                     \
+        var = frm->callControl.reg;          \
+} while (0)
 
+#define THREAD_SET_REG(t, reg, val) \
+    arch_cpu_ctxt_set_reg(t->CPU_FRAME, t->USE_FPU, reg, val)
+                                
+#define THREAD_GET_REG(t, reg, var) \
+    arch_cpu_ctxt_get_reg(t->CPU_FRAME, t->USE_FPU, reg, var)
 
-#define CPU_SET_REG(FRAME, TYPE, REG, VAL) \
-        do { \
-                        if ((TYPE & EXC_RETURN_USE_FPU_BM) == 0) \
-                             FRAME->callControlFpu.REG = VAL; \
-                        else \
-                             FRAME->callControl.REG = VAL; \
-                    } while (0)
-            
-#define CPU_GET_REG(FRAME, TYPE, REG, VAL) \
-        do { \
-                if ((TYPE & EXC_RETURN_USE_FPU_BM) == 0) \
-                            VAL = FRAME->callControlFpu.REG; \
-                        else \
-                             VAL = FRAME->callControl.REG; \
-                    } while (0); \
-        
 typedef struct {
-    WORD_T ACTLR;   /*Auxiliary Control Register                            */
-    WORD_T CPUID;   /*CPUID Base Register                                   */
-    WORD_T ICSR;    /*Interrupt Control and State Register                  */
-    WORD_T VTOR;    /*Vector Table Offset Register                          */
-    WORD_T AIRCR;   /*Application Interrupt and Reset Control Register      */
-    WORD_T SCR;     /*System Control Register                               */
-    WORD_T CCR;     /*Configuration and Control Register                    */
-    WORD_T SHPR1;   /*System Handler Priority Register 1                    */
-    WORD_T SHPR2;   /*System Handler Priority Register 2                    */
-    WORD_T SHPR3;   /*System Handler Priority Register 3                    */
-    WORD_T SHCRS;   /*System Handler Control and State Register             */
-    WORD_T CFSR;    /*Configurable Fault Status Register                    */
-    WORD_T MMSRb;   /*MemManage Fault Status Register                       */
-    WORD_T BFSRb;   /*BusFault Status Register                              */
-    WORD_T UFSRb;   /*UsageFault Status Register                            */
-    WORD_T HFSR;    /*HardFault Status Register                             */
-    WORD_T MMAR;    /*MemManage Fault Address Register                      */
-    WORD_T BFAR;    /*BusFault Address Register                             */
-    WORD_T AFSR;    /*Auxiliary Fault Status Register                       */
+    arch_word_t ACTLR;   /*Auxiliary Control Register                            */
+    arch_word_t CPUID;   /*CPUID Base Register                                   */
+    arch_word_t ICSR;    /*Interrupt Control and State Register                  */
+    arch_word_t VTOR;    /*Vector Table Offset Register                          */
+    arch_word_t AIRCR;   /*Application Interrupt and Reset Control Register      */
+    arch_word_t SCR;     /*System Control Register                               */
+    arch_word_t CCR;     /*Configuration and Control Register                    */
+    arch_word_t SHPR1;   /*System Handler Priority Register 1                    */
+    arch_word_t SHPR2;   /*System Handler Priority Register 2                    */
+    arch_word_t SHPR3;   /*System Handler Priority Register 3                    */
+    arch_word_t SHCRS;   /*System Handler Control and State Register             */
+    arch_word_t CFSR;    /*Configurable Fault Status Register                    */
+    arch_word_t MMSRb;   /*MemManage Fault Status Register                       */
+    arch_word_t BFSRb;   /*BusFault Status Register                              */
+    arch_word_t UFSRb;   /*UsageFault Status Register                            */
+    arch_word_t HFSR;    /*HardFault Status Register                             */
+    arch_word_t MMAR;    /*MemManage Fault Address Register                      */
+    arch_word_t BFAR;    /*BusFault Address Register                             */
+    arch_word_t AFSR;    /*Auxiliary Fault Status Register                       */
 } SCB_M4_TypeDef;   /*system control block for cortex m4 core               */
 
+#define arch_get_stack __arch_get_stack
+#define arch_get_heap __arch_get_heap
+#define arch_asmgoto __arch_asmgoto
+#define arch_get_shared __arch_get_shared
 
-void machInitCore ();
+extern void __arch_get_stack (void *sp, void *size);
+extern void __arch_get_heap (void *sp, void *size);
+extern void __arch_get_shared (void *sp, void *size);
+extern void __arch_asmgoto (arch_word_t addr) __attribute__((noreturn));
+
+static inline arch_word_t __msp (void)
+{
+    arch_word_t sp;
+    __asm
+    {
+        MRS     sp, MSP
+    }
+    return sp;
+}
+
+static inline void __msp_set (arch_word_t sp)
+{
+    __asm
+    {
+        MSR     MSP, sp
+    }
+}
+
+static inline arch_word_t __psp (void)
+{
+    return __current_sp();
+}
+
+static inline arch_word_t __pc (void)
+{
+    return __current_pc();
+}
+
+static inline arch_word_t __lr (void)
+{
+    return __return_address();
+}
 
 #ifdef __cplusplus
     }
 #endif
 
-   
-    
-    
-#endif /*CONTEXT_SWITCHING*/
-
-
-/*End of file*/
-
+#endif /*__MACH_M4_H__*/

@@ -15,34 +15,28 @@ static void bres_exec_list_link (exec_desc_t *bin);
 static void bres_exec_pack_list (void);
 
 void *
-bres_cache_file_2_mem (const bsp_heap_api_t *heapapi, const char *path, int *binsize)
+bres_cache_file_2_mem (void *(*alloc)(size_t), const char *path, int *binsize)
 {
-    int f;
-    int fsize, size;
+    int f, fsize, size;
     void *cache;
 
+    *binsize = 0;
     fsize = d_open(path, &f, "r");
     if (f < 0) {
         dprintf("%s() : failed to open : \'%s\'\n", __func__, path);
         return NULL;
     }
     size = ROUND_UP(fsize, 32);
-    cache = heapapi->malloc(size);
-    assert(cache);
+    cache = alloc(size);
 
-    dprintf("caching bin : dest <0x%p> size [0x%08x]\n", cache, fsize);
-
-    if (d_read(f, cache, fsize) < fsize) {
-        dprintf("%s() : missing part\n", __func__);
-        heapapi->free(cache);
-        cache = NULL;
+    if (!cache || d_read(f, cache, fsize) < fsize) {
+        dprintf("%s() : Failed to alloc/read\n", __func__);
     } else {
         *binsize = fsize;
     }
     d_close(f);
 
-    if (cache)
-        dprintf("Cache done : <0x%p> : 0x%08x bytes\n", cache, fsize);
+    dprintf("%s() : Done : <0x%p> : 0x%08x bytes\n", __func__, cache, *binsize);
 
     return cache;
 }

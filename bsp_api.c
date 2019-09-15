@@ -242,8 +242,8 @@ bspapi_t *bsp_api_attach (void)
     BSP_MOD_API(insert)    =  bspmod_insert;
     BSP_MOD_API(remove)     = bspmod_remove;
     BSP_MOD_API(probe)      = bspmod_probe;
-    BSP_MOD_API(register_api) = bspmod_register_api;
-    BSP_MOD_API(get_api)    = bspmod_get_api;
+    BSP_MOD_API(register_api) = NULL;
+    BSP_MOD_API(get_api)    = NULL;
 
     return &api->api;
 #else
@@ -318,6 +318,20 @@ const char **bsp_argc_argv_get (int *argc)
     __argv = (const char **)&tlv->data[1];
     __argc = *argc;
     return __argv;
+}
+
+char *bsp_sys_cmd_get (char *buf, int len)
+{
+    int argc, i = 0;
+    const char **argv;
+
+    argv = bsp_argc_argv_get(&argc);
+
+    while (argc--) {
+        i += snprintf(buf + i, len - i, "%s ", argv[0]);
+        argv++;
+    }
+    return (i == 0) ? NULL : buf;
 }
 
 int bsp_argv_check (const char *name)

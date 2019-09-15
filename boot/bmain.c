@@ -268,6 +268,7 @@ static int gui_stdout_hook (int argc, const char **argv)
 {
     assert(argc > 0);
     win_con_append(pane_console, argv[0], COLOR_WHITE);
+    gui_pane_set_dirty(&gui, pane_console); 
     return 0;
 }
 

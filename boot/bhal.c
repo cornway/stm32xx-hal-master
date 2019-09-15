@@ -15,11 +15,8 @@
 
 exec_region_t g_exec_region = EXEC_DRIVER;
 
-static uint32_t
-__bhal_FLASH_get_sect_num(uint32_t Address);
-
-static exec_mem_type_t
-__bhal_get_memory_type (arch_word_t addr)
+exec_mem_type_t
+bsp_which_memory (arch_word_t addr)
 {
     if ((addr >= FLASH_BASE) && (addr <= FLASH_END)) {
         return EXEC_ROM;
@@ -27,11 +24,19 @@ __bhal_get_memory_type (arch_word_t addr)
     if ((addr >= SDRAM_DEVICE_ADDR) && (addr <= (SDRAM_DEVICE_ADDR + SDRAM_DEVICE_SIZE))) {
         return EXEC_SDRAM;
     }
-    if ((addr >= SRAM1_BASE) && (addr <= SRAM2_BASE)) {
+    if ((addr >= SRAM1_BASE) && (addr <= SRAM2_BASE + 0x4000)) {
         return EXEC_SRAM;
     }
+#if __DTCM_PRESENT
+    if ((addr >= 0x20000000) && (addr <= 0x20017000) {
+        return EXEC_SRAM;
+    }
+#endif
     return EXEC_INVAL;
 }
+
+static uint32_t
+__bhal_FLASH_get_sect_num(uint32_t Address);
 
 static inline void
 __bhal_progmode_leave (void)
@@ -324,26 +329,22 @@ void bhal_execute_application (void *addr)
     g_exec_region = exec_prev;
 }
 
-int bhal_execute_module (arch_word_t addr)
+int bhal_execute_module (void *entry)
 {
-typedef int (*exec_t) (void);
+extern int sys_mod_insert (void *entry);
+
+    arch_sysio_arg_t args;
     exec_region_t exec_prev = g_exec_region;
-    register volatile arch_word_t *entryptr;
-    exec_t exec;
-    int ret = 0;
+    register int ret = 0;
 
-    assert(g_exec_region != EXEC_DRIVER);
-    g_exec_region = EXEC_APPLICATION;
+    g_exec_region = EXEC_MODULE;
 
-    entryptr = (arch_word_t *)(addr + sizeof(arch_word_t));
-    exec = (exec_t)entryptr;
+    CPU_CACHE_Reset();
 
-    __DSB();
-    ret = exec();
+    sys_mod_insert(entry);
     g_exec_region = exec_prev;
     return ret;
 }
-
 
 d_bool bhal_bin_check_in_mem (complete_ind_t cplth, arch_word_t *progaddr, void *progdata, size_t progsize)
 {
@@ -387,12 +388,11 @@ int __bhal_clear_RAM (complete_ind_t cplth, arch_word_t *progaddr, void *val, si
     return bhal_bin_memory_op_wrapper(cplth, &func_clear, progaddr, val, progsize);
 }
 
-
-int bhal_bin_2_mem_load (complete_ind_t cplth, arch_word_t *progaddr,
+int bhal_bin_2_mem_load (complete_ind_t cplth, void *progaddr,
                             void *progdata, size_t progsize)
 {
     int (*bhal_op) (complete_ind_t, arch_word_t *, void *, size_t) = NULL;
-    exec_mem_type_t exec_mem_type = __bhal_get_memory_type((arch_word_t)progaddr);
+    exec_mem_type_t exec_mem_type = bsp_which_memory((arch_word_t)progaddr);
 
     switch (exec_mem_type) {
         case EXEC_ROM :
@@ -416,7 +416,7 @@ int bhal_set_mem_with_value (complete_ind_t cplth, arch_word_t *progaddr,
                         size_t progsize, arch_word_t value)
 {
     int (*bhal_op) (complete_ind_t, arch_word_t *, void *, size_t) = NULL;
-    exec_mem_type_t exec_mem_type = __bhal_get_memory_type((arch_word_t)progaddr);
+    exec_mem_type_t exec_mem_type = bsp_which_memory((arch_word_t)progaddr);
 
     switch (exec_mem_type) {
         case EXEC_ROM :
@@ -452,15 +452,13 @@ arch_word_t *
 bhal_install_executable (complete_ind_t clbk, arch_word_t *progptr,
                                  arch_word_t *progsize, const char *path)
 {
-
     void *bindata;
     int binsize = 0, err = 0;
-    bsp_heap_api_t heap = {.malloc = heap_alloc_shared, .free = heap_free};
     boot_bin_parm_t parm;
 
     dprintf("Installing : \'%s\'\n", path);
 
-    bindata = bres_cache_file_2_mem(&heap, path, &binsize);
+    bindata = bres_cache_file_2_mem(heap_alloc_shared, path, &binsize);
     if (!bindata) {
         return NULL;
     }
