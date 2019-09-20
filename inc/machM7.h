@@ -246,12 +246,6 @@ void mach_m4_init_core_callback (void);
 
 typedef void (*cpu_exc_handler_t) (void);
 
-#pragma import import_mach_m4_systick_handler
-#pragma import import_mach_m4_psv_handler
-#pragma import import_mach_m4_svc_handler
-#pragma import import_mach_m4_start_handler
-#pragma import import_mach_m4_run_handler
-
 _EXTERN void export_mach_m4_swrst (void);
 _EXTERN _VALUES_IN_REGS ARG_STRUCT_T vm_init (void); /*from vm.cpp*/
 _EXTERN _VALUES_IN_REGS ARG_STRUCT_T export_mach_m4_boot (void);

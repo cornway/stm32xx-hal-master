@@ -11,7 +11,7 @@
 typedef struct {
     snd_sample_t *buf;
     int samples;
-    d_bool durty;
+    d_bool dirty;
 } a_master_t;
 
 static snd_sample_t master_buf_raw[2][AUDIO_OUT_BUFFER_SIZE] ALIGN(8);
@@ -97,11 +97,11 @@ a_mem_init (void)
 {
     master_track[0].buf = master_buf_raw[0];
     master_track[0].samples = AUDIO_OUT_BUFFER_SIZE;
-    master_track[0].durty = d_false;
+    master_track[0].dirty = d_false;
 
     master_track[1].buf = master_buf_raw[1];
     master_track[1].samples = AUDIO_OUT_BUFFER_SIZE;
-    master_track[1].durty = d_false;
+    master_track[1].dirty = d_false;
 
     master_base_raw = master_buf_raw[0];
     master_base_samples = AUDIO_OUT_BUFFER_SIZE * 2;
@@ -119,19 +119,19 @@ a_get_master4idx (a_buf_t *master, int idx)
 {
     master->buf = master_track[idx].buf;
     master->samples = master_track[idx].samples;
-    master->durty = &master_track[idx].durty;
+    master->dirty = &master_track[idx].dirty;
 }
 
 void a_clear_abuf (a_buf_t *abuf)
 {
     uint64_t *p_buf = (uint64_t *)abuf->buf;
-    if (*abuf->durty == d_false)
+    if (*abuf->dirty == d_false)
         return;
 
     for (int i = 0; i < AUDIO_SAMPLES_2_DWORDS(abuf->samples); i++) {
         p_buf[i] = 0;
     }
-    *abuf->durty = d_false;
+    *abuf->dirty = d_false;
 }
 
 void a_clear_master (void)
@@ -141,8 +141,8 @@ void a_clear_master (void)
     for (int i = 0; i < AUDIO_SAMPLES_2_DWORDS(master_base_samples); i++) {
         p_buf[i] = 0;
     }
-    master_track[0].durty = d_false;
-    master_track[1].durty = d_false;
+    master_track[0].dirty = d_false;
+    master_track[1].dirty = d_false;
 }
 #endif
 

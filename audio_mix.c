@@ -78,7 +78,7 @@ static void a_rev_proc (a_buf_t *abuf)
         a_rev2_push(buf[i]);
     }
     if (durty) {
-        *abuf->durty = true;
+        *abuf->dirty = true;
     }
 }
 #endif /*USE_REVERB*/
@@ -243,12 +243,12 @@ static void a_paint_buf_ex (a_channel_head_t *chanlist, a_buf_t *abuf, int compr
 {
     a_channel_t *cur, *next;
     mixdata_t mixdata;
-    int durty = 0;
+    int dirty = 0;
     int cnt = 0;
 
     a_chan_foreach_safe(chanlist, cur, next) {
         if (a_chn_cplt(cur) && a_chn_cplt(cur)((uint8_t *)a_chunk_data(cur), a_chunk_len(cur) * sizeof(snd_sample_t), A_HALF)) {
-            durty++;
+            dirty++;
             cnt++;
             continue;
         }
@@ -257,15 +257,15 @@ static void a_paint_buf_ex (a_channel_head_t *chanlist, a_buf_t *abuf, int compr
 
         if (mixdata.size) {
             a_mix_single_to_master(abuf->buf, &mixdata, compratio);
-            durty++;
+            dirty++;
         }
         cnt++;
     }
 #if (USE_REVERB)
     a_rev_proc(abuf);
 #endif
-    if (durty) {
-        *abuf->durty = d_true;
+    if (dirty) {
+        *abuf->dirty = d_true;
     }
 }
 

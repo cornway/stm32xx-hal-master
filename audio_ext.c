@@ -57,6 +57,7 @@ __link_desc (sfx_cache_t *sfx)
     assert(slot);
     *slot = sfx;
     sfx->slotnum = num;
+    wave_cache_slots_used++;
 }
 
 static void
@@ -97,12 +98,10 @@ __new_cache_desc (const char *path)
         dprintf("%s() : fail\n", __func__);
         return NULL;
     }
-    wave_cache_slots_used++;
     memset(sfx, 0, memsize);
     d_memcpy(sfx->path, path, pathlen);
 
     __link_desc(sfx);
-    wave_cache_slots_used++;
 
     return sfx;
 }

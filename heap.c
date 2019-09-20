@@ -65,10 +65,16 @@ __heap_malloc (size_t      size, int freeable)
 static inline void
 __heap_free (void *_p)
 {
+extern void m_free (void *);
+extern void *m_exist (void *);
     mchunk_t *p = (mchunk_t *)_p;
-    if (!_p) {
+    assert(_p);
+#if defined(BOOT)
+    if (m_exist(p)) {
+        m_free(p);
         return;
     }
+#endif
     p = p - 1;
     if (p->magic != MALLOC_MAGIC) {
         fatal_error("__heap_free : magic fail, expected= 0x%08x, token= 0x%08x\n",
@@ -131,10 +137,12 @@ void heap_init (void)
     dprintf("heap : <0x%p> + %u bytes\n", (void *)heap_mem, heap_size);
     heap_size_total = heap_size - MPU_CACHELINE * 2;
 #ifdef BOOT
-    extern void __arch_user_heap (void *mem, void *size);
+extern void m_init (void *pool, uint32_t size);
+extern void __arch_user_heap (void *mem, void *size);
 
     __arch_user_heap(&heap_user_mem_ptr, &heap_user_size);
     dprintf("user heap : <0x%p> + %u bytes\n", (void *)heap_user_mem_ptr, heap_user_size);
+    m_init(heap_user_mem_ptr, heap_user_size);
 #endif /*BOOT*/
 }
 
@@ -145,24 +153,10 @@ void heap_deinit (void)
 
 #ifdef BOOT
 
-void *heap_alloc_shared (size_t _size)
+void *heap_alloc_shared (size_t size)
 {
-    mchunk_t *p = NULL;
-    int size = _size + sizeof(mchunk_t);
-
-    size = ROUND_UP(size, sizeof(arch_word_t));
-    if (heap_user_size < size) {
-        return NULL;
-    }
-    p = (mchunk_t *)heap_user_mem_ptr;
-    assert(__heap_aligned(p));
-
-    heap_user_mem_ptr += size;
-    heap_user_size -= size;
-    p->freeable = 0;
-    p->magic = MALLOC_MAGIC;
-    p->size = size;
-    return p + 1;
+extern void *m_malloc (uint32_t size);
+    return m_malloc(size);
 }
 
 #else /*BOOT*/

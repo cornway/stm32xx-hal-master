@@ -115,7 +115,7 @@ a_paint_buff_helper (a_buf_t *abuf)
         }
         return;
     }
-    *abuf->durty = mixduty;
+    *abuf->dirty = mixduty;
     a_paint_buffer(&chan_llist_ready, abuf, compratio);
 }
 

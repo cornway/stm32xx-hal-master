@@ -47,7 +47,7 @@ typedef struct mixdata_s {
 typedef struct {
     snd_sample_t *buf;
     int samples;
-    d_bool *durty;
+    d_bool *dirty;
 } a_buf_t;
 
 typedef struct a_channel_head_s a_channel_head_t;
