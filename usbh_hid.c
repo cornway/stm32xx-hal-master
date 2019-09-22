@@ -375,8 +375,9 @@ static USBH_StatusTypeDef USBH_HID_ClassRequest(USBH_HandleTypeDef *phost)
   return status; 
 }
 
-extern usb_data_t gamepad_data;
-extern int8_t gamepad_data_ready;
+extern void *g_usb_data;
+extern uint32_t g_usb_data_size;
+extern int8_t g_usb_data_ready;
 
 /**
   * @brief  USBH_HID_Process 
@@ -429,8 +430,8 @@ static USBH_StatusTypeDef USBH_HID_Process(USBH_HandleTypeDef *phost)
 #if !USB_HID_HACK
     HID_Handle->DataReady = 0;
 #endif
-    memcpy(gamepad_data.data, HID_Handle->pData, sizeof(gamepad_data));
-    gamepad_data_ready++;
+    memcpy(g_usb_data, HID_Handle->pData, g_usb_data_size);
+    g_usb_data_ready++;
     break;
     
   case HID_POLL:
