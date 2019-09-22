@@ -224,6 +224,7 @@ void gui_set_child (pane_t *parent, pane_t *child)
 
 void gui_set_pic (component_t *com, rawpic_t *pic, int top)
 {
+    pic->sprite = 0;
     if (!pic->alpha) {
         pic->alpha = 0xff;
     }
@@ -235,6 +236,7 @@ void gui_set_pic (component_t *com, rawpic_t *pic, int top)
     if (pic->h > com->dim.h) {
         pic->h = com->dim.h;
     }
+    gui_set_dirty(com->parent->parent, &com->dim);
 }
 
 component_t *gui_create_comp (gui_t *gui, const char *name, const char *text)
@@ -299,11 +301,12 @@ gui_com_select_color (component_t *com)
 
 void gui_com_clear (component_t *com)
 {
-    gui_com_fill_HAL(com, com->bcolor);
+    gui_com_fill(com, com->bcolor);
 }
 
 void gui_com_fill (component_t *com, rgba_t color)
 {
+    gui_set_dirty(com->parent->parent, &com->dim);
     gui_com_fill_HAL(com, color);
 }
 

@@ -431,6 +431,8 @@ pane_t *win_new_console (gui_t *gui, prop_t *prop, int x, int y, int w, int h)
     const void *font = prop->fontprop.font;
     component_t *com;
     win_con_t *win;
+    dim_t dim;
+    point_t border = {2, 2};
 
     if (font == NULL) {
         font = gui->font;
@@ -441,13 +443,17 @@ pane_t *win_new_console (gui_t *gui, prop_t *prop, int x, int y, int w, int h)
     win = wcon_alloc(gui, prop->name, font, x, y, w, h);
     wcon_lsetup_lines(win, prop->fcolor);
 
+    win_trunc_frame(&dim, &border, x, y, w, h);
+
     prop->user_draw = 1;
     com = gui_create_comp(gui, "output", "");
     com->draw = win_con_repaint;
     com->act = win_act_handler;
-    gui_set_comp(win->win.pane, com, x, y, w, h);
+    gui_set_comp(win->win.pane, com, dim.x, dim.y, dim.w, dim.h);
     gui_set_prop(com, prop);
     win->com = com;
+
+    win_setup_frame(win->win.pane, &border, &dim);
 
     win->win.pane->onfocus = com;
 
@@ -793,8 +799,7 @@ rawpic_t *win_jpeg_decode (pane_t *pane, const char *path)
 void win_jpeg_set_rawpic (pane_t *pane, void *pic, int top)
 {
     win_jpeg_t *win = WJPEG_HANDLE(pane);
-    win->com->pic = pic;
-    win->com->pictop = top;
+    gui_set_pic(win->com, pic, top);
 }
 
 #endif /*BSP_DRIVER*/

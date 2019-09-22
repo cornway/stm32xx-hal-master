@@ -116,8 +116,7 @@ _joypad_read_gp_50_joypad (int8_t *keypads, void *_data, int8_t *pads, int joypa
 static int
 _joypad_read_gp_50 (int8_t *keypads, void *_data, int8_t *pads)
 {
-    _joypad_read_gp_50_joypad(keypads, _data, pads, 0);
-    return _joypad_read_gp_50_joypad(keypads, _data, pads, 1);
+    return _joypad_read_gp_50_joypad(keypads, _data, pads, 0);
 }
 
 static void

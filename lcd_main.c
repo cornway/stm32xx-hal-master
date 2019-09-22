@@ -379,11 +379,7 @@ vid_copy_HW (screen_t *dest, screen_t *src)
 
 int vid_copy (screen_t *dest, screen_t *src)
 {
-    if (lcd_active_cfg->config.hwaccel) {
-        return vid_copy_HW(dest, src);
-    }
-    vid_copy_SW(dest, src);
-    return 0;
+    vid_copy_HW(dest, src);
 }
 
 int vid_gfx2d_direct (int x, int y, gfx_2d_buf_t *src, int laynum)
