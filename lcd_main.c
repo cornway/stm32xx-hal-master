@@ -58,6 +58,38 @@ static void vid_mpu_release (lcd_wincfg_t *cfg)
     }
 }
 
+static void vid_mpu_create (lcd_wincfg_t *cfg, size_t *fb_size)
+{
+    int i;
+    const char *mpu_conf = NULL;
+
+    switch (cfg->config.cachealgo) {
+        case VID_CACHE_NONE:
+            /*Non-cacheable*/
+            mpu_conf = "-xscb";
+        break;
+        case VID_CACHE_WTWA:
+            /*Write through, no write allocate*/
+            mpu_conf = "-xsb";
+        break;
+        case VID_CACHE_WBNWA:
+            /*Write-back, no write allocate*/
+            mpu_conf = "-xs";
+        break;
+    }
+
+    i = *fb_size;
+    if (mpu_conf && mpu_lock((arch_word_t)cfg->raw_mem, fb_size, mpu_conf) < 0) {
+        dprintf("%s() : MPU region config failed\n", __func__);
+    } else if (i != *fb_size) {
+
+        assert(i < *fb_size);
+        i = *fb_size - i;
+        dprintf("%s() : MPU region requires extra space(padding) +[0x%08x] bytes\n",
+                __func__, i);
+    }
+}
+
 static void vid_release (lcd_wincfg_t *cfg)
 {
     if (NULL == cfg) {
@@ -137,35 +169,7 @@ vid_create_framebuffer (screen_alloc_t *alloc, lcd_wincfg_t *cfg,
         cfg->lay_mem[i] = (uint8_t *)(ROUND_UP((arch_word_t)fb_mem, lay_mem_align));
         fb_mem = fb_mem + lay_mem_align + (fb_size / layers_cnt);
     }
-
-    switch (cfg->config.cachealgo) {
-        case VID_CACHE_NONE:
-            /*Non-cacheable*/
-            mpu_conf = "-xscb";
-        break;
-        case VID_CACHE_WTWA:
-            /*Write through, no write allocate*/
-            mpu_conf = "-xsb";
-        break;
-        case VID_CACHE_WBNWA:
-            /*Write-back, no write allocate*/
-            mpu_conf = "-xs";
-        break;
-    }
-
-    i = fb_size;
-    if (mpu_conf && mpu_lock((arch_word_t)cfg->raw_mem, &fb_size, mpu_conf) < 0) {
-        dprintf("%s() : MPU region config failed\n", __func__);
-    } else if (i != fb_size) {
-
-        assert(i < fb_size);
-        i = fb_size - i;
-        dprintf("%s() : MPU region requires extra space(padding) +[0x%08x] bytes, allocating\n",
-                __func__, i);
-        cfg->extmem = alloc->malloc(i);
-        cfg->extmem_size = i;
-        assert(cfg->extmem);
-    }
+    vid_mpu_create(cfg, &fb_size);
     return cfg->raw_mem;
 }
 

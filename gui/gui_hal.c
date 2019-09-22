@@ -31,7 +31,7 @@ int gui_draw_string_HAL (component_t *com, int line,
         BSP_LCD_SetFont((sFONT *)com->font);
     }
     BSP_LCD_SetTextColor(textcolor);
-    ret = BSP_LCD_DisplayStringAt(dim.x, dim.y + LINE(line) + (LINE(1) / 2),
+    ret = BSP_LCD_DisplayStringAt(dim.x, dim.y + LINE(line) + (LINE(0) / 2),
                                   dim.w, dim.h, (uint8_t *)str, (Text_AlignModeTypdef)txtmode);
     if (font != com->font) {
         BSP_LCD_SetFont(font);
