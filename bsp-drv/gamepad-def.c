@@ -79,12 +79,13 @@ set_key_state (int8_t *keypads, int pad_idx, int state)
 }
 
 static int
-_joypad_read_std (int8_t *keypads, void *_data, int8_t *pads, int joypadnum)
+_joypad_read_std (gamepad_drv_t *drv, int8_t *pads, void *_data)
 {
     int i = 0, bit;
     uint32_t keys;
     uint8_t temp;
     usb_data8_t *data = (usb_data8_t *)_data;
+    int8_t *keypads = (int8_t *)drv->user;
 
     keys = readLong(&data->data[__KSTART]) >> __KSTART_SHIFT;
 
@@ -104,22 +105,37 @@ _joypad_read_std (int8_t *keypads, void *_data, int8_t *pads, int joypadnum)
     return JOY_STD_MAX;
 }
 
-static void *
-_joypad_init_std (uint32_t *bufsize)
+void *
+__joypad_init_std (gamepad_drv_t *drv, uint32_t bufsize)
 {
     void *p;
-    *bufsize = sizeof(usb_data8_t);
-    p = heap_malloc(*bufsize);
-    if (p) {
-        d_memzero(p, *bufsize);
+    int8_t *keypads;
+    p = heap_malloc(bufsize + (sizeof(int8_t) * JOY_MAX));
+    if (!p) {
+        return NULL;
+    }
+    drv->user = p;
+    keypads = (int8_t *)p;
+    p = (void *)((arch_word_t)p + (JOY_MAX * sizeof(int8_t)));
+    d_memzero(p, bufsize);
+    for (int i = 0; i < JOY_STD_MAX; i++) {
+        keypads[i] = -1;
     }
     return p;
 }
 
-static void
-_joypad_deinit_std (void *p)
+static void *
+_joypad_init_std (gamepad_drv_t *drv, uint32_t *bufsize)
 {
-    heap_free(p);
+    *bufsize = sizeof(usb_data8_t);
+    return __joypad_init_std(drv, sizeof(usb_data8_t));
+}
+
+static void
+_joypad_deinit_std (gamepad_drv_t *drv)
+{
+    heap_free(drv->user);
+    drv->user = NULL;
 }
 
 void joypad_attach_def (gamepad_drv_t *drv)
@@ -127,5 +143,6 @@ void joypad_attach_def (gamepad_drv_t *drv)
     drv->init = _joypad_init_std;
     drv->read = _joypad_read_std;
     drv->deinit = _joypad_deinit_std;
+    drv->user = NULL;
 }
 

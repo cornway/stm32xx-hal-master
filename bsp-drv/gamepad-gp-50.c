@@ -36,6 +36,7 @@ enum {
 /*0x[C0 - analog off, 4 - on]   000  f  7f7f--[8C - analog off val]--7f7f*/
 #define JOY_IDLE(in) ((in & JOY_IDLE_MASK) == JOY_IDLE_MASK)
 
+#define M_IDLE   0x7f
 #define M_UP     0
 #define M_DOWN   0xff
 #define M_LEFT   0
@@ -72,14 +73,35 @@ set_key_state (int8_t *keypads, int pad_idx, int state)
     return 0;
 }
 
-static int
-_joypad_read_gp_50_joypad (int8_t *keypads, void *_data, int8_t *pads, int joypadnum)
+static inline int
+_joypad_check_gp_50 (gamepad_drv_t *drv, void *_data, int num)
 {
-    int i = 0, bit;
+    usb_data16_t *usb_data = (usb_data16_t *)_data;
+    uint8_t *data = (uint8_t *)&usb_data->dword[num];
+    uint8_t key = data[__KSTART];
+
+    if (key & 0xf0) {
+        return 1;
+    }
+    key = data[__KSTART + 1];
+    if (key) {
+        return 1;
+    }
+    key = data[__UPDOWN] & data[__LEFTRIGHT];
+    if (key != M_IDLE) {
+        return 1;
+    }
+    return 0;
+}
+
+static int
+_joypad_read_gp_50_joypad (gamepad_drv_t *drv, void *_data, int8_t *pads, int joypadnum)
+{
     uint8_t keytmp;
     uint8_t temp;
     usb_data16_t *usb_data = (usb_data16_t *)_data;
     uint8_t *data = (uint8_t *)&usb_data->dword[joypadnum];
+    int8_t *keypads = (int8_t *)drv->user;
 
     keytmp = data[__KSTART] >> 4;
 
@@ -95,10 +117,10 @@ _joypad_read_gp_50_joypad (int8_t *keypads, void *_data, int8_t *pads, int joypa
 
     keytmp = data[__KSTART + 1] & 0xf;
 
-    set_key_state(keypads, JOY_K5, keytmp & 0x1);
-    set_key_state(keypads, JOY_K6, keytmp & 0x2);
-    set_key_state(keypads, JOY_K7, keytmp & 0x4);
-    set_key_state(keypads, JOY_K8, keytmp & 0x8);
+    set_key_state(keypads, JOY_K5, keytmp & 0x4);
+    set_key_state(keypads, JOY_K6, keytmp & 0x8);
+    set_key_state(keypads, JOY_K7, keytmp & 0x1);
+    set_key_state(keypads, JOY_K8, keytmp & 0x2);
 
     temp = data[__UPDOWN];
     set_key_state(keypads, JOY_UPARROW, temp == M_UP);
@@ -114,27 +136,29 @@ _joypad_read_gp_50_joypad (int8_t *keypads, void *_data, int8_t *pads, int joypa
 }
 
 static int
-_joypad_read_gp_50 (int8_t *keypads, void *_data, int8_t *pads)
+_joypad_read_gp_50 (gamepad_drv_t *drv, int8_t *pads, void *_data)
 {
-    return _joypad_read_gp_50_joypad(keypads, _data, pads, 0);
+    if (_joypad_check_gp_50(drv, _data, 1)) {
+        return _joypad_read_gp_50_joypad(drv, _data, pads, 1);
+    }
+    return _joypad_read_gp_50_joypad(drv, _data, pads, 0);
 }
 
 static void
-_joypad_deinit_gp_50 (void *p)
+_joypad_deinit_gp_50 (gamepad_drv_t *drv)
 {
-    heap_free(p);
+    heap_free(drv->user);
+    drv->user = NULL;
 }
 
 static void *
-_joypad_init_gp_50 (uint32_t *bufsize)
+_joypad_init_gp_50 (gamepad_drv_t *drv, uint32_t *bufsize)
 {
-    void *p;
+extern void *
+__joypad_init_std (gamepad_drv_t *drv, uint32_t bufsize);
+
     *bufsize = sizeof(usb_data16_t);
-    p = heap_malloc(*bufsize);
-    if (p) {
-        d_memzero(p, *bufsize);
-    }
-    return p;
+    return __joypad_init_std(drv, sizeof(usb_data16_t));
 }
 
 void joypad_attach_gp_50 (gamepad_drv_t *drv)
@@ -142,6 +166,7 @@ void joypad_attach_gp_50 (gamepad_drv_t *drv)
     drv->init = _joypad_init_gp_50;
     drv->read = _joypad_read_gp_50;
     drv->deinit = _joypad_deinit_gp_50;
+    drv->user = NULL;
 }
 
 

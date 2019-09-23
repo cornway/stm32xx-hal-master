@@ -10,10 +10,11 @@ void joypad_bsp_deinit (void);
 
 /*Drivers*/
 
-typedef struct {
-    void *(*init) (uint32_t *);
-    void (*deinit) (void *);
-    int (*read) (int8_t *, void *, int8_t *);
+typedef struct gamepad_drv_s {
+    void *(*init) (struct gamepad_drv_s *, uint32_t *);
+    void (*deinit) (struct gamepad_drv_s *);
+    int (*read) (struct gamepad_drv_s *, int8_t *, void *);
+    void *user;
 } gamepad_drv_t;
 
 void joypad_attach_def (gamepad_drv_t *drv);

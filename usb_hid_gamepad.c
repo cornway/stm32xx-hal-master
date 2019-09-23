@@ -18,14 +18,12 @@ int8_t g_usb_data_ready = 0;
 static USBH_HandleTypeDef hUSBHost;
 
 static irqmask_t usb_irq;
-static int8_t g_keypads[JOY_STD_MAX];
 static gamepad_drv_t joypad_drv = {NULL};
 
 int joypad_read (int8_t *pads)
 {
     uint8_t data[64];
     irqmask_t irq = usb_irq;
-    uint8_t mode;
 
     if (!g_usb_data_ready) {
         return 0;
@@ -39,8 +37,9 @@ int joypad_read (int8_t *pads)
     irq_restore(irq);
 
     if (joypad_drv.read) {
-        return joypad_drv.read(g_keypads, &data, pads);
+        return joypad_drv.read(&joypad_drv, pads, &data[0]);
     }
+    return 0;
 }
 
 void joypad_bsp_deinit (void)
@@ -49,7 +48,7 @@ void joypad_bsp_deinit (void)
     USBH_DeInit(&hUSBHost);
     USBH_LL_DeInit(&hUSBHost);
     if (joypad_drv.deinit) {
-        joypad_drv.deinit(g_usb_data);
+        joypad_drv.deinit(&joypad_drv);
     }
     d_memzero(&joypad_drv, sizeof(joypad_drv));
     g_usb_data = NULL;
@@ -64,9 +63,6 @@ void joypad_bsp_init (void)
     USBH_Init(&hUSBHost, USBH_UserProcess, 0);
     USBH_RegisterClass(&hUSBHost, USBH_HID_CLASS);
     USBH_Start(&hUSBHost);
-    for (int i = 0; i < JOY_STD_MAX; i++) {
-        g_keypads[i] = -1;
-    }
     irq_bmap(&usb_irq);
     usb_irq = usb_irq & (~temp);
 }
@@ -106,7 +102,7 @@ USBH_StatusTypeDef USBH_HID_GamepadInit(USBH_HandleTypeDef *phost)
     }
 
     if (joypad_drv.init) {
-        g_usb_data = joypad_drv.init(&g_usb_data_size);
+        g_usb_data = joypad_drv.init(&joypad_drv, &g_usb_data_size);
     }
 
     if (NULL == g_usb_data) {
