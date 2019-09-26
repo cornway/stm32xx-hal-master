@@ -11,7 +11,6 @@
 #include <input_main.h>
 #include <debug.h>
 #include <dev_io.h>
-#include <debug.h>
 #include <nvic.h>
 #include <mpu.h>
 #include <heap.h>
@@ -197,6 +196,7 @@ int dev_hal_init (void)
     BSP_LED_Init(LED1);
     BSP_LED_Init(LED2);
     serial_init();
+    cs_load_code(NULL, NULL, 0);
     return 0;
 }
 

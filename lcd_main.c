@@ -139,7 +139,6 @@ vid_create_framebuffer (screen_alloc_t *alloc, lcd_wincfg_t *cfg,
     const uint32_t lay_mem_size = (w * h * pixel_deep) + lay_mem_align;
     uint32_t fb_size, i;
     uint8_t *fb_mem;
-    const char *mpu_conf = NULL;
 
     assert(layers_cnt <= LCD_MAX_LAYER);
 

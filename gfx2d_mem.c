@@ -1,6 +1,8 @@
 
 #include <gfx.h>
 #include <gfx2d_mem.h>
+#include <misc_utils.h>
+#include <heap.h>
 
 typedef uint8_t pix8_t;
 
@@ -28,8 +30,11 @@ typedef struct {
     scanline8_u a[2];
 } pix_outx2_t;
 
-void
-gfx2d_scale2x2_8bpp (gfx_2d_buf_t *dest, gfx_2d_buf_t *src)
+IRAMFUNC static void
+__gfx2d_scale2x2_8bpp (gfx_2d_buf_t *dest, gfx_2d_buf_t *src);
+
+static void
+__gfx2d_scale2x2_8bpp (gfx_2d_buf_t *dest, gfx_2d_buf_t *src)
 {
     scanline8_u d_yt0, d_yt1;
     scanline8_t *scanline;
@@ -72,12 +77,23 @@ gfx2d_scale2x2_8bpp (gfx_2d_buf_t *dest, gfx_2d_buf_t *src)
     }
 }
 
+void
+gfx2d_scale2x2_8bpp (gfx_2d_buf_t *dest, gfx_2d_buf_t *src)
+{
+    if (cs_check_symb(__gfx2d_scale2x2_8bpp)) {
+        __gfx2d_scale2x2_8bpp(dest, src);
+    }
+}
+
 typedef struct {
     scanline8_u a[3];
 } pix_outx3_t;
 
-void
-gfx2d_scale3x3_8bpp (gfx_2d_buf_t *dest, gfx_2d_buf_t *src)
+IRAMFUNC static void
+__gfx2d_scale3x3_8bpp (gfx_2d_buf_t *dest, gfx_2d_buf_t *src);
+
+static void
+__gfx2d_scale3x3_8bpp (gfx_2d_buf_t *dest, gfx_2d_buf_t *src)
 {
     scanline8_u d_yt0, d_yt1, d_yt2;
     pix_outx3_t *d_y0, *d_y1, *d_y2;
@@ -124,6 +140,14 @@ gfx2d_scale3x3_8bpp (gfx_2d_buf_t *dest, gfx_2d_buf_t *src)
         d_y0 = GFXBUF_NEXT_SCALED_LINE_8bpp(d_y0, src->wtotal, 2);
         d_y1 = GFXBUF_NEXT_SCALED_LINE_8bpp(d_y1, src->wtotal, 2);
         d_y2 = GFXBUF_NEXT_SCALED_LINE_8bpp(d_y2, src->wtotal, 2);
+    }
+}
+
+void
+gfx2d_scale3x3_8bpp (gfx_2d_buf_t *dest, gfx_2d_buf_t *src)
+{
+    if (cs_check_symb(__gfx2d_scale3x3_8bpp)) {
+        __gfx2d_scale3x3_8bpp(dest, src);
     }
 }
 

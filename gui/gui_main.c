@@ -360,7 +360,7 @@ void gui_rect_fill (component_t *com, dim_t *rect, rgba_t color)
 static int
 gui_rawpic_draw (component_t *com, rawpic_t *pic)
 {
-    screen_t dest = {0}, src = {0};
+    screen_t src = {0};
     point_t p;
     dim_t d = {0, 0, pic->w, pic->h};
 

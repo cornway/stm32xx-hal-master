@@ -9,6 +9,14 @@
 #define DTCM __attribute__ ((section ("dtcm")))
 #define IRAM __attribute__ ((section ("iram")))
 #define IRAM2 __attribute__ ((section ("iram2")))
+#if defined(HAVE_CODESWAP)
+#define IRAMFUNC __attribute__ ((section ("ramcode")))
+#else
+#define IRAMFUNC
+#endif
+
+int cs_load_code (void *unused1, void *unused2, int unused3);
+int cs_check_symb (void *symb);
 
 #define PTR_ALIGNED(p, a) ((a) && ((arch_word_t)(p) % (a) == 0))
 

@@ -137,7 +137,6 @@ __bhal_memory_write (arch_word_t *dst, const arch_word_t *src, int size)
 static int 
 __bhal_memory_erase (arch_word_t *dst, const arch_word_t *src, int size)
 {
-    arch_word_t val = *src;
     int _size = size;
     if (BOOT_LOG_CHECK(BOOT_LOG_INFO2)) {
         BOOT_LOG_ALWAYS("%s() BEFORE:\n", __func__);
@@ -146,7 +145,7 @@ __bhal_memory_erase (arch_word_t *dst, const arch_word_t *src, int size)
     }
     hdd_led_on();
     while (size > 0) {
-        *dst = val;
+        *dst = 0;
         dst++;
         size--;
     }
