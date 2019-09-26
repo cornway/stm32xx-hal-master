@@ -298,7 +298,7 @@ void boot_gui_preinit (void)
     win_set_user_clbk(pane_console, b_console_user_clbk);
 
     prop.fontprop.font = NULL;
-    prop.bcolor = COLOR_AQUAMARINE;
+    prop.bcolor = COLOR_LGREY;
     prop.name = "binselect";
     pane_selector = win_new_console(&gui, &prop, gui.dim.x, gui.dim.y, gui.dim.w / 2, gui.dim.h);
     win_con_set_clbk(pane_selector, b_gui_input_event_hanlder);
@@ -367,6 +367,12 @@ static void gui_char_input_event_wrap (gui_t *gui, gevt_t *evt)
     }
 
     switch (evt->sym) {
+        case GUI_KEY_LEFT:
+        case GUI_KEY_RIGHT:
+            if (gui->selected_head == pane_alert) {
+                gui_send_event(gui, evt);
+                break;
+            }
         case GUI_KEY_SELECT:
             bsfx_start_sound(SFX_SCROLL, 100);
             gui_select_next_pane(gui);

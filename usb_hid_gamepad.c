@@ -19,11 +19,16 @@ static USBH_HandleTypeDef hUSBHost;
 
 static irqmask_t usb_irq;
 static gamepad_drv_t joypad_drv = {NULL};
+static uint32_t jpad_last_tsf;
 
 int joypad_read (int8_t *pads)
 {
     uint8_t data[64];
     irqmask_t irq = usb_irq;
+
+    if (!d_rlimit_wrap(&jpad_last_tsf, 1000 / 25)) {
+        return 0;
+    }
 
     if (!g_usb_data_ready) {
         return 0;
