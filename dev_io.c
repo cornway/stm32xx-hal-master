@@ -27,7 +27,7 @@ static char DEV_Path[4] = {0};
 
 typedef struct {
     int type;
-    int is_owned;
+    uint8_t refcnt;
     char ptr[];
 } fobjhdl_t;
 
@@ -44,26 +44,22 @@ typedef struct {
     FILINFO fn;
 } dirhandle_t;
 
-static fhandle_t __file_handles[MAX_HANDLES] ALIGN(8);
-static dirhandle_t __dir_handles[MAX_HANDLES] ALIGN(8);
-
-static fobjhdl_t *file_handles[MAX_HANDLES] ALIGN(8);
-static fobjhdl_t *dir_handles[MAX_HANDLES] ALIGN(8);
+static fobjhdl_t *handles[MAX_HANDLES * 2];
 
 static int _devio_mount (char *path);
 static void _devio_unmount (char *path);
 
-#define alloc_file(nump) allochandle(file_handles, nump)
-#define alloc_dir(nump) allochandle(dir_handles, nump)
+#define alloc_file(nump) allochandle(handles, nump, 0)
+#define alloc_dir(nump) allochandle(handles, nump, 1)
 
-#define getfile(num) gethandle(file_handles, num)
-#define getdir(num) gethandle(dir_handles, num)
+#define getfile(num) gethandle(handles, num)
+#define getdir(num) gethandle(handles, num)
 
-#define freefile(num) releasehandle(file_handles, num)
-#define freedir(num) releasehandle(dir_handles, num)
+#define freefile(num) releasehandle(handles, num)
+#define freedir(num) releasehandle(handles, num)
 
-#define chkfile(num) chk_handle(file_handles, num)
-#define chkdir(num) chk_handle(dir_handles, num)
+#define chkfile(num) chk_handle(handles, num)
+#define chkdir(num) chk_handle(handles, num)
 
 static inline int chk_handle (fobjhdl_t **hdls, int num)
 {
@@ -73,16 +69,20 @@ static inline int chk_handle (fobjhdl_t **hdls, int num)
         return 0;
     }
     hdl = hdls[num];
-    return hdl->is_owned;
+    return hdl->refcnt;
 }
 
-static inline void *allochandle (fobjhdl_t **hdls, int *num)
+static inline void *allochandle (fobjhdl_t **hdls, int *num, int dir)
 {
-    int i;
+    int i, memsize = dir ? sizeof(dirhandle_t) : sizeof(fhandle_t);
 
-    for (i=0 ; i<MAX_HANDLES ; i++) {
-        if (hdls[i]->is_owned == 0) {
-            hdls[i]->is_owned = 1;
+    for (i=0 ; i<MAX_HANDLES * 2; i++) {
+        if (!hdls[i]) {
+            hdls[i] = heap_malloc(memsize);
+            if (!hdls) {
+                break;
+            }
+            hdls[i]->refcnt = 1;
             *num = i;
             return hdls[i]->ptr;
         }
@@ -93,12 +93,13 @@ static inline void *allochandle (fobjhdl_t **hdls, int *num)
 
 static inline void *gethandle (fobjhdl_t **hdls, int num)
 {
-    return hdls[num]->ptr;
+    return hdls[num] ? hdls[num]->ptr : NULL;
 }
 
 static inline void releasehandle (fobjhdl_t **hdls, int handle)
 {
-    hdls[handle]->is_owned = 0;
+    heap_free(hdls[handle]);
+    hdls[handle] = NULL;
 }
 
 int FR_2_ERR (FRESULT res)
@@ -501,16 +502,7 @@ static int _devio_mount (char *path)
     }
     dprintf("FS mount : \'%s\'\n", path);
 
-    /*TODO : Add own size to each pool*/
-    for (i = 0; i < MAX_HANDLES; i++) {
-        file_handles[i] = (fobjhdl_t *)&__file_handles[i];
-        __file_handles[i].is_owned = 0;
-    }
-    for (i = 0; i < MAX_HANDLES; i++) {
-        dir_handles[i] = (fobjhdl_t *)&__dir_handles[i];
-        __dir_handles[i].is_owned = 0;
-    }
-
+    d_memzero(handles, sizeof(handles));
     return 0;
 }
 
