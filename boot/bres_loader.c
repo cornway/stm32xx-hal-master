@@ -1,3 +1,4 @@
+#include <string.h>
 
 #include <debug.h>
 #include "int/boot_int.h"
@@ -6,6 +7,10 @@
 #include <dev_io.h>
 #include <bsp_cmd.h>
 #include <bconf.h>
+
+typedef struct {
+    char titlepic[32];
+} exec_conf_t;
 
 static exec_desc_t *
 bres_collect_exec_path (const char *dirpath, const char *path,
@@ -47,7 +52,7 @@ bres_cache_file_2_mem (const bsp_heap_api_t *heapapi, const char *path, int *bin
     return cache;
 }
 
-void bres_exec_scan_path (const char *path)
+void bres_exec_scan_path (void (*statfunc) (const char *, int), const char *path)
 {
     fobj_t fobj;
     int dir, bindir;
@@ -77,6 +82,10 @@ void bres_exec_scan_path (const char *path)
                         snprintf(binpath, sizeof(binpath), "%s/%s", buf, binobj.name);
                         if (bres_collect_exec_path(buf, binpath, binobj.name, type)) {
                             filesfound++;
+                            if (statfunc) {
+                                statfunc(binobj.name, filesfound);
+                            }
+
                         }
                     }
                 }
@@ -100,8 +109,36 @@ __bsp_setup_desc (const char *dirpath, exec_desc_t *bin, const char *path,
     snprintf(bin->name, sizeof(bin->name), "%s", originname);
     snprintf(bin->path, sizeof(bin->path), "%s", path);
     bin->filetype = type;
-    bsp_load_exec_title_pic(dirpath, bin);
     return bin;
+}
+
+static void
+bsp_preparse_exec (exec_desc_t *bin, exec_conf_t *conf)
+{
+    int f;
+    char buf[128], *p;
+    const char *argv[16];
+    int argc;
+
+    d_open(bin->path, &f, "r");
+    if (f < 0) {
+        return;
+    }
+    p = d_gets(f, buf, sizeof(buf));
+    if (p) {
+        p = d_gets(f, buf, sizeof(buf));
+    }
+    if (!p) {
+        goto done;
+    }
+    argc = d_wstrtok(argv, arrlen(argv), buf);
+    while (argc--) {
+        if (strcmp(argv[argc], "--titlepic") == 0) {
+            snprintf(conf->titlepic, sizeof(conf->titlepic), "%s", argv[argc + 1]);
+        }
+    }
+done:
+    d_close(f);
 }
 
 exec_desc_t *
@@ -112,6 +149,7 @@ bsp_setup_bin_desc (const char *dirpath, exec_desc_t *bin, const char *path,
     if (bsp_setup_bin_param(bin) < 0) {
         return NULL;
     }
+    bsp_load_exec_title_pic(dirpath, bin, NULL);
     return bin;
 }
 
@@ -119,7 +157,14 @@ exec_desc_t *
 bsp_setup_bin_link (const char *dirpath, exec_desc_t *bin, const char *path,
                            const char *originname, bsp_exec_file_type_t type)
 {
+    exec_conf_t conf = {{0}};
+
     bin = __bsp_setup_desc(dirpath, bin, path, originname, type);
+    if (!bin) {
+        return NULL;
+    }
+    bsp_preparse_exec(bin, &conf);
+    bsp_load_exec_title_pic(dirpath, bin, conf.titlepic);
     bin->parm.progaddr = 0;
     return bin;
 }

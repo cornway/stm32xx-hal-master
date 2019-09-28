@@ -37,8 +37,8 @@ static component_t *
 win_new_border (gui_t *gui)
 {
     component_t *com = gui_create_comp(gui, "pad", "");
-    com->bcolor = COLOR_LGREY;
-    com->fcolor = COLOR_LGREY;
+    com->bcolor = COLOR_BLACK;
+    com->fcolor = COLOR_BLACK;
     com->ispad = 1;
     return com;
 }
@@ -175,7 +175,7 @@ static win_alert_t *win_alert_alloc (gui_t *gui)
     return win;
 }
 
-pane_t *win_new_allert (gui_t *gui, int w, int h)
+pane_t *win_new_allert (gui_t *gui, int w, int h, const char *msg)
 {
     const point_t border = {16, 8};
     const int btnsize = 40;
@@ -199,7 +199,7 @@ pane_t *win_new_allert (gui_t *gui, int w, int h)
     prop.fcolor = COLOR_BLACK;
     gui_set_prop(com, &prop);
 
-    com = gui_create_comp(gui, "title", "MESSAGE");
+    com = gui_create_comp(gui, "title", msg);
     com->userflags = WALERT_ACT_NONE;
     gui_set_comp(pane, com, 0, 0, w, btnsize);
 
@@ -687,8 +687,6 @@ pane_t *win_new_progress (gui_t *gui, prop_t *prop, int x, int y, int w, int h)
     gui_set_comp(pane, com, 0, 0, w, htitle);
     win->title = com;
 
-    prop->bcolor = COLOR_LBLUE;
-    prop->fcolor = COLOR_BLACK;
     gui_set_prop(com, prop);
     pane->selectable = 0;
     return pane;
@@ -731,13 +729,13 @@ static int win_prog_repaint (pane_t *pane, component_t *com, void *user)
     int compl, left;
 
     if (win->percent == 100) {
-        gui_com_fill(com, COLOR_GREEN);
+        gui_com_fill(com, COLOR_BLUE);
     } else if (win->percent >= 0) {
         compl = (dim.w * win->percent) / 100;
         left = dim.w - compl;
 
         dim.w = compl;
-        gui_rect_fill(com, &dim, COLOR_GREEN);
+        gui_rect_fill(com, &dim, COLOR_BLUE);
         dim.x = compl;
         dim.w = left;
         gui_rect_fill(com, &dim, COLOR_WHITE);
@@ -772,8 +770,6 @@ pane_t *win_new_jpeg (gui_t *gui, prop_t *prop, int x, int y, int w, int h)
     com = gui_create_comp(gui, "pic", "");
     gui_set_comp(pane, com, 0, 0, -1, -1);
     prop->user_draw = 1;
-    prop->fcolor = COLOR_BLACK;
-    prop->bcolor = COLOR_AQUAMARINE;
     gui_set_prop(com, prop);
     win->com = com;
     win->win.pane = pane;

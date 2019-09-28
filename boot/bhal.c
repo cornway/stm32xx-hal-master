@@ -188,7 +188,7 @@ typedef struct {
 
 static const prog_func_t func_program =
 {
-    "Write memory",
+    "Writing...",
     "",
     "Corrupted memory",
     "#O",
@@ -199,9 +199,9 @@ static const prog_func_t func_program =
 
 static const prog_func_t func_clear =
 {
-    "Clear memory",
+    "Erasing...",
     "",
-    "Clear failed",
+    "Erase failed",
     "E?",
     d_true,
     d_false,
@@ -210,7 +210,7 @@ static const prog_func_t func_clear =
 
 static const prog_func_t func_compare =
 {
-    "Compare memory",
+    "Checking...",
     "",
     "Mismatch",
     ".X",
@@ -221,7 +221,7 @@ static const prog_func_t func_compare =
 
 static const prog_func_t func_read =
 {
-    "Read memory",
+    "Reading...",
     "",
     "Read fail",
     "..",
@@ -232,7 +232,7 @@ static const prog_func_t func_read =
 
 static const prog_func_t func_write =
 {
-    "Write memory",
+    "Writing...",
     "",
     "Write fail",
     "#O",

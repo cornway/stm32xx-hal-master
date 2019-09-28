@@ -24,7 +24,6 @@ static pane_t *pane_console, *pane_selector,
 static int b_exec_selector_cursor = 0;
 
 static void boot_gui_bsp_init (gui_t *gui);
-static void b_exec_install_status_clbk (const char *msg, int percent);
 static void b_dev_deinit_callback (void);
 
 typedef struct {
@@ -78,17 +77,20 @@ bsp_setup_bin_param (exec_desc_t *bin)
 }
 
 void
-bsp_load_exec_title_pic (const char *dirpath, exec_desc_t *bin)
+bsp_load_exec_title_pic (const char *dirpath, exec_desc_t *bin, const char *path)
 {
-    char name[D_MAX_NAME] = {0};
-    char tpath[D_MAX_PATH];
-    const char *argv[2] = {0};
+    if (path && path[0]) {
+        bin->pic = win_jpeg_decode(pane_jpeg, path);
+    } else {
+        char name[D_MAX_NAME] = {0}, tpath[D_MAX_PATH];
+        const char *argv[2] = {0};
 
-    strcpy(name, bin->name);
-    d_vstrtok(argv, 2, name, '.');
+        strcpy(name, bin->name);
+        d_vstrtok(argv, 2, name, '.');
 
-    snprintf(tpath, sizeof(tpath), "%s/%s.jpg", dirpath, argv[0]);
-    bin->pic = win_jpeg_decode(pane_jpeg, tpath);
+        snprintf(tpath, sizeof(tpath), "%s/%s.jpg", dirpath, argv[0]);
+        bin->pic = win_jpeg_decode(pane_jpeg, tpath);
+    }
 }
 
 int b_execute_link (const char *path)
@@ -175,7 +177,10 @@ b_gui_print_apps_list (pane_t *pane)
     }
     for (i = start; i < start + size; i++) {
         if (i == selected) {
-            snprintf(str, sizeof(str), "%*.*s <", -prsize, -prsize, binarray[i - start]->name);
+            int off = prsize - strlen(binarray[i - start]->name);
+
+            d_memset(str, ' ', off);
+            snprintf(str + off, sizeof(str) - off, "%s <", binarray[i - start]->name);
             win_con_printline(pane, i, str, COLOR_RED);
         } else {
             snprintf(str, sizeof(str), "%*.*s", -prsize, -prsize, binarray[i - start]->name);
@@ -271,7 +276,8 @@ static int gui_stdout_hook (int argc, const char **argv)
     return 0;
 }
 
-static void b_exec_install_status_clbk (const char *msg, int percent)
+static inline void
+boot_gui_set_proc_stat (const char *msg, int percent)
 {
     if (win_prog_set(pane_progress, msg, percent)) {
         gui_draw(&gui, 1);
@@ -303,7 +309,7 @@ void boot_gui_preinit (void)
     pane_selector = win_new_console(&gui, &prop, gui.dim.x, gui.dim.y, gui.dim.w / 2, gui.dim.h);
     win_con_set_clbk(pane_selector, b_gui_input_event_hanlder);
 
-    pane_alert = win_new_allert(&gui, gui.dim.w / 2, 250);
+    pane_alert = win_new_allert(&gui, gui.dim.w / 2, 250, "Console90");
     win_set_user_clbk(pane_alert, b_alert_user_clbk);
 
     dim = pane_alert->dim;
@@ -317,13 +323,14 @@ void boot_gui_preinit (void)
     pane_progress = win_new_progress(&gui, &prop, dim.x, dim.y, dim.w, dim.h);
 
     prop.name = "pane_jpeg";
+    prop.bcolor = COLOR_LGREY;
     pane_jpeg = win_new_jpeg(&gui, &prop, gui.dim.x + (gui.dim.w / 2),
                                           gui.dim.y, gui.dim.w / 2, gui.dim.h);
     gui_set_child(pane_selector, pane_jpeg);
 
     bsp_stdout_register_if(gui_stdout_hook);
 
-    gui_select_pane(&gui, pane_console);
+    gui_select_pane(&gui, pane_progress);
 }
 
 int boot_main (int argc, const char **argv)
@@ -331,20 +338,28 @@ int boot_main (int argc, const char **argv)
     jpeg_init("");
     boot_gui_preinit();
 
-    bres_exec_scan_path("");
+    boot_gui_set_proc_stat("Loading...", 0);
+    bres_exec_scan_path(boot_gui_set_proc_stat, "");
     b_gui_print_apps_list(pane_selector);
 
-    bsfx_sound_precache();
+    boot_gui_set_proc_stat("Sfx...", 0);
+    bsfx_sound_precache(boot_gui_set_proc_stat, 50);
     dprintf("Ready\n");
 
+    boot_gui_set_proc_stat("Muic...", 75);
     bsfx_title_music(1, 40);
-    complete_ind_clbk = b_exec_install_status_clbk;
+    boot_gui_set_proc_stat(BOOT_STARTUP_MUSIC_PATH, 99);
+    boot_gui_set_proc_stat("Done...", 100);
+    gui_select_pane(&gui, pane_selector);
+
+    complete_ind_clbk = boot_gui_set_proc_stat;
     while (!gui.destroy)
     {
         bsp_tickle();
         gui_draw(&gui, 0);
         input_proc_keys(NULL);
     }
+    complete_ind_clbk = NULL;
     bres_exec_unload();
     bsp_tickle();
     assert(0);

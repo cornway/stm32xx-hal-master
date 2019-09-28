@@ -70,7 +70,7 @@ static void bsfx_read_sfx_map (const char *path, sfx_map_t *map, int mapsize)
     d_close(f);
 }
 
-void bsfx_sound_precache (void)
+void bsfx_sound_precache (void (*statfunc) (const char *, int), int prev_per)
 {
     int i;
     char path[BOOT_MAX_PATH];
@@ -84,6 +84,9 @@ void bsfx_sound_precache (void)
 
         snprintf(path, sizeof(path), "%s/%s", BOOT_SFX_DIR_PATH, name);
         sfx_map[i].sfx_id = bsp_open_wave_sfx(path);
+        if (statfunc) {
+            statfunc(path, ++prev_per);
+        }
     }
 }
 

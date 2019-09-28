@@ -243,7 +243,7 @@ typedef int (*win_user_hdlr_t) (gevt_t *);
 void win_con_set_clbk (void *pane, comp_handler_t h);
 void win_set_user_clbk (void *pane, win_user_hdlr_t clbk);
 
-pane_t *win_new_allert (gui_t *gui, int w, int h);
+pane_t *win_new_allert (gui_t *gui, int w, int h, const char *msg);
 int win_alert (pane_t *pane, const char *text,
                   win_alert_hdlr_t accept, win_alert_hdlr_t decline);
 

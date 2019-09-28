@@ -68,10 +68,10 @@ int bsp_stop_wave_sfx (int hdl);
 void bsp_release_wave_sfx (int hdl);
 
 int bres_dump_exec_list (int argc, const char **argv);
-void bres_exec_scan_path (const char *path);
+void bres_exec_scan_path (void (*statfunc) (const char *, int), const char *path);
 void bres_exec_unload (void);
 int bhal_setup_bin_param (boot_bin_parm_t *parm, void *ptr, int size);
-void bsfx_sound_precache (void);
+void bsfx_sound_precache (void (*statfunc) (const char *, int), int prev_per);
 void bsfx_sound_free (void);
 void bsfx_title_music (int play, uint8_t volume);
 void bsfx_start_sound (int num, uint8_t volume);
@@ -79,7 +79,7 @@ void bres_querry_executables_for_range (const exec_desc_t **binarray, int *pstar
                                                     int cursor, int *size, int maxsize);
 void *bres_get_executable_for_num (int num);
 int bres_get_executables_num (void);
-void bsp_load_exec_title_pic (const char *dirpath, exec_desc_t *bin);
+void bsp_load_exec_title_pic (const char *dirpath, exec_desc_t *bin, const char *path);
 
 enum {
     BOOT_LOG_NONE = -1,
