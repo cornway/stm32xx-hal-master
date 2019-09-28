@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include "int/audio_int.h"
 #include "audio_main.h"
+#include <heap.h>
 
 #define GAIN(x, vol, comp) (((int16_t)x * vol) / comp)
 #define GAIN_FLOAT(x, vol) (int16_t)((float)(x) * (float)vol)
@@ -88,6 +89,9 @@ static void a_rev_proc (a_buf_t *abuf)
 #error "Unsupported"
 #endif
 
+IRAMFUNC static void
+a_write_single_to_master (snd_sample_t *dest, mixdata_t *mixdata, int compratio);
+
 static void
 a_write_single_to_master (snd_sample_t *dest, mixdata_t *mixdata, int compratio)
 {
@@ -108,7 +112,10 @@ a_write_single_to_master (snd_sample_t *dest, mixdata_t *mixdata, int compratio)
     }
 }
 
-void
+IRAMFUNC static void
+a_mix_single_to_master (snd_sample_t *dest, mixdata_t *mixdata, int compratio);
+
+static void
 a_mix_single_to_master (snd_sample_t *dest, mixdata_t *mixdata, int compratio)
 {
     int16_t *pdest = (int16_t *)dest;
