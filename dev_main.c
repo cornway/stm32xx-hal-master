@@ -32,13 +32,13 @@ int app_main (void)
     char **argv;
     int argc;
 
+    g_bspapi = bsp_api_attach();
     dev_hal_init();
     heap_init();
 
     bsp_drv_init();
     VID_PreConfig();
 
-    g_bspapi = bsp_api_attach();
     sys_user_attach(&user_api);
     argv = bsp_argc_argv_get(&argc);
     return mainloop(argc, argv);
