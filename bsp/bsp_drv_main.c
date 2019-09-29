@@ -233,7 +233,6 @@ void dev_deinit (void)
     input_bsp_deinit();
     vid_deinit();
     heap_dump();
-    mpu_deinit();
     serial_deinit();
 
     irq_destroy();
