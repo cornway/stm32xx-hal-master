@@ -40,8 +40,9 @@ void *screen_hal_set_config (lcd_wincfg_t *cfg, int x, int y,
 void screen_hal_set_clut (lcd_wincfg_t *cfg, void *_buf, int size, int layer);
 int screen_hal_set_keying (lcd_wincfg_t *cfg, uint32_t color, int layer);
 void screen_hal_sync (lcd_wincfg_t *cfg, int wait);
-int screen_hal_copy (lcd_wincfg_t *cfg, copybuf_t *copybuf, uint8_t pix_bytes);
+int screen_hal_copy_m2m (lcd_wincfg_t *cfg, copybuf_t *copybuf, uint8_t pix_bytes);
 int screen_hal_scale_h8_2x2 (lcd_wincfg_t *cfg, copybuf_t *copybuf, int interleave);
+int screen_gfx8_copy_line (lcd_wincfg_t *cfg, void *dest, void *src, int w);
 
 static inline void screen_hal_layreload (lcd_wincfg_t *cfg)
 {

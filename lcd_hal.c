@@ -39,13 +39,13 @@ lcd_layers_t screen_hal_set_layer (lcd_wincfg_t *cfg)
     lcd_layers_t nextlay;
 
     switch (cfg->ready_lay_idx) {
-        case LCD_BACKGROUND:
+        case LCD_FOREGROUND:
             BSP_LCD_SelectLayer(LCD_BACKGROUND);
             BSP_LCD_SetTransparency(LCD_FOREGROUND, GFX_OPAQUE);
             BSP_LCD_SetTransparency(LCD_BACKGROUND, GFX_TRANSPARENT);
             nextlay = LCD_BACKGROUND;
         break;
-        case LCD_FOREGROUND:
+        case LCD_BACKGROUND:
             BSP_LCD_SelectLayer(LCD_FOREGROUND);
             BSP_LCD_SetTransparency(LCD_BACKGROUND, GFX_OPAQUE);
             BSP_LCD_SetTransparency(LCD_FOREGROUND, GFX_TRANSPARENT);
@@ -211,7 +211,7 @@ static int screen_update_direct (lcd_wincfg_t *cfg, screen_t *psrc)
     dest->height = cfg->h;
     dest->colormode = cfg->config.colormode;
     if (GET_VHAL_CTXT(cfg)->poll) {
-        return screen_hal_copy(cfg, &buf, screen_mode2pixdeep[dest->colormode]);
+        return screen_hal_copy_m2m(cfg, &buf, screen_mode2pixdeep[dest->colormode]);
     } else {
         irqmask_t irq;
         int ret;
@@ -228,7 +228,7 @@ static int screen_update_direct (lcd_wincfg_t *cfg, screen_t *psrc)
 }
 
 static DMA2D_HandleTypeDef *
-__screen_hal_copy_setup
+__screen_hal_copy_setup_M2M
 (
     screen_hal_ctxt_t *ctxt,
     uint8_t dst_colormode,
@@ -236,13 +236,15 @@ __screen_hal_copy_setup
     uint8_t src_alpha,
     int src_width,
     int dest_wtotal,
-    int src_wtotal,
-    uint32_t mode
+    int src_wtotal
 )
 {
     DMA2D_HandleTypeDef *hdma2d = GET_VHAL_DMA2D(ctxt->lcd_cfg);
+    const int layid = 1;
 
-    hdma2d->Init.Mode         = DMA2D_M2M;/*FIXME : only m2m for single buffer*/
+    d_memzero(&hdma2d->Init, sizeof(hdma2d->Init));
+
+    hdma2d->Init.Mode         = DMA2D_M2M;
     hdma2d->Init.ColorMode    = dma2d_color_mode2out_map[dst_colormode];
     hdma2d->Init.OutputOffset = dest_wtotal - src_width;
     hdma2d->Init.AlphaInverted = DMA2D_REGULAR_ALPHA;
@@ -250,14 +252,22 @@ __screen_hal_copy_setup
 
     hdma2d->XferCpltCallback = DMA2D_XferCpltCallback;
 
-    hdma2d->LayerCfg[0].AlphaMode = DMA2D_COMBINE_ALPHA;
-    hdma2d->LayerCfg[0].InputAlpha = src_alpha;
-    hdma2d->LayerCfg[0].InputColorMode = dma2d_color_mode2in_map[src_colormode];
-    hdma2d->LayerCfg[0].InputOffset = src_wtotal - src_width;
-    hdma2d->LayerCfg[0].RedBlueSwap = DMA2D_RB_REGULAR;
-    hdma2d->LayerCfg[0].AlphaInverted = DMA2D_REGULAR_ALPHA;
+    hdma2d->LayerCfg[layid].AlphaMode = DMA2D_COMBINE_ALPHA;
+    hdma2d->LayerCfg[layid].InputAlpha = src_alpha;
+    hdma2d->LayerCfg[layid].InputColorMode = dma2d_color_mode2in_map[src_colormode];
+    hdma2d->LayerCfg[layid].InputOffset = src_wtotal - src_width;
+    hdma2d->LayerCfg[layid].RedBlueSwap = DMA2D_RB_REGULAR;
+    hdma2d->LayerCfg[layid].AlphaInverted = DMA2D_REGULAR_ALPHA;
 
     hdma2d->Instance = DMA2D;
+
+    if(HAL_DMA2D_Init(hdma2d) != HAL_OK) {
+        return NULL;
+    }
+    if (HAL_DMA2D_ConfigLayer(hdma2d, layid) != HAL_OK) {
+        return NULL;
+    }
+
     return hdma2d;
 }
 
@@ -302,12 +312,6 @@ screen_hal_copy_start
     DMA2D_HandleTypeDef *hdma2d = GET_VHAL_DMA2D(cfg);
     HAL_StatusTypeDef status = HAL_OK;
 
-    if(HAL_DMA2D_Init(hdma2d) != HAL_OK) {
-        return -1;
-    }
-    if (HAL_DMA2D_ConfigLayer(hdma2d, 1) != HAL_OK) {
-        return -1;
-    }
     if (GET_VHAL_CTXT(cfg)->poll) {
         if (HAL_DMA2D_Start(hdma2d, (uint32_t)sptr, (uint32_t)dptr, width, height) != HAL_OK) {
             return -1;
@@ -345,11 +349,10 @@ __screen_check (lcd_wincfg_t *cfg, screen_t *s)
     }
 }
 
-int screen_hal_copy (lcd_wincfg_t *cfg, copybuf_t *copybuf, uint8_t pix_bytes)
+int screen_hal_copy_m2m (lcd_wincfg_t *cfg, copybuf_t *copybuf, uint8_t pix_bytes)
 {
     screen_t *dest = &copybuf->dest;
     screen_t *src = &copybuf->src;
-    const uint32_t dma2d_mode = (src->alpha) ? DMA2D_M2M_BLEND : DMA2D_M2M;
 
     void *dptr = __screen_2_ptr(dest, pix_bytes);
     void *sptr = __screen_2_ptr(src,  pix_bytes);
@@ -357,9 +360,8 @@ int screen_hal_copy (lcd_wincfg_t *cfg, copybuf_t *copybuf, uint8_t pix_bytes)
     __screen_check(cfg, dest);
     __screen_check(cfg, src);
 
-    __screen_hal_copy_setup(GET_VHAL_CTXT(cfg), dest->colormode, src->colormode,
-                                    src->alpha, src->width, dest->width, src->width,
-                                    dma2d_mode);
+    __screen_hal_copy_setup_M2M(GET_VHAL_CTXT(cfg), dest->colormode, src->colormode,
+                                    src->alpha, src->width, dest->width, src->width);
 
     GET_VHAL_CTXT(cfg)->state = V_STATE_QCOPY;
 
@@ -371,12 +373,22 @@ int screen_gfx8888_copy (lcd_wincfg_t *cfg, gfx_2d_buf_t *dest, gfx_2d_buf_t *sr
     void *dptr = __gfx_2_ptr(dest, 4);
     void *sptr = __gfx_2_ptr(src, 4);
 
-    __screen_hal_copy_setup(GET_VHAL_CTXT(cfg), GFX_COLOR_MODE_RGBA8888, GFX_COLOR_MODE_RGBA8888,
-                                    0xff, src->w, dest->wtotal, src->wtotal, DMA2D_M2M);
+    __screen_hal_copy_setup_M2M(GET_VHAL_CTXT(cfg), GFX_COLOR_MODE_RGBA8888, GFX_COLOR_MODE_RGBA8888,
+                                    0xff, src->w, dest->wtotal, src->wtotal);
 
     GET_VHAL_CTXT(cfg)->state = V_STATE_QCOPY;
 
     return screen_hal_copy_start(cfg, src->w, src->h, dptr, sptr);
+}
+
+int screen_gfx8_copy_line (lcd_wincfg_t *cfg, void *dest, void *src, int w)
+{
+    __screen_hal_copy_setup_M2M(GET_VHAL_CTXT(cfg), cfg->config.colormode, cfg->config.colormode,
+                                    0xff, w, w, w);
+
+    GET_VHAL_CTXT(cfg)->state = V_STATE_QCOPY;
+
+    return screen_hal_copy_start(cfg, w, 1, dest, src);
 }
 
 typedef struct {
@@ -427,8 +439,8 @@ int screen_hal_scale_h8_2x2 (lcd_wincfg_t *cfg, copybuf_t *copybuf, int interlea
     fastline_h8.dptr = dptr;
     fastline_h8.sptr = sptr;
 
-    __screen_hal_copy_setup(GET_VHAL_CTXT(cfg), GFX_COLOR_MODE_CLUT, GFX_COLOR_MODE_CLUT,
-                            0xff, src->width, dw * 2, sw, DMA2D_M2M);
+    __screen_hal_copy_setup_M2M(GET_VHAL_CTXT(cfg), GFX_COLOR_MODE_CLUT, GFX_COLOR_MODE_CLUT,
+                            0xff, src->width, dw * 2, sw);
 
     GET_VHAL_CTXT(cfg)->state = V_STATE_COPYFAST;
 
@@ -492,7 +504,7 @@ screen_hal_copy_next (screen_hal_ctxt_t *ctxt)
     }
     buf = bufq;
     bufq = bufq->next;
-    ret = screen_hal_copy(ctxt->lcd_cfg, buf, screen_mode2pixdeep[ctxt->lcd_cfg->config.colormode]);
+    ret = screen_hal_copy_m2m(ctxt->lcd_cfg, buf, screen_mode2pixdeep[ctxt->lcd_cfg->config.colormode]);
     ctxt->lcd_cfg->config.alloc.free(buf);
     ctxt->bufq = bufq;
     return ret;
