@@ -24,7 +24,6 @@ static pane_t *pane_console, *pane_selector,
 static int b_exec_selector_cursor = 0;
 
 static void boot_gui_bsp_init (gui_t *gui);
-static void b_dev_deinit_callback (void);
 
 typedef struct {
     int (*func) (const char *);
@@ -221,7 +220,6 @@ b_alert_decline_clbk (const component_t *com)
 static int
 b_alert_accept_clbk (const component_t *com)
 {
-extern void (*dev_deinit_callback) (void);
     int ret;
 
     bsfx_title_music(0, 0);
@@ -235,7 +233,6 @@ extern void (*dev_deinit_callback) (void);
     if (ret != CMDERR_OK) {
         bsfx_title_music(1, 40);
     } else {
-        dev_deinit_callback = b_dev_deinit_callback;
         gui.destroy = 1;
     }
     return ret;
@@ -281,7 +278,7 @@ boot_gui_set_proc_stat (const char *msg, int percent)
 {
     if (win_prog_set(pane_progress, msg, percent)) {
         gui_draw(&gui, 1);
-        HAL_Delay(10);
+        d_sleep(10);
     }
 }
 
@@ -333,8 +330,17 @@ void boot_gui_preinit (void)
     gui_select_pane(&gui, pane_progress);
 }
 
+void b_dev_deinit_callback (void)
+{
+    bres_exec_unload();
+    bsp_stout_unreg_if(gui_stdout_hook);
+    gui_destroy(&gui);
+}
+
 int boot_main (int argc, const char **argv)
 {
+extern void (*dev_deinit_callback) (void);
+
     jpeg_init("");
     boot_gui_preinit();
 
@@ -350,29 +356,22 @@ int boot_main (int argc, const char **argv)
     bsfx_title_music(1, 40);
     boot_gui_set_proc_stat(BOOT_STARTUP_MUSIC_PATH, 99);
     boot_gui_set_proc_stat("Done...", 100);
+    gui_release_pane(&gui);
     gui_select_pane(&gui, pane_selector);
 
     complete_ind_clbk = boot_gui_set_proc_stat;
+    dev_deinit_callback = b_dev_deinit_callback;
+
     while (!gui.destroy)
     {
         bsp_tickle();
         gui_draw(&gui, 0);
         input_proc_keys(NULL);
     }
-    complete_ind_clbk = NULL;
-    bres_exec_unload();
     bsp_tickle();
+    complete_ind_clbk = NULL;
     assert(0);
     return 0;
-}
-
-static void b_dev_deinit_callback (void)
-{
-    if (!gui.destroy) {
-        return;
-    }
-    bsp_stout_unreg_if(gui_stdout_hook);
-    gui_destroy(&gui);
 }
 
 static void gui_char_input_event_wrap (gui_t *gui, gevt_t *evt)

@@ -51,6 +51,7 @@
 #include "ff_gen_drv.h"
 #include "sd_diskio.h"
 #include "stm32f769i_discovery_audio.h"
+#include "stm32f7xx_it.h"
 #include "debug.h"
 #include "nvic.h"
 #include "heap.h"
@@ -599,6 +600,22 @@ void BSP_SD_ReadCpltCallback(void)
 #endif
 }
 
+extern SD_HandleTypeDef uSdHandle;
+
+void BSP_SDMMC_DMA_Tx_IRQHandler (void)
+{
+    HAL_DMA_IRQHandler(uSdHandle.hdmatx);
+}
+
+void BSP_SDMMC_DMA_Rx_IRQHandler (void)
+{
+    HAL_DMA_IRQHandler(uSdHandle.hdmarx);
+}
+
+void SDMMC2_IRQHandler (void)
+{
+    HAL_SD_IRQHandler(&uSdHandle);
+}
 
 #endif
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

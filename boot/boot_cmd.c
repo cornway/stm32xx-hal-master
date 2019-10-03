@@ -254,7 +254,6 @@ int bin_execute (int argc, const char **argv)
             case BIN_FILE:
                 progptr = bhal_install_executable(complete_ind_clbk, progptr, &progbytes, binpath);
                 err = (progptr && progbytes) ? CMDERR_OK : CMDERR_NOCORE;
-                complete_ind_clbk = NULL;
             break;
             case BIN_LINK:
                 return b_execute_link(binpath);

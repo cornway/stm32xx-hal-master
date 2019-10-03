@@ -392,6 +392,7 @@ wcon_alloc (gui_t *gui, const char *name,
 
     wmax = w / fprop.w;
     hmax = h / fprop.h;
+    hmax = hmax ? hmax - 1 : 0;
 
     textsize = hmax * wmax;
     winmemsize += hmax * sizeof(con_line_t);

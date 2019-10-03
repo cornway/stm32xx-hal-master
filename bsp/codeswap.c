@@ -20,6 +20,7 @@ static uint8_t cs_code_ready = 0;
 
 int cs_load_code (void *unused1, void *unused2, int unused3)
 {
+    size_t size = RAMCODE_IMG_LENGTH;
     if (cs_code_ready) {
         return 0;
     }
@@ -29,7 +30,7 @@ int cs_load_code (void *unused1, void *unused2, int unused3)
     }
     d_memcpy(RAMCODE_IMG_BASE, RAMCODE_LOAD_BASE, RAMCODE_IMG_LENGTH);
     dprintf("codeswap region: <%p> : 0x%08x bytes\n", RAMCODE_IMG_BASE, RAMCODE_IMG_LENGTH);
-    mpu_lock(RAMCODE_IMG_BASE, RAMCODE_IMG_LENGTH, "xwr");
+    mpu_lock(RAMCODE_IMG_BASE, &size, "xwr");
     cs_code_ready = 1;
     return 0;
 }

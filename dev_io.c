@@ -27,22 +27,18 @@ static char DEV_Path[4] = {0};
 
 typedef struct {
     int type;
-    uint8_t refcnt;
-    char ptr[];
+    uint32_t refcnt;
+    uint32_t ptr[];
 } fobjhdl_t;
 
 typedef struct {
-    int type;
-    int is_owned;
     FIL file;
-} fhandle_t;
+} ALIGN(8) fhandle_t;
 
 typedef struct {
-    int type;
-    int is_owned;
     DIR dir;
     FILINFO fn;
-} dirhandle_t;
+} ALIGN(8) dirhandle_t;
 
 static fobjhdl_t *handles[MAX_HANDLES * 2];
 

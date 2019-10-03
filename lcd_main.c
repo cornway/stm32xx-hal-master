@@ -373,12 +373,17 @@ vid_copy_HW (screen_t *dest, screen_t *src)
     uint8_t colormode = lcd_active_cfg->config.colormode;
 
     vid_vsync(0);
-    return screen_hal_copy(lcd_active_cfg, &copybuf, screen_mode2pixdeep[colormode]);
+    return screen_hal_copy_m2m(lcd_active_cfg, &copybuf, screen_mode2pixdeep[colormode]);
 }
 
 int vid_copy (screen_t *dest, screen_t *src)
 {
     return vid_copy_HW(dest, src);
+}
+
+int vid_copy_line_8b (void *dest, void *src, int w)
+{
+    return screen_gfx8_copy_line(lcd_active_cfg, dest, src, w);
 }
 
 int vid_gfx2d_direct (int x, int y, gfx_2d_buf_t *src, int laynum)
@@ -409,14 +414,14 @@ static void
 screen_copy_1x1_HW (screen_t *in)
 {
     screen_t screen;
-    copybuf_t copybuf;
+    copybuf_t copybuf = {NULL};
 
-    vid_vsync(1);
     vid_get_ready_screen(&screen);
+    vid_vsync(1);
     copybuf.dest = screen;
     copybuf.src = *in;
 
-    screen_hal_copy(lcd_active_cfg, &copybuf, 1);
+    screen_hal_copy_m2m(lcd_active_cfg, &copybuf, 1);
 }
 
 static void
@@ -425,8 +430,9 @@ screen_copy_2x2_HW (screen_t *in)
     screen_t screen;
     copybuf_t copybuf;
 
-    vid_vsync(1);
     vid_get_ready_screen(&screen);
+    vid_vsync(1);
+
     copybuf.dest = screen;
     copybuf.src = *in;
 
@@ -441,9 +447,8 @@ screen_copy_2x2_8bpp (screen_t *in)
     screen_t screen;
     gfx_2d_buf_t dest, src;
 
-    vid_vsync(1);
     vid_get_ready_screen(&screen);
-
+    vid_vsync(1);
     __screen_to_gfx2d(&dest, &screen);
     __screen_to_gfx2d(&src, in);
     gfx2d_scale2x2_8bpp(&dest, &src);

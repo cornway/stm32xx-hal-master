@@ -272,6 +272,13 @@ void BSP_AUDIO_OUT_Error_CallBack(void)
     error_handle();
 }
 
+extern SAI_HandleTypeDef haudio_out_sai;
+
+void AUDIO_OUT_SAIx_DMAx_IRQHandler(void)
+{
+  HAL_DMA_IRQHandler(haudio_out_sai.hdmatx);
+}
+
 static void a_isr_clear_all (void)
 {
     isr_status = A_ISR_NONE;

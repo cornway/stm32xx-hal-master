@@ -1,3 +1,6 @@
+
+#include "stm32f7xx_it.h"
+
 #include "int/input_int.h"
 #include <usbh_def.h>
 #include <usbh_conf.h>
@@ -119,6 +122,17 @@ USBH_StatusTypeDef USBH_HID_GamepadInit(USBH_HandleTypeDef *phost)
     fifo_init(&HID_Handle->fifo, phost->device.Data, HID_Handle->length);
 
     return USBH_OK;
+}
+
+extern HCD_HandleTypeDef hhcd;
+
+#ifdef USE_USB_FS
+void OTG_FS_IRQHandler(void)
+#else
+void OTG_HS_IRQHandler(void)
+#endif
+{
+  HAL_HCD_IRQHandler(&hhcd);
 }
 
 #endif /*BSP_DRIVER*/
