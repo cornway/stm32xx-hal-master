@@ -85,6 +85,77 @@ gfx2d_scale2x2_8bpp (gfx_2d_buf_t *dest, gfx_2d_buf_t *src)
     }
 }
 
+IRAMFUNC static void
+__gfx2d_scale2x2_8bpp_F (blut8_t *lut, gfx_2d_buf_t *dest, gfx_2d_buf_t *src);
+
+static void
+__gfx2d_scale2x2_8bpp_F (blut8_t *lut, gfx_2d_buf_t *dest, gfx_2d_buf_t *src)
+{
+    scanline8_u d_yt0, d_yt1, d_yref;
+    scanline8_t *scanline, *scanline2;
+    pix_outx2_t *d_y0, *d_y1;
+    pix_outx2_t pix;
+    pix8_t *rawptr, p_yref;
+    int s_y, i;
+
+    rawptr = (pix8_t *)src->buf;
+
+    d_y0 = (pix_outx2_t *)dest->buf;
+    d_y1 = GFXBUF_NEXT_SCALED_LINE_8bpp(d_y0, src->wtotal, 1);
+
+    for (s_y = 0; s_y < (src->wtotal * (src->htotal - 1)); s_y += src->wtotal) {
+
+        scanline = (scanline8_t *)&rawptr[s_y];
+        scanline2 = (scanline8_t *)&rawptr[s_y + src->wtotal];
+
+        for (i = 0; i < src->w; i += GFXBUF_BYTES_STEP_8bpp) {
+
+            d_yref.sl = *scanline2++;
+            d_yt0.sl = *scanline++;
+            p_yref = scanline->a[0];
+            d_yt1    = d_yt0;
+
+            d_yt0.sl.a[3] = lut->lut[d_yt1.sl.a[1]][d_yt1.sl.a[2]];
+            d_yt0.sl.a[2] = d_yt1.sl.a[1];
+            d_yt0.sl.a[1] = lut->lut[d_yt1.sl.a[0]][d_yt1.sl.a[1]];
+
+            d_yt1.sl.a[0] = d_yt1.sl.a[2];
+            d_yt1.sl.a[1] = lut->lut[d_yt1.sl.a[2]][d_yt1.sl.a[3]];
+            d_yt1.sl.a[2] = d_yt1.sl.a[3];
+            d_yt1.sl.a[3] = lut->lut[d_yt1.sl.a[3]][p_yref];
+
+
+            pix.a[0] = d_yt0;
+            pix.a[1] = d_yt1;
+
+            *d_y0++     = pix;
+
+            pix.a[0].sl.a[1] = lut->lut[d_yt0.sl.a[0]][d_yref.sl.a[0]];
+            pix.a[0].sl.a[3] = lut->lut[d_yt0.sl.a[2]][d_yref.sl.a[1]];
+
+            pix.a[1].sl.a[1] = lut->lut[d_yt1.sl.a[0]][d_yref.sl.a[2]];
+            pix.a[1].sl.a[3] = lut->lut[d_yt1.sl.a[2]][d_yref.sl.a[3]];
+
+            pix.a[0].sl.a[0] = pix.a[0].sl.a[1];
+            pix.a[0].sl.a[2] = pix.a[0].sl.a[3];
+            pix.a[1].sl.a[0] = pix.a[1].sl.a[1];
+            pix.a[1].sl.a[2] = pix.a[1].sl.a[3];
+
+            *d_y1++     = pix;
+        }
+        d_y0 = GFXBUF_NEXT_SCALED_LINE_8bpp(d_y0, src->wtotal, 1);
+        d_y1 = GFXBUF_NEXT_SCALED_LINE_8bpp(d_y1, src->wtotal, 1);
+    }
+}
+
+void
+gfx2d_scale2x2_8bpp_filt (blut8_t *lut, gfx_2d_buf_t *dest, gfx_2d_buf_t *src)
+{
+    if (cs_check_symb(__gfx2d_scale2x2_8bpp)) {
+        __gfx2d_scale2x2_8bpp_F(lut, dest, src);
+    }
+}
+
 typedef struct {
     scanline8_u a[3];
 } pix_outx3_t;

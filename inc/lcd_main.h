@@ -38,7 +38,8 @@ typedef struct {
     uint8_t clockpresc;
     uint8_t hwaccel: 2,
             cachealgo: 2,
-            reserved: 4;
+            filter: 1,
+            reserved: 3;
 } screen_conf_t;
 
 typedef struct bsp_video_api_s {

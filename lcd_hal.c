@@ -459,7 +459,6 @@ screen_hal_copy_h8_next (screen_hal_ctxt_t *ctxt)
         return 0;
     }
 
-    
     fastline_h8.copycnt--;
     fastline_h8.copydone++;
 

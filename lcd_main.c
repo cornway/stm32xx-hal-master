@@ -4,6 +4,7 @@
 
 #include "int/lcd_int.h"
 #include "gui/colors.h"
+#include <gui.h>
 
 #include <lcd_main.h>
 #include <misc_utils.h>
@@ -16,6 +17,7 @@ static void screen_copy_1x1_SW (screen_t *in);
 static void screen_copy_1x1_HW (screen_t *in);
 static void screen_copy_2x2_HW (screen_t *in);
 static void screen_copy_2x2_8bpp (screen_t *in);
+static void screen_copy_2x2_8bpp_filt (screen_t *in);
 static void screen_copy_3x3_8bpp (screen_t *in);
 
 static screen_update_handler_t vid_scaler_handler = NULL;
@@ -46,8 +48,11 @@ const uint32_t screen_mode2pixdeep[GFX_COLOR_MODE_MAX] =
     [GFX_COLOR_MODE_RGBA8888]   = 4,
 };
 
+static int vid_gfx_filter_scale = 0;
+
 int vid_init (void)
 {
+    cmd_register_i32(&vid_gfx_filter_scale, "vidfilt");
     return screen_hal_init(1);
 }
 
@@ -179,20 +184,25 @@ void vid_ptr_align (int *x, int *y)
 static screen_update_handler_t vid_get_scaler (int scale, uint8_t colormode)
 {
     screen_update_handler_t h = NULL;
+    screen_conf_t *conf = &lcd_active_cfg->config;
 
     if (colormode == GFX_COLOR_MODE_CLUT) {
         switch (scale) {
             case 1:
-                if (lcd_active_cfg->config.hwaccel) {
+                if (conf->hwaccel) {
                     h = screen_copy_1x1_HW;
                 } else {
                     h = screen_copy_1x1_SW;
                 }
             case 2:
-                if (lcd_active_cfg->config.hwaccel) {
+                if (conf->hwaccel) {
                     h = screen_copy_2x2_HW;
                 } else {
-                    h = screen_copy_2x2_8bpp;
+                    if (conf->filter) {
+                        h = screen_copy_2x2_8bpp_filt;
+                    } else {
+                        h = screen_copy_2x2_8bpp;
+                    }
                 }
             break;
             case 3:
@@ -309,14 +319,125 @@ void vid_get_ready_screen (screen_t *screen)
     vid_get_screen(screen, lcd_active_cfg->ready_lay_idx);
 }
 
+static int
+vid_get_pal8_idx (rgba_t *pal, int palnum, int r, int g, int b)
+{
+    uint32_t best, best_diff, diff;
+    int i;
+    uint8_t pr, pg, pb;
+
+    best = 0;
+    best_diff = ~0;
+
+    for (i = 0; i < palnum; ++i)
+    {
+        pr = GFX_ARGB8888_R(pal[i]);
+        pg = GFX_ARGB8888_G(pal[i]);
+        pb = GFX_ARGB8888_B(pal[i]);
+        diff = (r - pr) * (r - pr)
+             + (g - pg) * (g - pg)
+             + (b - pb) * (b - pb);
+
+        if (diff < best_diff)
+        {
+            best = i;
+            best_diff = diff;
+        }
+
+        if (diff == 0)
+        {
+            break;
+        }
+    }
+
+    return best;
+}
+
+
+static inline
+rgba_t vid_blend (rgba_t fg, rgba_t bg, uint8_t a)
+{
+#define __blend(f, b, a) (uint8_t)(((uint16_t)(f * a) + (uint16_t)(b * (255 - a))) / 255)
+    rgba_t ret;
+
+    uint8_t fg_r = GFX_ARGB8888_R(fg);
+    uint8_t fg_g = GFX_ARGB8888_G(fg);
+    uint8_t fg_b = GFX_ARGB8888_B(fg);
+
+    uint8_t bg_r = GFX_ARGB8888_R(bg);
+    uint8_t bg_g = GFX_ARGB8888_G(bg);
+    uint8_t bg_b = GFX_ARGB8888_B(bg);
+
+    uint8_t r = __blend(fg_r, bg_r, a);
+    uint8_t g = __blend(fg_g, bg_g, a);
+    uint8_t b = __blend(fg_b, bg_b, a);
+
+    ret = GFX_RGBA8888(r, g, b, 0xff);
+    return ret;
+}
+
+static inline uint8_t
+vid_blend8 (rgba_t *pal, int palnum, uint8_t _fg, uint8_t _bg, uint8_t a)
+{
+    rgba_t fg = pal[_fg];
+    rgba_t bg = pal[_bg];
+    rgba_t pix = vid_blend(fg, bg, a);
+
+    return vid_get_pal8_idx(pal, palnum, GFX_ARGB8888_R(pix), GFX_ARGB8888_G(pix), GFX_ARGB8888_B(pix));
+}
+
+static void vid_gen_blut8 (lcd_wincfg_t *cfg, void *palette, int numentries)
+{
+    int i, j;
+    blut8_t *blut;
+    rgba_t *clut;
+
+    cfg->blutoff = numentries * sizeof(rgba_t);
+    cfg->blut = cfg->config.alloc.malloc(cfg->blutoff + sizeof(blut8_t));
+    if (NULL == cfg->blut) {
+        return;
+    }
+    clut = (rgba_t *)cfg->blut;
+    blut = (blut8_t *)((arch_word_t)clut + cfg->blutoff);
+
+    d_memcpy(clut, palette, numentries * sizeof(rgba_t));
+
+    for (i = 0; i < numentries; i++) {
+        for (j = 0; j < numentries; j++) {
+            if (i == j) {
+                blut->lut[i][j] = i;
+            } else {
+                blut->lut[i][j] = vid_blend8(clut, numentries, i, j, 128);
+            }
+        }
+    }
+}
+
+
 void vid_set_clut (void *palette, uint32_t clut_num_entries)
 {
     int layer;
 
     assert(lcd_active_cfg);
     screen_hal_sync(lcd_active_cfg, 1);
+    if (NULL == lcd_active_cfg->blut) {
+        vid_gen_blut8(lcd_active_cfg, palette, clut_num_entries);
+    }
     for (layer = 0; layer < lcd_active_cfg->config.laynum; layer++) {
         screen_hal_set_clut (lcd_active_cfg, palette, clut_num_entries, layer);
+    }
+}
+
+static void vid_setup_filter (void)
+{
+    if (vid_scaler_handler == screen_copy_2x2_8bpp &&
+        vid_gfx_filter_scale) {
+
+        vid_scaler_handler = screen_copy_2x2_8bpp_filt;
+    } else if (vid_scaler_handler == screen_copy_2x2_8bpp_filt &&
+        !vid_gfx_filter_scale) {
+
+        vid_scaler_handler = screen_copy_2x2_8bpp;
     }
 }
 
@@ -325,6 +446,9 @@ void vid_update (screen_t *in)
     if (in == NULL) {
         vid_vsync(1);
     } else {
+        in->colormode = lcd_active_cfg->config.colormode;
+        in->alpha = 0xff;
+        vid_setup_filter();
         vid_scaler_handler(in);
     }
 }
@@ -453,6 +577,24 @@ screen_copy_2x2_8bpp (screen_t *in)
     __screen_to_gfx2d(&src, in);
     gfx2d_scale2x2_8bpp(&dest, &src);
 }
+
+static void
+screen_copy_2x2_8bpp_filt (screen_t *in)
+{
+    screen_t screen;
+    gfx_2d_buf_t dest, src;
+
+    if (NULL == lcd_active_cfg->blut) {
+        screen_copy_2x2_8bpp(in);
+        return;
+    }
+    vid_get_ready_screen(&screen);
+    vid_vsync(1);
+    __screen_to_gfx2d(&dest, &screen);
+    __screen_to_gfx2d(&src, in);
+    gfx2d_scale2x2_8bpp_filt((blut8_t *)((uint32_t)lcd_active_cfg->blut + lcd_active_cfg->blutoff), &dest, &src);
+}
+
 
 static void
 screen_copy_3x3_8bpp(screen_t *in)

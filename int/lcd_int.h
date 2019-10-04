@@ -21,6 +21,7 @@ typedef struct {
     void *hal_ctxt;
     screen_conf_t config;
     uint16_t w, h;
+    void *blut;
     void *extmem;
     void *raw_mem;
     void *lay_mem[LCD_MAX_LAYER];
@@ -28,6 +29,7 @@ typedef struct {
     uint32_t fb_size;
     uint32_t lay_size;
     lcd_layers_t ready_lay_idx;
+    uint16_t blutoff;
 } lcd_wincfg_t;
 
 typedef void (*screen_update_handler_t) (screen_t *in);

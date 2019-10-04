@@ -16,6 +16,10 @@ typedef struct {
     int wtotal, htotal;
 } gfx_2d_buf_t;
 
+typedef struct {
+    uint8_t lut[256][256];
+} blut8_t;
+
 static inline void
 __screen_to_gfx2d (gfx_2d_buf_t *g, screen_t *s)
 {
