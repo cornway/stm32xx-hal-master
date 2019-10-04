@@ -9,6 +9,7 @@
 #include <misc_utils.h>
 #include <debug.h>
 #include <dev_io.h>
+#include <heap.h>
 
 #define P_RECORDS_MAX 1024
 #define P_MAX_DEEPTH 36
@@ -38,7 +39,7 @@ typedef struct {
 
 static int profiler_print_dvar (void *p1, void *p2);
 
-static record_t records_pool[P_RECORDS_MAX];
+static record_t *records_pool = NULL;
 static uint16_t last_alloced_record = 0;
 
 static rhead_t record_levels[P_MAX_DEEPTH];
@@ -82,6 +83,12 @@ static void delay_us (uint32_t us)
 static inline record_t *prof_alloc_rec (void)
 {
     if (last_alloced_record >= P_RECORDS_MAX) {
+        return NULL;
+    }
+    if (NULL == records_pool) {
+        records_pool = heap_malloc(P_RECORDS_MAX * sizeof(record_t));
+    }
+    if (NULL == records_pool) {
         return NULL;
     }
     return &records_pool[last_alloced_record++];
@@ -171,7 +178,13 @@ void _profiler_exit (const char *func, int line)
 void profiler_reset (void)
 {
     int i;
-    memset(records_pool, 0, sizeof(records_pool));
+
+    if (NULL == records_pool) {
+        return;
+    }
+    d_memzero(records_pool, P_MAX_DEEPTH * sizeof(record_t));
+    heap_free(records_pool);
+    records_pool = NULL;
 
     for (i = 0; i < P_MAX_DEEPTH; i++) {
         record_levels[i].top = -1;
@@ -267,7 +280,12 @@ void profiler_print (void)
     dprintf("%s() : \n", __func__);
     dprintf("core clock = \'%u\', clocks per us = \'%u\'\n",
         SystemCoreClock, clocks_per_us);
-    
+
+
+    if (NULL == records_pool) {
+        return;
+    }
+
     for (i = 0; i < P_MAX_DEEPTH; i++) {
 
         tail = &record_levels[i];

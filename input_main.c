@@ -37,13 +37,6 @@ static uint8_t ts_freeze_ticks = 0;
 
 static uint32_t joypad_timestamp = 0;
 
-
-int8_t ctrl_key_action = -1;
-uint8_t extra_key_remaped = 0;
-uint8_t lookfly_key_action = 0;
-uint8_t lookfly_key_remaped = 0;
-uint8_t lookfly_key_trigger = 0;
-
 static int ts_screen_zones[2][3];
 static uint8_t ts_zones_keymap[3][4];
 
