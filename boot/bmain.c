@@ -106,7 +106,7 @@ int b_execute_link (const char *path)
         return -CMDERR_NOCORE;
     }
     d_close(f);
-    cmd_exec_dsr("bin", strbuf);
+    cmd_exec_dsr(strbuf, "");
     return CMDERR_OK;
 }
 

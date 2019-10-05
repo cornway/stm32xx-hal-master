@@ -38,6 +38,7 @@ static int _cmd_export_all (int argc, const char **argv);
 static int __cmd_fs_touch (int argc, const char **argv);
 static void cmd_dvar_unregister_all (void);
 static int cmd_bsp_sys_reset (int argc, const char **argv);
+static int cmd_bsp_sys_poweroff (int argc, const char **argv);
 static int __cmd_fs_mkdir (int argc, const char **argv);
 static int __cmd_fs_mkdir (int argc, const char **argv);
 static void cmd_exec_pending (cmd_handler_t hdlr);
@@ -69,6 +70,7 @@ static const cmd_func_map_t cmd_func_tbl[] =
 {
     {"print",       __cmd_print_env},
     {"reset",       cmd_bsp_sys_reset},
+    {"poweroff",    cmd_bsp_sys_poweroff},
     {"register",    __cmd_register_var},
     {"unreg",       __cmd_unregister_var},
     {"bsp",         __cmd_exec_internal},
@@ -673,6 +675,15 @@ extern void SystemSoftReset (void);
     return -CMDERR_UNKNOWN;
 }
 
+static int cmd_bsp_sys_poweroff (int argc, const char **argv)
+{
+extern void dev_deinit (void);
+    dprintf("poweroff ...");
+    dev_deinit();
+    for (;;) {}
+    bug();
+}
+
 int cmd_execute (const char *cmd, int len)
 {
     char buf[CMD_MAX_BUF];
@@ -1006,7 +1017,7 @@ static int _cmd_register_var (cmdvar_t *var, const char *name)
     }
 
     v->namelen = snprintf(v->name, sizeof(v->name), "%s", name);
-    memcpy(&v->dvar, var, sizeof(v->dvar));
+    d_memcpy(&v->dvar, var, sizeof(v->dvar));
 
     if (dvar_head == NULL) {
         dvar_head = v;

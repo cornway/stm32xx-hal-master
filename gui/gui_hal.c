@@ -4,10 +4,10 @@
 /*HAL api*/
 /*=======================================================================================*/
 
-void gui_rect_fill_HAL (component_t *com, dim_t *rect, rgba_t color)
+void gui_rect_fill_HAL (dim_t *dest, dim_t *rect, rgba_t color)
 {
     dim_t d = *rect;
-    dim_place(&d, &com->dim);
+    dim_place(&d, dest);
     BSP_LCD_SetTextColor(color);
     BSP_LCD_FillRect(d.x, d.y, d.w, d.h);
 }

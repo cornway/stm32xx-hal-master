@@ -217,7 +217,7 @@ int gui_apendxy (component_t *com, int x, int y, const char *fmt, ...) PRINTF_AT
 int gui_draw_string (component_t *com, int line, rgba_t textcolor, const char *str);
 int gui_draw_string_c (component_t *com, int line, rgba_t textcolor, const char *str);
 
-void gui_rect_fill (component_t *com, dim_t *rect, rgba_t color);
+void gui_rect_fill (gui_t *gui, dim_t *dest, dim_t *rect, rgba_t color);
 void gui_com_fill (component_t *com, rgba_t color);
 
 void gui_com_clear (component_t *com);

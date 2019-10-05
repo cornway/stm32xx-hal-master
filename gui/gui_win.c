@@ -593,7 +593,7 @@ win_con_clean_line (component_t *com, fontprop_t *fprop, con_line_t *line, int l
 {
     if (line->pos) {
         dim_t dim = {0, linenum * fprop->h, line->pos * fprop->w, fprop->h};
-        gui_rect_fill(com, &dim, com->bcolor);
+        gui_rect_fill(com->parent->parent, &com->dim, &dim, com->bcolor);
     }
 }
 
@@ -736,10 +736,10 @@ static int win_prog_repaint (pane_t *pane, component_t *com, void *user)
         left = dim.w - compl;
 
         dim.w = compl;
-        gui_rect_fill(com, &dim, COLOR_BLUE);
+        gui_rect_fill(pane->parent, &com->dim, &dim, COLOR_BLUE);
         dim.x = compl;
         dim.w = left;
-        gui_rect_fill(com, &dim, COLOR_WHITE);
+        gui_rect_fill(pane->parent, &com->dim, &dim, COLOR_WHITE);
     } else {
         gui_com_fill(com, COLOR_RED);
     }

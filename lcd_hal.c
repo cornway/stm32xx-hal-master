@@ -39,13 +39,13 @@ lcd_layers_t screen_hal_set_layer (lcd_wincfg_t *cfg)
     lcd_layers_t nextlay;
 
     switch (cfg->ready_lay_idx) {
-        case LCD_FOREGROUND:
+        case LCD_BACKGROUND:
             BSP_LCD_SelectLayer(LCD_BACKGROUND);
             BSP_LCD_SetTransparency(LCD_FOREGROUND, GFX_OPAQUE);
             BSP_LCD_SetTransparency(LCD_BACKGROUND, GFX_TRANSPARENT);
             nextlay = LCD_BACKGROUND;
         break;
-        case LCD_BACKGROUND:
+        case LCD_FOREGROUND:
             BSP_LCD_SelectLayer(LCD_FOREGROUND);
             BSP_LCD_SetTransparency(LCD_BACKGROUND, GFX_OPAQUE);
             BSP_LCD_SetTransparency(LCD_FOREGROUND, GFX_TRANSPARENT);

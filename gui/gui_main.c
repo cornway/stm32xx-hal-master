@@ -8,7 +8,7 @@
 #include <heap.h>
 #include <bsp_cmd.h>
 
-extern void gui_rect_fill_HAL (component_t *com, dim_t *rect, rgba_t color);
+extern void gui_rect_fill_HAL (dim_t *dest, dim_t *rect, rgba_t color);
 extern void gui_com_fill_HAL (component_t *com, rgba_t color);
 extern int gui_draw_string_HAL (component_t *com, int line,
                                 rgba_t textcolor, const char *str, int txtmode);
@@ -170,6 +170,7 @@ void gui_destroy (gui_t *gui)
             heap_free(com);
             com = com->next;
         }
+        gui_rect_fill(pane->parent, &pane->dim, &pane->dim, COLOR_BLACK);
         heap_free(pane);
         pane = pane->next;
     }
@@ -351,10 +352,10 @@ int gui_draw_string_c (component_t *com, int line, rgba_t textcolor, const char 
     return gui_draw_string_HAL(com, line, textcolor, str, GUI_CENTER_ALIGN);
 }
 
-void gui_rect_fill (component_t *com, dim_t *rect, rgba_t color)
+void gui_rect_fill (gui_t *gui, dim_t *dest, dim_t *rect, rgba_t color)
 {
-    gui_rect_fill_HAL(com, rect, color);
-    gui_set_dirty(com->parent->parent, rect);
+    gui_rect_fill_HAL(dest, rect, color);
+    gui_set_dirty(gui, rect);
 }
 
 static int

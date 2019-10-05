@@ -101,15 +101,15 @@ static void vid_release (lcd_wincfg_t *cfg)
         return;
     }
     if (cfg->raw_mem) {
-        d_memset(cfg->raw_mem, 0, cfg->fb_size);
+        d_memzero(cfg->raw_mem, cfg->fb_size);
         heap_free(cfg->raw_mem);
     }
     if (cfg->extmem) {
-        d_memset(cfg->extmem, 0, cfg->extmem_size);
+        d_memzero(cfg->extmem, cfg->extmem_size);
         heap_free(cfg->extmem);
     }
     vid_mpu_release(cfg);
-    d_memset(cfg, 0, sizeof(*cfg));
+    d_memzero(cfg, sizeof(*cfg));
 }
 
 void vid_deinit (void)
@@ -420,7 +420,7 @@ void vid_set_clut (void *palette, uint32_t clut_num_entries)
 
     assert(lcd_active_cfg);
     screen_hal_sync(lcd_active_cfg, 1);
-    if (NULL == lcd_active_cfg->blut) {
+    if (lcd_active_cfg->config.filter && NULL == lcd_active_cfg->blut) {
         vid_gen_blut8(lcd_active_cfg, palette, clut_num_entries);
     }
     for (layer = 0; layer < lcd_active_cfg->config.laynum; layer++) {

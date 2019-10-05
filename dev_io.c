@@ -27,7 +27,8 @@ static char DEV_Path[4] = {0};
 
 typedef struct {
     int type;
-    uint32_t refcnt;
+    uint16_t refcnt;
+    uint16_t dir;
     uint32_t ptr[];
 } fobjhdl_t;
 
@@ -79,6 +80,7 @@ static inline void *allochandle (fobjhdl_t **hdls, int *num, int dir)
                 break;
             }
             hdls[i]->refcnt = 1;
+            hdls[i]->dir = dir;
             *num = i;
             return hdls[i]->ptr;
         }
@@ -96,6 +98,23 @@ static inline void releasehandle (fobjhdl_t **hdls, int handle)
 {
     heap_free(hdls[handle]);
     hdls[handle] = NULL;
+}
+
+static inline void *releasehandles (fobjhdl_t **hdls)
+{
+    int i;
+
+    for (i=0 ; i<MAX_HANDLES * 2; i++) {
+        if (hdls[i]) {
+            dprintf("closing stream is_dir= %u\n", hdls[i]->dir);
+            if (hdls[i]->dir) {
+                d_closedir(i);
+            } else {
+                d_close(i);
+            }
+            releasehandle(hdls, i);
+        }
+    }
 }
 
 int FR_2_ERR (FRESULT res)
@@ -176,9 +195,11 @@ void dev_io_deinit (void)
 {
 extern void SD_Deinitialize(void);
 
-    dprintf("%s() :\n", __func__);
+    dprintf("%s()+ :\n", __func__);
+    releasehandles(handles);
     _devio_unmount(DEV_Path);
     SD_Deinitialize();
+    dprintf("%s()- :\n", __func__);
 }
 
 

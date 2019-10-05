@@ -40,6 +40,8 @@ int g_dev_debug_level = DBG_ERR;
 
 static void SystemClock_Config(void);
 
+static void sys_exception_handler (uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3);
+
 static void clock_fault (void)
 {
     bug();
@@ -61,6 +63,8 @@ void dumpstack (void)
 
 void fatal_error (char *message, ...)
 {
+extern void SystemSoftReset (void);
+
     va_list argptr;
 
     va_start (argptr, message);
@@ -68,6 +72,7 @@ void fatal_error (char *message, ...)
     va_end (argptr);
 
     serial_flush();
+    SystemSoftReset();
     for(;;) {}
 }
 
@@ -235,8 +240,6 @@ void dev_deinit (void)
     vid_deinit();
     heap_dump();
     serial_deinit();
-
-    irq_destroy();
 }
 
 int bsp_drv_main (void)
@@ -267,6 +270,7 @@ int bsp_drv_main (void)
   */
 void NMI_Handler(void)
 {
+    sys_exception_handler(0, 0, 0, 0);
 }
 
 /**
@@ -276,10 +280,7 @@ void NMI_Handler(void)
   */
 void HardFault_Handler(void)
 {
-  /* Go to infinite loop when Hard Fault exception occurs */
-  //while (1)
-  //{
-  //}
+    sys_exception_handler(0, 0, 0, 0);
 }
 
 /**
@@ -289,10 +290,7 @@ void HardFault_Handler(void)
   */
 void MemManage_Handler(void)
 {
-  /* Go to infinite loop when Memory Manage exception occurs */
-//  while (1)
-//  {
-//  }
+    sys_exception_handler(0, 0, 0, 0);
 }
 
 /**
@@ -302,10 +300,7 @@ void MemManage_Handler(void)
   */
 void BusFault_Handler(void)
 {
-  /* Go to infinite loop when Bus Fault exception occurs */
-  while (1)
-  {
-  }
+    sys_exception_handler(0, 0, 0, 0);
 }
 
 /**
@@ -315,10 +310,7 @@ void BusFault_Handler(void)
   */
 void UsageFault_Handler(void)
 {
-  /* Go to infinite loop when Usage Fault exception occurs */
-  while (1)
-  {
-  }
+    sys_exception_handler(0, 0, 0, 0);
 }
 
 /**
@@ -328,6 +320,7 @@ void UsageFault_Handler(void)
   */
 void SVC_Handler(void)
 {
+    sys_exception_handler(0, 0, 0, 0);
 }
 
 /**
@@ -337,6 +330,7 @@ void SVC_Handler(void)
   */
 void DebugMon_Handler(void)
 {
+    sys_exception_handler(0, 0, 0, 0);
 }
 
 /**
@@ -346,6 +340,7 @@ void DebugMon_Handler(void)
   */
 void PendSV_Handler(void)
 {
+    sys_exception_handler(0, 0, 0, 0);
 }
 
 /**
@@ -358,6 +353,10 @@ void SysTick_Handler(void)
   HAL_IncTick();
 }
 
+static void sys_exception_handler (uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3)
+{
+    bug();
+}
 
 #endif /*!defined(MODULE) && defined(BSP_DRIVER)*/
 

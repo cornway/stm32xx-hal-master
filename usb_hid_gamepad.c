@@ -22,6 +22,7 @@ static USBH_HandleTypeDef hUSBHost;
 
 static irqmask_t usb_irq;
 static gamepad_drv_t joypad_drv = {NULL};
+static uint8_t joypad_ready = 0;
 static uint32_t jpad_last_tsf;
 
 int joypad_read (int8_t *pads)
@@ -66,6 +67,7 @@ void joypad_bsp_deinit (void)
 void joypad_bsp_init (void)
 {
     irqmask_t temp;
+    uint32_t timeout = 2000;
 
     irq_bmap(&temp);
     USBH_Init(&hUSBHost, USBH_UserProcess, 0);
@@ -73,6 +75,12 @@ void joypad_bsp_init (void)
     USBH_Start(&hUSBHost);
     irq_bmap(&usb_irq);
     usb_irq = usb_irq & (~temp);
+    timeout += d_time();
+    joypad_ready = 0;
+    while (timeout > d_time() && !joypad_ready) {
+        joypad_tickle();
+        d_sleep(10);
+    }
 }
 
 void USBH_HID_EventCallback(USBH_HandleTypeDef *phost)
@@ -94,13 +102,9 @@ USBH_StatusTypeDef USBH_HID_GamepadInit(USBH_HandleTypeDef *phost)
 {
     HID_HandleTypeDef *HID_Handle =  (HID_HandleTypeDef *) phost->pActiveClass->pData;
 
-    if (joypad_drv.init ||
-        joypad_drv.read ||
-        joypad_drv.deinit) {
-
+    if (joypad_ready) {
         return USBH_FAIL;
     }
-
     if (phost->device.DevDesc.idProduct == 0x1 &&
         phost->device.DevDesc.idVendor == 0x810) {
 
@@ -120,7 +124,7 @@ USBH_StatusTypeDef USBH_HID_GamepadInit(USBH_HandleTypeDef *phost)
     HID_Handle->pData = (uint8_t *)g_usb_data;
 
     fifo_init(&HID_Handle->fifo, phost->device.Data, HID_Handle->length);
-
+    joypad_ready = 1;
     return USBH_OK;
 }
 
