@@ -18,6 +18,7 @@
   */
 
 /* Includes ------------------------------------------------------------------*/
+#include "../utilities/jpeg/jpeg_utils.h"
 #include <jpeg.h>
 
 

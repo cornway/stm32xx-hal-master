@@ -47,13 +47,16 @@
 
 
 /* Includes ------------------------------------------------------------------*/
-#include "string.h"
-#include "ff_gen_drv.h"
-#include "sd_diskio.h"
+#include <string.h>
+
+#include "../../ulib/io/fs/FatFs/src/ff_gen_drv.h"
+#include "../int/sd_diskio.h"
+#include "../int/nvic.h"
+
+/*TODO : remove from here*/
 #include "stm32f769i_discovery_audio.h"
 #include "stm32f7xx_it.h"
 #include "debug.h"
-#include "nvic.h"
 #include "heap.h"
 #include <misc_utils.h>
 

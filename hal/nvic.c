@@ -1,5 +1,5 @@
 #include "main.h"
-#include "nvic.h"
+#include "../int/nvic.h"
 #include "dev_conf.h"
 #include "debug.h"
 #include "misc_utils.h"

@@ -2,7 +2,7 @@
 #include <stm32f7xx_it.h>
 #include "stm32f769i_discovery_lcd.h"
 
-#include "int/lcd_int.h"
+#include "../int/lcd_int.h"
 
 #include <misc_utils.h>
 #include <bsp_sys.h>

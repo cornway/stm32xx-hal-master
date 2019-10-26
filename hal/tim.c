@@ -1,6 +1,6 @@
 #if defined(BSP_DRIVER)
 
-#include "int/tim_int.h"
+#include "../../common/int/tim_int.h"
 #include <misc_utils.h>
 
 extern uint32_t SystemCoreClock;

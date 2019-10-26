@@ -7,6 +7,8 @@
 #define MPU_CACHELINE 32
 #endif
 
+#include "misc_utils.h"
+
 void mpu_init (void);
 void mpu_deinit (void);
 int mpu_lock (arch_word_t addr, arch_word_t *size, const char *mode);

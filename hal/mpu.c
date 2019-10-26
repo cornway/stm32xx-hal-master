@@ -1,6 +1,6 @@
 #include "main.h"
 #include <misc_utils.h>
-#include <mpu.h>
+#include "../int/mpu.h"
 #include <string.h>
 #include <bsp_sys.h>
 #include <debug.h>

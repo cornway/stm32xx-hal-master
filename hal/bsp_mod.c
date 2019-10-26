@@ -1,8 +1,8 @@
 
 #include <string.h>
 #include <debug.h>
-#include "boot/int/boot_int.h"
-#include "int/bsp_mod_int.h"
+#include "../int/boot_int.h"
+#include "../int/bsp_mod_int.h"
 #include <bsp_sys.h>
 
 #define MOD_MAX_NAME 24

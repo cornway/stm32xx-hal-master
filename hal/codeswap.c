@@ -2,7 +2,7 @@
 #include <misc_utils.h>
 #include <heap.h>
 #include <debug.h>
-#include <mpu.h>
+#include "../int/mpu.h"
 
 #if defined(HAVE_CODESWAP)
 

@@ -2,7 +2,7 @@
 #define __TIM_H__
 
 #include <main.h>
-#include <nvic.h>
+#include "../../common/int/nvic.h"
 
 typedef enum {
     TIM_NONE,

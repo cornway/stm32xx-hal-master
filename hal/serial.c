@@ -4,14 +4,14 @@
 
 #include <stm32f7xx_it.h>
 
-#include "int/tim_int.h"
-#include "int/term_int.h"
+#include "../int/tim_int.h"
+#include "../int/term_int.h"
 
 #include <misc_utils.h>
 #include <debug.h>
 #include <main.h>
 #include <dev_conf.h>
-#include <nvic.h>
+#include "../int/nvic.h"
 #include <heap.h>
 #include <dev_io.h>
 

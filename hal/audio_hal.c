@@ -3,11 +3,11 @@
 
 #include "string.h"
 #include "stm32f769i_discovery_audio.h"
-#include "int/audio_int.h"
-#include "int/term_int.h"
+#include "../int/audio_int.h"
+#include "../int/term_int.h"
 #include "audio_main.h"
-#include "wm8994.h"
-#include "nvic.h"
+#include "../int/wm8994.h"
+#include "../int/nvic.h"
 #include "debug.h"
 #include <dev_conf.h>
 

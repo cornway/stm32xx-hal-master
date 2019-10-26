@@ -3,7 +3,7 @@
 #include <stm32f769i_discovery_sdram.h>
 
 #include <debug.h>
-#include "int/boot_int.h"
+#include "../int/boot_int.h"
 #include "../int/bsp_mod_int.h"
 
 #include <misc_utils.h>
@@ -306,8 +306,8 @@ extern void CPU_CACHE_Disable (void);
 
     CPU_CACHE_Disable();
 
-    __DSB();
-    __msp_set(*spinitial);
+    arch_dsb();
+    arch_set_sp(*spinitial);
     arch_asmgoto(*entryptr);
 }
 
