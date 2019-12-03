@@ -51,7 +51,7 @@
 
 #include "../../ulib/io/fs/FatFs/src/ff_gen_drv.h"
 #include "../int/sd_diskio.h"
-#include "../int/nvic.h"
+#include <nvic.h>
 
 /*TODO : remove from here*/
 #include "stm32f769i_discovery_audio.h"

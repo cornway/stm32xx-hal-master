@@ -2,6 +2,8 @@ PLATFORM ?= $(PLATFORM)
 TOP ?= $(TOP)
 
 include $(TOP)/configs/$(PLATFORM)/boot.mk
+include $(TOP)/.config
+
 
 CCFLAGS := $(CCFLAGS_MK)
 CCDEFS := $(CCDEFS_MK)
@@ -12,33 +14,43 @@ CCINC += -I$(TOP)/main/Inc \
 		-I$(TOP)/ulib/arch \
 		$(HALINC_MK)
 
-f769_bsp :
+bsp :
+	mkdir -p ./.output/bsp/Components
 	mkdir -p ./.output/bsp/src
 	mkdir -p ./.output/bsp/obj
 
 	cp -r ./BSP/STM32F769I-Discovery/* ./.output/bsp/src
-	cp -r ./BSP/Components ./.output/bsp/
+	cp -r ./BSP/Components/Common ./.output/bsp/Components
+
+ifeq ($(HAVE_HDMI), 1)
+	cp -r ./BSP/Components/adv7533 ./.output/bsp/Components
+endif
+
+ifeq ($(HAVE_AUDIO), 1)
+	cp -r ./BSP/Components/wm8994 ./.output/bsp/Components
+endif
+
 	cp Makefile ./.output/bsp
 
-	$(MAKE) _f769_bsp TOP=$(TOP) PLATFORM=$(PLATFORM) -C ./.output/bsp
+	$(MAKE) _bsp TOP=$(TOP) PLATFORM=$(PLATFORM) -C ./.output/bsp
 
 	mv ./.output/bsp/*.o ./.output/bsp/obj/
 
-f769_hal :
+hal :
 	mkdir -p ./.output/hal/src
 	mkdir -p ./.output/hal/obj
 
 	cp -r ./Src/* ./.output/hal/src
 	cp Makefile ./.output/hal/src
 
-	$(MAKE) _f769_hal TOP=$(TOP) -C ./.output/hal/src
+	$(MAKE) _hal TOP=$(TOP) -C ./.output/hal/src
 
 	mv ./.output/hal/src/*.o ./.output/hal/obj/
 
-_f769_hal :
+_hal :
 	$(CC) $(CCFLAGS) $(CCINC) $(CCDEFS) -c ./*.c
 
-_f769_bsp :
+_bsp :
 	$(CC) $(CCFLAGS) $(CCINC) $(CCDEFS) -c ./Components/*/*.c
 	$(CC) $(CCFLAGS) $(CCINC) $(CCDEFS) -c ./src/*.c
 

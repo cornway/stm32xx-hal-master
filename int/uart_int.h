@@ -77,4 +77,6 @@ typedef struct {
 
 uart_desc_t *uart_find_desc (void *source);
 
+int serial_init (void);
+
 #endif /*__UART_H__*/

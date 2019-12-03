@@ -4,8 +4,8 @@
 #include <stm32f7xx_hal.h>
 
 #include <nvic.h>
+#include <tim.h>
 #include <uart_int.h>
-#include <tim_int.h>
 
 #include <misc_utils.h>
 
@@ -44,6 +44,22 @@ const UART_InitTypeDef *uart_def_ptr = &uart_115200_8n1_txrx;
 #else
 const UART_InitTypeDef *uart_def_ptr = &uart_115200_8n1_tx;
 #endif
+
+uart_desc_t *uart_get_stdio_port (void)
+{
+    int i;
+
+    for (i = 0; i < uart_desc_cnt; i++) {
+
+        if (uart_desc_pool[i]->initialized &&
+            (uart_desc_pool[i]->type == SERIAL_DEBUG)) {
+
+            return uart_desc_pool[i];
+        }
+    }
+    serial_fatal();
+    return NULL;
+}
 
 static void uart1_dma_init (uart_desc_t *uart_desc)
 {
@@ -161,26 +177,6 @@ static void uart1_msp_deinit (uart_desc_t *uart_desc)
     HAL_NVIC_DisableIRQ(uart_desc->irq_uart);
 }
 
-static void _serial_init (uart_desc_t *uart_desc)
-{
-    UART_HandleTypeDef *handle = &uart_desc->handle;
-
-    handle->Instance        = uart_desc->hw;
-
-    memcpy(&handle->Init, uart_desc->cfg, sizeof(handle->Init));
-
-    if(HAL_UART_DeInit(handle) != HAL_OK)
-    {
-        serial_fatal();
-    }
-    if(HAL_UART_Init(handle) != HAL_OK)
-    {
-        serial_fatal();
-    }
-    uart_desc->dma_init(uart_desc);
-    uart_desc->initialized = SET;
-}
-
 static void _serial_deinit (uart_desc_t *uart_desc)
 {
     UART_HandleTypeDef *handle = &uart_desc->handle;
@@ -195,7 +191,7 @@ static void _serial_deinit (uart_desc_t *uart_desc)
 
 #if DEBUG_SERIAL_USE_DMA
 
-static irqmask_t dma_rx_irq_mask = 0;
+irqmask_t dma_rx_irq_mask = 0;
 
 static inline void dma_tx_sync (uart_desc_t *uart_desc)
 {
@@ -249,28 +245,7 @@ static void serial_timer_handler (timer_desc_t *desc)
 
 void TIM3_IRQHandler (void)
 {
-    HAL_TIM_IRQHandler(&serial_timer.handle);
-}
-
-int serial_init (void)
-{
-    if (uart_desc_cnt >= MAX_UARTS) {
-        return -1;
-    }
-    uart_desc_pool[uart_desc_cnt++] = &uart1_desc;
-
-    _serial_debug_setup(&uart1_desc);
-    _serial_init(&uart1_desc);
-
-    serial_timer.flags = TIM_RUNIT;
-    serial_timer.period = 1000;
-    serial_timer.presc = 10000;
-    serial_timer.handler = serial_timer_handler;
-    serial_timer.init = serial_timer_msp_init;
-    serial_timer.deinit = serial_timer_msp_deinit;
-    serial_timer.hw = TIM3;
-    serial_timer.irq = TIM3_IRQn;
-    return hal_tim_init(&serial_timer);
+    tim_hal_irq_handler(&serial_timer);
 }
 
 void serial_deinit (void)

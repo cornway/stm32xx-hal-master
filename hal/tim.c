@@ -1,14 +1,19 @@
-#if defined(BSP_DRIVER)
-
 #include <main.h>
 #include <nvic.h>
-#include <tim_int.h>
+#include <tim.h>
 #include <misc_utils.h>
 
 extern uint32_t SystemCoreClock;
 
+typedef struct {
+    TIM_TypeDef *hw;
+    TIM_HandleTypeDef handle;
+    irqn_t irq;
+} tim_hal_t;
+
 typedef struct tim_int_s {
     struct tim_int_s *next;
+    tim_hal_t hal;
     timer_desc_t *desc;
     uint8_t alloced;
 } tim_int_t;
@@ -72,12 +77,13 @@ static void tim_unlink (tim_int_t *tim)
 
 int hal_tim_init (timer_desc_t *desc)
 {
-    TIM_HandleTypeDef *handle = &desc->handle;
+    tim_int_t *tim = container_of(desc, tim_int_t, desc);
+    TIM_HandleTypeDef *handle = &tim->hal.handle;
+  
     uint32_t prescaler = (uint32_t)((SystemCoreClock / 2) / desc->presc) - 1;
     irqmask_t irqmask;
-    tim_int_t *tim;
-
-    handle->Instance = desc->hw;
+  
+    handle->Instance = tim->hal.hw;
 
     handle->Init.Period            = desc->period - 1;
     handle->Init.Prescaler         = prescaler;
@@ -120,7 +126,9 @@ int hal_tim_init (timer_desc_t *desc)
 
 int hal_tim_deinit (timer_desc_t *desc)
 {
-    TIM_HandleTypeDef *handle = &desc->handle;
+    tim_int_t *tim = container_of(desc, tim_int_t, desc);
+    TIM_HandleTypeDef *handle = &tim->hal.handle;
+
     if (desc->flags == TIM_RUNIT) {
         HAL_TIM_Base_Stop_IT(handle);
     } else if (desc->flags == TIM_RUNREG) {
@@ -140,7 +148,7 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef *htim)
     assert(tim);
 
     while (tim) {
-        if (&tim->desc->handle == htim && tim->desc->deinit) {
+        if (&tim->hal.handle == htim && tim->desc->deinit) {
             tim->desc->deinit(tim->desc);
             return;
         }
@@ -159,7 +167,7 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef *htim)
     assert(tim);
 
     while (tim) {
-        if (&tim->desc->handle == htim && tim->desc->init) {
+        if (&tim->hal.handle == htim && tim->desc->init) {
             tim->desc->init(tim->desc);
             return;
         }
@@ -174,7 +182,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
     assert(tim);
     while (tim) {
-        if (&tim->desc->handle == htim && tim->desc->handler) {
+        if (&tim->hal.handle == htim && tim->desc->handler) {
             tim->desc->handler(tim->desc);
             return;
         }
@@ -183,5 +191,24 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     assert(0);
 }
 
-#endif
+void tim_hal_irq_handler (timer_desc_t *desc)
+{
+    tim_int_t *tim = timer_desc_head;
 
+    HAL_TIM_IRQHandler(&tim->hal.handle);
+}
+
+void tim_hal_set_hw (timer_desc_t *desc, void *hw, irqn_t irqn)
+{
+    tim_int_t *tim = container_of(desc, tim_int_t, desc);
+
+    tim->hal.hw = hw;
+    tim->hal.irq = irqn;
+}
+
+uint32_t tim_hal_get_cycles (timer_desc_t *desc)
+{
+    tim_int_t *tim = container_of(desc, tim_int_t, desc);
+    
+    return tim->hal.hw->CNT;
+}
