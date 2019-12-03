@@ -37,7 +37,7 @@ com :
 	cp -r ./$(ARCHNAME_MK)_Driver/.output/hal/obj/*.o ./.output/obj/
 	cp -r ./$(ARCHNAME_MK)_Driver/.output/bsp/obj/*.o ./.output/obj/
 
-	#$(AR) rcs ./.output/lib/common.a ./.output/obj/*.o
+	$(AR) rcs ./.output/lib/common.a ./.output/obj/*.o
 
 _com :
 	$(CC) $(CCFLAGS) $(CCINC) $(CCINC_COM) $(CCDEFS) -c ./*.c

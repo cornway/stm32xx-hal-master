@@ -1,9 +1,6 @@
 #ifndef __TIM_H__
 #define __TIM_H__
 
-#include <main.h>
-#include "../../common/int/nvic.h"
-
 typedef enum {
     TIM_NONE,
     TIM_RUNIT,

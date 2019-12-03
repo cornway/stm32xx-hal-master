@@ -1,2 +1,2 @@
-./STM32F7xx_Driver/.output
-./*.o
+/STM32F7xx_Driver/.output
+/.output

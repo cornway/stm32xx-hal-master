@@ -1,6 +1,20 @@
 #ifndef __UART_H__
 #define __UART_H__
 
+#include <dev_conf.h>
+
+#ifndef DEBUG_SERIAL_USE_DMA
+#define DEBUG_SERIAL_USE_DMA 0
+#endif
+
+#ifndef DEBUG_SERIAL_BUFERIZED
+#define DEBUG_SERIAL_BUFERIZED 0
+#endif
+
+#ifndef DEBUG_SERIAL_USE_RX
+#define DEBUG_SERIAL_USE_RX 0
+#endif
+
 typedef enum {
     SERIAL_DEBUG,
     SERIAL_REGULAR,
@@ -58,5 +72,9 @@ typedef struct {
     char dmabuf[DMA_RX_SIZE];
     char fifo[DMA_RX_FIFO_SIZE];
 } rxstream_t;
+
+#endif /*DEBUG_SERIAL_BUFERIZED*/
+
+uart_desc_t *uart_find_desc (void *source);
 
 #endif /*__UART_H__*/
