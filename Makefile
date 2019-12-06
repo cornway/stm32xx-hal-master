@@ -1,8 +1,9 @@
 PLATFORM ?= $(PLATFORM)
 TOP ?= $(TOP)
+OUT ?= $(OUT)
+Q ?= @
 
 include $(TOP)/configs/$(PLATFORM)/boot.mk
-include $(TOP)/.config
 
 CCFLAGS := $(CCFLAGS_MK)
 CCDEFS := $(CCDEFS_MK)
@@ -11,51 +12,57 @@ CCINC += -I$(TOP)/main/Inc \
 		-I$(TOP)/common/Utilities/JPEG \
 		-I$(TOP)/ulib/pub \
 		-I$(TOP)/ulib/arch \
+		-I$(TOP)/configs/$(PLATFORM) \
 		$(HALINC_MK)
-
-.PHONY: hal
-hal :
-	mkdir -p ./.output/obj
-
-	$(MAKE) hal TOP=$(TOP) PLATFORM=$(PLATFORM) -C ./$(ARCHNAME_MK)_Driver
-	cp -r ./$(ARCHNAME_MK)_Driver/.output/hal/obj/*.o ./.output/obj/
-
-.PHONY: bsp
-bsp :
-	mkdir -p ./.output/obj
-
-	$(MAKE) bsp TOP=$(TOP) PLATFORM=$(PLATFORM) -C ./$(ARCHNAME_MK)_Driver
-	cp -r ./$(ARCHNAME_MK)_Driver/.output/bsp/obj/*.o ./.output/obj/
-
 
 CCINC_COM := -I$(TOP)/common/int
 
-.PHONY: com
-com :
-	mkdir -p ./.output/obj
+OBJ := .output/obj
+OUT_OBJ := .output/obj
+HAL_OBJ := $(OBJ)/hal
+BSP_OBJ := $(OBJ)/bsp
+COM_OBJ := $(OBJ)/com
 
-	mkdir -p  ./hal/.output/obj
-	mkdir -p  ./hal/.output/lib
+.PHONY: hal bsp com
+hal : hal/hal hal/bsp hal/com
 
-	cp -r ./hal/*.c ./hal/.output
+hal/hal: $(HAL_OBJ)/*.o
+hal/bsp: $(BSP_OBJ)/*.o
+hal/com : $(COM_OBJ)/*.o
+
+$(HAL_OBJ)/*.o :
+	@mkdir -p ./$(HAL_OBJ)
+	$(MAKE) hal TOP=$(TOP) PLATFORM=$(PLATFORM) OUT=../$(HAL_OBJ) Q=$(Q) -C ./$(ARCHNAME_MK)_Driver
+	@cp -r $(HAL_OBJ)/*.o $(OUT)
+
+$(BSP_OBJ)/*.o :
+	@mkdir -p ./$(BSP_OBJ)
+	$(MAKE) bsp TOP=$(TOP) PLATFORM=$(PLATFORM) OUT=../$(BSP_OBJ) Q=$(Q) -C ./$(ARCHNAME_MK)_Driver
+	@cp -r $(BSP_OBJ)/*.o $(OUT)
+
+$(COM_OBJ)/*.o :
+	@echo "Compiling $(BRDNAME_MK) hal..."
+
+	@mkdir -p ./.output/obj/com
+	@mkdir -p  ./hal/.output
+
+	@cp -r ./hal/*.c ./hal/.output
 ifeq ($(HAVE_JPEG), 1)
-	cp -r ./Utilities/JPEG/*.c ./hal/.output
+	@cp -r ./Utilities/JPEG/*.c ./hal/.output
 endif
-	cp ./Makefile ./hal/.output
 
-	$(MAKE) _com TOP=$(TOP) PLATFORM=$(PLATFORM) -C ./hal/.output
+	$(Q) $(CC) $(CCFLAGS) $(CCINC) $(CCINC_COM) $(CCDEFS) -c ./hal/.output/*.c
 
-	cp -r ./hal/.output/obj/*.o ./.output/obj/
+	@mv ./*.o $(COM_OBJ)
+	@cp -r $(COM_OBJ)/*.o $(OUT)
 
-	#$(AR) rcs ./.output/lib/common.a ./.output/obj/*.o
+clean : hal/clean bsp/clean com/clean
 
-_com :
-	$(CC) $(CCFLAGS) $(CCINC) $(CCINC_COM) $(CCDEFS) -c ./*.c
+hal/clean :
+	@rm -rf ./hal/.output
 
-	mv ./*.o ./obj/
+bsp/clean :
+	$(MAKE) $@ TOP=$(TOP) -C ./$(ARCHNAME_MK)_Driver
 
-clean :
-	$(MAKE) clean TOP=$(TOP) -C ./$(ARCHNAME_MK)_Driver
-
-	rm -rf ./hal/.output
-	rm -rf ./.output
+com/clean :
+	@rm -rf ./.output

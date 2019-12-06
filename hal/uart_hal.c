@@ -57,7 +57,7 @@ uart_desc_t *uart_get_stdio_port (void)
             return uart_desc_pool[i];
         }
     }
-    serial_fatal();
+    fatal_error("%s() : fail\n");
     return NULL;
 }
 
@@ -124,7 +124,7 @@ static void uart1_dma_init (uart_desc_t *uart_desc)
 
     if(HAL_UART_Receive_DMA(huart, (uint8_t *)rxstream.dmabuf, sizeof(rxstream.dmabuf)) != HAL_OK)
     {
-        serial_fatal();
+        fatal_error("%s() : fail\n");
     }
 #else
     UNUSED(hdma_rx);
@@ -183,7 +183,7 @@ static void _serial_deinit (uart_desc_t *uart_desc)
 
     if(HAL_UART_DeInit(handle) != HAL_OK)
     {
-        serial_fatal();
+        fatal_error();
     }
     uart_desc->dma_deinit(uart_desc);
 }
@@ -199,7 +199,7 @@ static inline void dma_tx_sync (uart_desc_t *uart_desc)
     uart_desc->uart_tx_ready = RESET;
 }
 
-static inline void dma_tx_waitflush (uart_desc_t *uart_desc)
+void uart_hal_sync (uart_desc_t *uart_desc)
 {
     while (uart_desc->uart_tx_ready != SET) { }
 }
@@ -240,7 +240,7 @@ static void serial_timer_msp_deinit (timer_desc_t *desc)
 
 static void serial_timer_handler (timer_desc_t *desc)
 {
-    serial_flush_handler(0);
+    serial_rx_flush_handler(0);
 }
 
 void TIM3_IRQHandler (void)
@@ -260,7 +260,7 @@ void serial_deinit (void)
     uart_desc_cnt = 0;
 }
 
-static HAL_StatusTypeDef serial_submit_to_hw (uart_desc_t *uart_desc, const void *data, size_t cnt)
+int serial_submit_to_hw (uart_desc_t *uart_desc, const void *data, size_t cnt)
 {
     irqmask_t irq = 0;
     HAL_StatusTypeDef status;
@@ -276,7 +276,7 @@ static HAL_StatusTypeDef serial_submit_to_hw (uart_desc_t *uart_desc, const void
 #endif /*DEBUG_SERIAL_USE_DMA*/
 
     serial_led_off();
-    return status;
+    return status == HAL_OK ? 0 : -1;
 }
 
 static void dma_tx_handle_irq (const DMA_Stream_TypeDef *source)
@@ -304,12 +304,12 @@ static void uart_handle_irq (USART_TypeDef *source)
 
 void HAL_UART_RxHalfCpltCallback (UART_HandleTypeDef* huart)
 {
-    _serial_rx_cplt(0);
+    serial_rx_cplt_handler(0);
 }
 
 void HAL_UART_RxCpltCallback (UART_HandleTypeDef* huart)
 {
-    _serial_rx_cplt(1);
+    serial_rx_cplt_handler(1);
 }
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *UartHandle)
@@ -389,4 +389,43 @@ uart_desc_t *uart_find_desc (void *source)
     return NULL;
 }
 
+static void _serial_init (uart_desc_t *uart_desc)
+{
+    UART_HandleTypeDef *handle = &uart_desc->handle;
+
+    handle->Instance        = uart_desc->hw;
+
+    memcpy(&handle->Init, uart_desc->cfg, sizeof(handle->Init));
+
+    if(HAL_UART_DeInit(handle) != HAL_OK)
+    {
+        fatal_error("%s() : fail\n");
+    }
+    if(HAL_UART_Init(handle) != HAL_OK)
+    {
+        fatal_error("%s() : fail\n");
+    }
+    uart_desc->dma_init(uart_desc);
+    uart_desc->initialized = SET;
+}
+
+int serial_init (void)
+{
+    if (uart_desc_cnt >= MAX_UARTS) {
+        return -1;
+    }
+    uart_desc_pool[uart_desc_cnt++] = &uart1_desc;
+
+    _serial_debug_setup(&uart1_desc);
+    _serial_init(&uart1_desc);
+
+    serial_timer.flags = TIM_RUNIT;
+    serial_timer.period = 1000;
+    serial_timer.presc = 10000;
+    serial_timer.handler = serial_timer_handler;
+    serial_timer.init = serial_timer_msp_init;
+    serial_timer.deinit = serial_timer_msp_deinit;
+    tim_hal_set_hw(&serial_timer, TIM3, TIM3_IRQn);
+    return hal_tim_init(&serial_timer);
+}
 

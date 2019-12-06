@@ -1,9 +1,9 @@
 PLATFORM ?= $(PLATFORM)
+OUT ?= $(OUT)
 TOP ?= $(TOP)
+Q ?= @
 
 include $(TOP)/configs/$(PLATFORM)/boot.mk
-include $(TOP)/.config
-
 
 CCFLAGS := $(CCFLAGS_MK)
 CCDEFS := $(CCDEFS_MK)
@@ -12,48 +12,63 @@ CCINC += -I$(TOP)/main/Inc \
 		-I$(TOP)/common/Utilities/JPEG \
 		-I$(TOP)/ulib/pub \
 		-I$(TOP)/ulib/arch \
+		-I$(TOP)/configs/$(PLATFORM) \
 		$(HALINC_MK)
 
-bsp :
-	mkdir -p ./.output/bsp/Components
-	mkdir -p ./.output/bsp/src
-	mkdir -p ./.output/bsp/obj
+BSP_OBJ = .output/bsp/obj
+HAL_OBJ = .output/hal/obj
 
-	cp -r ./BSP/STM32F769I-Discovery/* ./.output/bsp/src
-	cp -r ./BSP/Components/Common ./.output/bsp/Components
+bsp :
+	@echo "Compiling $(BRDNAME_MK) $@ lib..."
+
+	@mkdir -p ./.output/bsp/Components
+	@mkdir -p ./.output/bsp/src
+	@mkdir -p ./.output/bsp/obj
+
+	@cp -r ./BSP/STM32F769I-Discovery/* ./.output/bsp/src
+	@cp -r ./BSP/Components/Common ./.output/bsp/Components
 
 ifeq ($(HAVE_HDMI), 1)
-	cp -r ./BSP/Components/adv7533 ./.output/bsp/Components
+	@cp -r ./BSP/Components/adv7533 ./.output/bsp/Components
+endif
+
+ifeq ($(HAVE_LCD), 1)
+	@cp -r ./BSP/Components/otm8009a ./.output/bsp/Components
 endif
 
 ifeq ($(HAVE_AUDIO), 1)
-	cp -r ./BSP/Components/wm8994 ./.output/bsp/Components
+	@cp -r ./BSP/Components/wm8994 ./.output/bsp/Components
 endif
 
-	cp Makefile ./.output/bsp
+ifeq ($(HAVE_TOUCH_SCREEN), 1)
+	@cp -r ./BSP/Components/ft6x06 ./.output/bsp/Components
+endif
 
-	$(MAKE) _bsp TOP=$(TOP) PLATFORM=$(PLATFORM) -C ./.output/bsp
+	$(Q) $(CC) $(CCFLAGS) $(CCINC) $(CCDEFS) -c ./.output/bsp/Components/*/*.c
+	$(Q) $(CC) $(CCFLAGS) $(CCINC) $(CCDEFS) -c ./.output/bsp/src/*.c
 
-	mv ./.output/bsp/*.o ./.output/bsp/obj/
+	@mv ./*.o ./.output/bsp/obj/
+	@cp -r ./.output/bsp/obj/*.o $(OUT)
 
 hal :
-	mkdir -p ./.output/hal/src
-	mkdir -p ./.output/hal/obj
+	@echo "Compiling $(BRDNAME_MK) $@ lib..."
 
-	cp -r ./Src/* ./.output/hal/src
-	cp Makefile ./.output/hal/src
+	@mkdir -p ./.output/hal/src
+	@mkdir -p ./.output/hal/obj
 
-	$(MAKE) _hal TOP=$(TOP) -C ./.output/hal/src
+	@cp -r ./Src/* ./.output/hal/src
 
-	mv ./.output/hal/src/*.o ./.output/hal/obj/
+	$(Q) @$(CC) $(CCFLAGS) $(CCINC) $(CCDEFS) -c ./.output/hal/src/*.c
 
-_hal :
-	$(CC) $(CCFLAGS) $(CCINC) $(CCDEFS) -c ./*.c
+	@mv ./*.o ./.output/hal/obj
+	@cp -r ./.output/hal/obj/*.o $(OUT)
 
-_bsp :
-	$(CC) $(CCFLAGS) $(CCINC) $(CCDEFS) -c ./Components/*/*.c
-	$(CC) $(CCFLAGS) $(CCINC) $(CCDEFS) -c ./src/*.c
+hal/clean:
+	@rm -rf ./.output/hal
+
+bsp/clean:
+	@rm -rf ./.output/bsp
 
 clean :
-	rm -rf ./.output
+	@rm -rf ./.output
 

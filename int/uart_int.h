@@ -36,10 +36,10 @@ struct uart_desc_s {
     uart_dma_init_t         dma_deinit;
     DMA_HandleTypeDef       hdma_tx;
     FlagStatus              uart_tx_ready;
-    IRQn_Type               irq_txdma, irq_uart;
+    irqn_t                  irq_txdma, irq_uart;
 #if DEBUG_SERIAL_USE_RX
     DMA_HandleTypeDef       hdma_rx;
-    IRQn_Type               irq_rxdma;
+    irqn_t                  irq_rxdma;
     void                    (*rx_handler) (DMA_HandleTypeDef *);
 #endif
 #endif
