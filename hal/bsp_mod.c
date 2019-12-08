@@ -97,13 +97,13 @@ void *bspmod_insert (const bsp_heap_api_t *heap, const char *path, const char *n
         return NULL;
     }
 
-    mod = heap->malloc(sizeof(*mod));
+    mod = heap_api_malloc(heap, sizeof(*mod));
     assert(mod);
 
     bin = bsp_setup_bin_desc(path, &mod->bin, path, name, bintype);
 
     if (!bin || !bspmod_check_mod_allowed(mod)) {
-        heap->free(mod);
+        heap_api_free(heap, mod);
         return NULL;
     }
 
@@ -117,13 +117,13 @@ void *bspmod_insert (const bsp_heap_api_t *heap, const char *path, const char *n
         }
     }
     if (err < 0) {
-        heap->free(mod);
+        heap_api_free(heap, mod);
         return NULL;
     }
     mod->heap = (bsp_heap_api_t *)heap;
 
     bspmod_link(mod);
-    heap->free(rawptr);
+    heap_api_free(heap, rawptr);
 
     return mod;
 }
@@ -137,7 +137,7 @@ int bspmod_remove (const char *name)
         return -1;
     }
     bspmod_unlink(mod);
-    mod->heap->free(mod);
+    heap_api_free(mod->heap, mod);
     return 0;
 }
 

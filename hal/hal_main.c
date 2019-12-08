@@ -30,8 +30,6 @@ int const __cache_line_size = 32;
 */
 #endif
 
-#if !defined(MODULE) && defined(BSP_DRIVER)
-
 static void SystemClock_Config(void);
 
 static void sys_exception_handler (uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3);
@@ -40,12 +38,6 @@ static void clock_fault (void)
 {
     bug();
 }
-
-#if (_USE_LFN == 3)
-#error "ff_malloc, ff_free must be redefined to Sys_HeapAlloc"
-#endif
-
-/* Private function prototypes -----------------------------------------------*/
 
 /*TODO : move to gpio.c/gpio.h*/
 void hdd_led_on (void)
@@ -147,110 +139,13 @@ void CPU_CACHE_Reset (void)
 
 int dev_hal_init (void)
 {
-    CPU_CACHE_Enable();
-    SystemClock_Config();
     HAL_Init();
+    SystemClock_Config();
+    CPU_CACHE_Enable();
+
     BSP_LED_Init(LED1);
     BSP_LED_Init(LED2);
     serial_init();
     cs_load_code(NULL, NULL, 0);
     return 0;
 }
-
-/**
-  * @brief  This function handles NMI exception.
-  * @param  None
-  * @retval None
-  */
-void NMI_Handler(void)
-{
-    sys_exception_handler(0, 0, 0, 0);
-}
-
-/**
-  * @brief  This function handles Hard Fault exception.
-  * @param  None
-  * @retval None
-  */
-void HardFault_Handler(void)
-{
-    sys_exception_handler(0, 0, 0, 0);
-}
-
-/**
-  * @brief  This function handles Memory Manage exception.
-  * @param  None
-  * @retval None
-  */
-void MemManage_Handler(void)
-{
-    sys_exception_handler(0, 0, 0, 0);
-}
-
-/**
-  * @brief  This function handles Bus Fault exception.
-  * @param  None
-  * @retval None
-  */
-void BusFault_Handler(void)
-{
-    sys_exception_handler(0, 0, 0, 0);
-}
-
-/**
-  * @brief  This function handles Usage Fault exception.
-  * @param  None
-  * @retval None
-  */
-void UsageFault_Handler(void)
-{
-    sys_exception_handler(0, 0, 0, 0);
-}
-
-/**
-  * @brief  This function handles SVCall exception.
-  * @param  None
-  * @retval None
-  */
-void SVC_Handler(void)
-{
-    sys_exception_handler(0, 0, 0, 0);
-}
-
-/**
-  * @brief  This function handles Debug Monitor exception.
-  * @param  None
-  * @retval None
-  */
-void DebugMon_Handler(void)
-{
-    sys_exception_handler(0, 0, 0, 0);
-}
-
-/**
-  * @brief  This function handles PendSVC exception.
-  * @param  None
-  * @retval None
-  */
-void PendSV_Handler(void)
-{
-    sys_exception_handler(0, 0, 0, 0);
-}
-
-/**
-  * @brief  This function handles SysTick Handler.
-  * @param  None
-  * @retval None
-  */
-void SysTick_Handler(void)
-{
-  HAL_IncTick();
-}
-
-static void sys_exception_handler (uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3)
-{
-    bug();
-}
-
-#endif /*!defined(MODULE) && defined(BSP_DRIVER)*/
-

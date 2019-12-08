@@ -56,13 +56,7 @@ endif
 	@mv ./*.o $(COM_OBJ)
 	@cp -r $(COM_OBJ)/*.o $(OUT)
 
-clean : hal/clean bsp/clean com/clean
-
-hal/clean :
+clean :
+	$(MAKE) clean TOP=$(TOP) -C ./$(ARCHNAME_MK)_Driver
 	@rm -rf ./hal/.output
-
-bsp/clean :
-	$(MAKE) $@ TOP=$(TOP) -C ./$(ARCHNAME_MK)_Driver
-
-com/clean :
 	@rm -rf ./.output

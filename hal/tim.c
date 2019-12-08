@@ -167,13 +167,15 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef *htim)
     assert(tim);
 
     while (tim) {
-        if (&tim->hal.handle == htim && tim->desc->init) {
-            tim->desc->init(tim->desc);
+        if (&tim->hal.handle == htim) {
+            if (tim->desc->init) {
+                tim->desc->init(tim->desc);
+            }
             return;
         }
         tim = tim->next;
     }
-    assert(0);
+    dprintf("%s() : Unknown handler: <%p>\n", __func__, htim);
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)

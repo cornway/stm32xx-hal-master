@@ -9,6 +9,7 @@
 #include <misc_utils.h>
 #include <main.h>
 #include <bsp_sys.h>
+#include <heap.h>
 
 #define BHAL_MEM_RW_PORTION (1 << 10)
 #define BHAL_DBG_LINE_LEN ((1 << 6) - 1)
@@ -454,9 +455,10 @@ bhal_install_executable (complete_ind_t clbk, arch_word_t *progptr,
 
     void *bindata;
     int binsize = 0, err = 0;
-    bsp_heap_api_t heap = {.malloc = heap_alloc_shared, .free = heap_free};
+    bsp_heap_api_t heap;
     boot_bin_parm_t parm;
 
+    heap_set_api_shared(&heap);
     dprintf("Installing : \'%s\'\n", path);
 
     bindata = bres_cache_file_2_mem(&heap, path, &binsize);

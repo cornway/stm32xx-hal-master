@@ -7,12 +7,8 @@
 #define DEBUG_SERIAL_USE_DMA 0
 #endif
 
-#ifndef DEBUG_SERIAL_BUFERIZED
-#define DEBUG_SERIAL_BUFERIZED 0
-#endif
-
 #ifndef DEBUG_SERIAL_USE_RX
-#define DEBUG_SERIAL_USE_RX 0
+#define DEBUG_SERIAL_USE_RX (DEBUG_SERIAL_USE_DMA)
 #endif
 
 typedef enum {
@@ -28,7 +24,7 @@ typedef void (*uart_dma_init_t) (uart_desc_t *uart_desc);
 struct uart_desc_s {
     USART_TypeDef           *hw;
     UART_HandleTypeDef      handle;
-    UART_InitTypeDef  const * cfg;
+    UART_InitTypeDef        const * cfg;
     uart_msp_init_t         msp_init;
     uart_msp_init_t         msp_deinit;
 #if DEBUG_SERIAL_USE_DMA
@@ -36,21 +32,22 @@ struct uart_desc_s {
     uart_dma_init_t         dma_deinit;
     DMA_HandleTypeDef       hdma_tx;
     FlagStatus              uart_tx_ready;
-    irqn_t                  irq_txdma, irq_uart;
+    irqn_t                  irq_txdma;
 #if DEBUG_SERIAL_USE_RX
     DMA_HandleTypeDef       hdma_rx;
     irqn_t                  irq_rxdma;
     void                    (*rx_handler) (DMA_HandleTypeDef *);
 #endif
 #endif
+    irqn_t                  irq_uart;
     serial_type_t           type;
-#if DEBUG_SERIAL_BUFERIZED
+#if DEBUG_SERIAL_USE_DMA
     int                     active_stream;
 #endif
     FlagStatus              initialized;
 };
 
-#if DEBUG_SERIAL_BUFERIZED
+#if DEBUG_SERIAL_USE_DMA
 
 #define STREAM_BUFSIZE 512
 #define STREAM_BUFCNT 2
@@ -73,7 +70,7 @@ typedef struct {
     char fifo[DMA_RX_FIFO_SIZE];
 } rxstream_t;
 
-#endif /*DEBUG_SERIAL_BUFERIZED*/
+#endif /*DEBUG_SERIAL_USE_DMA*/
 
 uart_desc_t *uart_find_desc (void *source);
 
