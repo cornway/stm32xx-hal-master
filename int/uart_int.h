@@ -3,61 +3,24 @@
 
 #include <dev_conf.h>
 
-#ifndef DEBUG_SERIAL_USE_DMA
-#define DEBUG_SERIAL_USE_DMA 0
+#ifndef SERIAL_TTY_HAS_DMA
+#define SERIAL_TTY_HAS_DMA 0
 #endif
 
 #ifndef DEBUG_SERIAL_USE_RX
-#define DEBUG_SERIAL_USE_RX (DEBUG_SERIAL_USE_DMA)
+#define DEBUG_SERIAL_USE_RX (SERIAL_TTY_HAS_DMA)
 #endif
+
+#if SERIAL_TTY_HAS_DMA
+#define SERIAL_TX_BUFFERIZED 1
+#else
+#define SERIAL_TX_BUFFERIZED 0
+#endif /*SERIAL_TTY_HAS_DMA*/
 
 typedef enum {
     SERIAL_DEBUG,
     SERIAL_REGULAR,
 } serial_type_t;
-
-typedef struct uart_desc_s uart_desc_t;
-
-typedef void (*uart_msp_init_t) (uart_desc_t *uart_desc);
-typedef void (*uart_dma_init_t) (uart_desc_t *uart_desc);
-
-struct uart_desc_s {
-    USART_TypeDef           *hw;
-    UART_HandleTypeDef      handle;
-    UART_InitTypeDef        const * cfg;
-    uart_msp_init_t         msp_init;
-    uart_msp_init_t         msp_deinit;
-#if DEBUG_SERIAL_USE_DMA
-    uart_dma_init_t         dma_init;
-    uart_dma_init_t         dma_deinit;
-    DMA_HandleTypeDef       hdma_tx;
-    FlagStatus              uart_tx_ready;
-    irqn_t                  irq_txdma;
-#if DEBUG_SERIAL_USE_RX
-    DMA_HandleTypeDef       hdma_rx;
-    irqn_t                  irq_rxdma;
-    void                    (*rx_handler) (DMA_HandleTypeDef *);
-#endif
-#endif
-    irqn_t                  irq_uart;
-    serial_type_t           type;
-#if DEBUG_SERIAL_USE_DMA
-    int                     active_stream;
-#endif
-    FlagStatus              initialized;
-};
-
-#if DEBUG_SERIAL_USE_DMA
-
-#define STREAM_BUFSIZE 512
-#define STREAM_BUFCNT 2
-#define STREAM_BUFCNT_MS (STREAM_BUFCNT - 1)
-
-typedef struct {
-    char data[STREAM_BUFSIZE + 1];
-    int  bufposition;
-    uint32_t timestamp;
-} streambuf_t;
 
 #define DMA_RX_SIZE (1 << 1)
 #define DMA_RX_FIFO_SIZE (1 << 8)
@@ -70,7 +33,34 @@ typedef struct {
     char fifo[DMA_RX_FIFO_SIZE];
 } rxstream_t;
 
-#endif /*DEBUG_SERIAL_USE_DMA*/
+typedef struct uart_desc_s uart_desc_t;
+
+typedef void (*hal_msp_init_t) (uart_desc_t *uart_desc);
+
+struct uart_desc_s {
+    USART_TypeDef           *hw;
+    UART_HandleTypeDef      handle;
+    UART_InitTypeDef        const * ini;
+    hal_msp_init_t          msp_init;
+    hal_msp_init_t          msp_deinit;
+    irqmask_t               uart_irq_mask;
+    hal_msp_init_t          dma_init;
+    hal_msp_init_t          dma_deinit;
+    irqn_t                  irq_uart;
+    serial_type_t           type;
+    int                     tx_id;
+    FlagStatus              initialized;
+    FlagStatus              tx_allowed;
+#if SERIAL_TTY_HAS_DMA
+    DMA_HandleTypeDef       hdma_tx;
+    irqn_t                  irq_txdma;
+#endif
+#if DEBUG_SERIAL_USE_RX
+    DMA_HandleTypeDef       hdma_rx;
+    irqn_t                  irq_rxdma;
+    void                    (*rx_handler) (DMA_HandleTypeDef *);
+#endif
+};
 
 uart_desc_t *uart_find_desc (void *source);
 

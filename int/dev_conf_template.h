@@ -4,7 +4,7 @@
 #define NVIC_IRQ_MAX                (32)
 
 #define DEBUG_SERIAL                (1)
-#define DEBUG_SERIAL_USE_DMA        (1)
+#define SERIAL_TTY_HAS_DMA        (1)
 #define MAX_UARTS                    (1)
 #define DEBUG_SERIAL_BUFERIZED      (1)
 #define SERIAL_TSF                   (1)
