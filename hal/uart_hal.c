@@ -262,7 +262,7 @@ static void serial_tx_flush_handler (uart_desc_t *uart_desc, int force)
         if ((uint32_t)(time - tstamp) > TX_FLUSH_TIMEOUT ||
             force) {
 
-            serial_hal_tx_submit(uart_desc, NULL, 0, d_true, time);
+            serial_submit_tx_data(uart_desc, NULL, 0, d_true, time);
             if (force) {
                 uart_hal_sync(uart_desc);
             }
@@ -272,7 +272,7 @@ static void serial_tx_flush_handler (uart_desc_t *uart_desc, int force)
 
 void uart_hal_sync (uart_desc_t *uart_desc)
 {
-    volatile int *_ready = &uart_desc->tx_allowed;
+    volatile FlagStatus *_ready = &uart_desc->tx_allowed;
     while (*_ready != SET) { }
 }
 
@@ -297,7 +297,10 @@ static void serial_timer_msp_deinit (timer_desc_t *desc)
 
 static void serial_timer_handler (timer_desc_t *desc)
 {
-    serial_tx_flush_handler(desc, 0);
+    int i;
+    for (i = 0; i < uart_desc_cnt; i++) {
+        serial_tx_flush_handler(uart_desc_pool[i], 0);
+    }
 }
 
 static void hal_tx_wdog_timer_init (uart_desc_t *uart_desc, timer_desc_t *tim)
@@ -308,8 +311,7 @@ static void hal_tx_wdog_timer_init (uart_desc_t *uart_desc, timer_desc_t *tim)
     tim->handler = serial_timer_handler;
     tim->init = serial_timer_msp_init;
     tim->deinit = serial_timer_msp_deinit;
-    tim_hal_set_hw(tim, TIM3, TIM3_IRQn);
-    return hal_tim_init(tim);
+    hal_tim_init(tim , TIM3, TIM3_IRQn);
     uart_desc->uart_irq_mask = tim->irqmask;
 }
 
@@ -464,7 +466,7 @@ uart_desc_t *uart_find_desc (void *source)
     return NULL;
 }
 
-void serial_deinit (void)
+void uart_if_deinit (void)
 {
     int i = 0;
     dprintf("%s() :\n", __func__);

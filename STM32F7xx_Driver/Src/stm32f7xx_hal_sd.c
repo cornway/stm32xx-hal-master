@@ -225,7 +225,6 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f7xx_hal.h"
-#include "misc_utils.h"
 
 /** @addtogroup STM32F7xx_HAL_Driver
   * @{
@@ -681,7 +680,7 @@ HAL_StatusTypeDef HAL_SD_WriteBlocks(SD_HandleTypeDef *hsd, uint8_t *pData, uint
   SDMMC_DataInitTypeDef config;
   uint32_t errorstate = HAL_SD_ERROR_NONE;
   uint32_t tickstart = HAL_GetTick();
-  uint32_t count ATTR_UNUSED = 0;
+  uint32_t count = 0;
   uint32_t *tempbuff = (uint32_t *)pData;
   
   if(NULL == pData)

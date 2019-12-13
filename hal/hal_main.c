@@ -145,7 +145,7 @@ int dev_hal_init (void)
 
     BSP_LED_Init(LED1);
     BSP_LED_Init(LED2);
-    serial_init();
+    uart_hal_tty_init();
     cs_load_code(NULL, NULL, 0);
     return 0;
 }

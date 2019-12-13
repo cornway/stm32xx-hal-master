@@ -64,6 +64,6 @@ struct uart_desc_s {
 
 uart_desc_t *uart_find_desc (void *source);
 
-int serial_init (void);
+int uart_hal_tty_init (void);
 
 #endif /*__UART_H__*/

@@ -8,7 +8,6 @@ extern uint32_t SystemCoreClock;
 typedef struct {
     TIM_TypeDef *hw;
     TIM_HandleTypeDef handle;
-    irqn_t irq;
 } tim_hal_t;
 
 typedef struct tim_int_s {
@@ -75,11 +74,24 @@ static void tim_unlink (tim_int_t *tim)
     assert(0);
 }
 
-int hal_tim_init (timer_desc_t *desc)
+int hal_tim_init (timer_desc_t *desc, void *hw, irqn_t irqn)
 {
-    tim_int_t *tim = container_of(desc, tim_int_t, desc);
-    TIM_HandleTypeDef *handle = &tim->hal.handle;
-  
+    tim_int_t *tim;
+    TIM_HandleTypeDef *handle;
+
+
+    tim = tim_alloc();
+    if (!tim) {
+        return -1;
+    }
+    tim_link(tim);
+    tim->desc = desc;
+    desc->parent = tim;
+
+    tim->hal.hw = hw;
+    desc->irq = irqn;
+
+    handle = &tim->hal.handle;
     uint32_t prescaler = (uint32_t)((SystemCoreClock / 2) / desc->presc) - 1;
     irqmask_t irqmask;
   
@@ -92,14 +104,6 @@ int hal_tim_init (timer_desc_t *desc)
     handle->Init.RepetitionCounter = 0;
     handle->Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
 
-    tim = tim_alloc();
-    if (!tim) {
-        return -1;
-    }
-    tim->desc = desc;
-    desc->parent = tim;
-    tim_link(tim);
-    
     irq_bmap(&irqmask);
     if (HAL_TIM_Base_Init(handle) != HAL_OK)
     {
@@ -195,17 +199,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
 void tim_hal_irq_handler (timer_desc_t *desc)
 {
-    tim_int_t *tim = timer_desc_head;
+    tim_int_t *tim = desc->parent;
 
     HAL_TIM_IRQHandler(&tim->hal.handle);
-}
-
-void tim_hal_set_hw (timer_desc_t *desc, void *hw, irqn_t irqn)
-{
-    tim_int_t *tim = container_of(desc, tim_int_t, desc);
-
-    tim->hal.hw = hw;
-    tim->hal.irq = irqn;
 }
 
 uint32_t tim_hal_get_cycles (timer_desc_t *desc)
