@@ -1,4 +1,4 @@
-#include <dev_conf.h>
+#include <config.h>
 
 #include <stm32f7xx_hal.h>
 

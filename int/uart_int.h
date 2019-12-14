@@ -1,7 +1,7 @@
 #ifndef __UART_H__
 #define __UART_H__
 
-#include <dev_conf.h>
+#include <config.h>
 
 #ifndef SERIAL_TTY_HAS_DMA
 #define SERIAL_TTY_HAS_DMA 0

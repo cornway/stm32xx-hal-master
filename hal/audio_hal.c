@@ -7,7 +7,7 @@
 
 #include <audio_main.h>
 #include <debug.h>
-#include <dev_conf.h>
+#include <config.h>
 
 #if AUDIO_MODULE_PRESENT
 

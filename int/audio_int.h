@@ -1,7 +1,7 @@
 #ifndef _AUDIO_INT_H
 #define _AUDIO_INT_H
 
-#include "dev_conf.h"
+#include "config.h"
 #include "misc_utils.h"
 #include <audio_main.h>
 

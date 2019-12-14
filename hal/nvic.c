@@ -1,6 +1,6 @@
 #include "main.h"
 #include <nvic.h>
-#include "dev_conf.h"
+#include "config.h"
 #include "debug.h"
 #include "misc_utils.h"
 #include <bsp_sys.h>
