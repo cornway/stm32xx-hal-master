@@ -40,13 +40,8 @@
 #define __JPEG_UTILS_H
 
 /* Includes ------------------------------------------------------------------*/
-#include "jpeg_utils_conf.h"
-
-typedef struct {
-    uint16_t w, h;
-    uint8_t colormode;
-    uint8_t flags;
-} jpeg_info_t;
+#include <jpeg.h>
+#include "../../int/jpeg_utils_conf.h"
 
 /** @addtogroup Utilities
   * @{

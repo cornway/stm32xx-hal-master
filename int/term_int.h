@@ -1,6 +1,9 @@
 #include <stdint.h>
 #include "bsp_cmd_int.h"
 
+#define TTY_OUT '>'
+#define TTY_IN '<'
+
 int str_parse_tok (const char *str, const char *tok, uint32_t *val);
 int d_wstrtok (const char **tok, int tokcnt, char *str);
 void d_stoalpha (char *str);

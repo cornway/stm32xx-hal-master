@@ -37,7 +37,6 @@
 #include "adv7533.h"
 #include "hdmi_pub.h"
 #include "debug.h"
-#include "main.h"
 #include "misc_utils.h"
 
 /** @addtogroup BSP

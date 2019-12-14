@@ -89,6 +89,7 @@ typedef struct {
     uint32_t volume;
     uint32_t channels;
     uint32_t samplebits;
+    irqmask_t irq;
 } a_intcfg_t;
 
 #define a_chunk_len(chan) \
@@ -119,17 +120,15 @@ for (channel = (head)->first,\
      channel = next,         \
      next = next->next)
 
+void a_hal_configure (a_intcfg_t *cfg);
 
+void a_dsr_hung_fuse (isr_status_e status);
+void a_paint_buff_helper (a_buf_t *abuf);
 int a_channel_link (a_channel_head_t *head, a_channel_t *link, uint8_t sort);
-
 int a_channel_unlink (a_channel_head_t *head, a_channel_t *node);
-
 void a_channel_remove (a_channel_t *desc);
-
 void a_paint_buffer (a_channel_head_t *chanlist, a_buf_t *abuf, int compratio);
-
 uint8_t a_chanlist_try_reject_all (a_channel_head_t *chanlist);
-
 a_intcfg_t *a_get_conf (void);
 
 void error_handle (void);
