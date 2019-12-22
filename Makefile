@@ -3,17 +3,20 @@ TOP ?= $(TOP)
 OUT ?= $(OUT)
 Q ?= @
 
-include $(TOP)/configs/$(PLATFORM)/boot.mk
+include $(TOP)/boot.mk
+
+HALSRC_MK:=$\(TOP\)/common/$\(ARCHNAME_MK\)_Driver
+
+HALINC_MK:=-I$(HALSRC_MK)/Inc
+HALINC_MK+=-I$\(HALSRC_MK\)/CMSIS/Device/ST/$\(ARCHNAME_MK\)/Include
+HALINC_MK+=-I$\(HALSRC_MK\)/CMSIS/Include
+HALINC_MK+=-I$\(HALSRC_MK\)/BSP/Components
+HALINC_MK+=-I$\(HALSRC_MK\)/BSP/STM32F769I-Discovery
+HALINC_MK+=-I$(TOP)/common/Utilities/JPEG
 
 CCFLAGS := $(CCFLAGS_MK)
 CCDEFS := $(CCDEFS_MK)
-CCINC := $(CCINC_MK)
-CCINC += -I$(TOP)/main/Inc \
-		-I$(TOP)/common/Utilities/JPEG \
-		-I$(TOP)/ulib/pub \
-		-I$(TOP)/ulib/arch \
-		-I$(TOP)/configs/$(PLATFORM) \
-		$(HALINC_MK)
+CCINC := $$CCINC_PUB $(HALINC_MK)
 
 CCINC_COM := -I$(TOP)/common/int
 

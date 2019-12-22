@@ -99,7 +99,8 @@ EndDependencies */
 #include "../../../Utilities/Fonts/font12.c"
 #include "../../../Utilities/Fonts/font8.c"
 #include "../../../int/lcd_int.h"
-#include "misc_utils.h"
+#include <config.h>
+#include <misc_utils.h>
 #include "debug.h"
 /** @addtogroup BSP
   * @{

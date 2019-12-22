@@ -5,10 +5,8 @@
 #include "misc_utils.h"
 #include <bsp_sys.h>
 
-#if defined(BSP_DRIVER)
-
-#ifndef USE_STM32F769I_DISCO
-#error "Not supported"
+#ifndef NVIC_IRQ_MAX
+#define NVIC_IRQ_MAX (32)
 #endif
 
 #define InvalidIrqNum ((IRQn_Type)(NonMaskableInt_IRQn - 1))
@@ -403,4 +401,3 @@ void NVIC_dump (void)
     dprintf("%s : DUMP END\n", __func__);
 }
 
-#endif /*BSP_DRIVER*/

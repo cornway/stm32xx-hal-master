@@ -20,6 +20,10 @@
 #include "stm32f7xx.h"
 #include "debug.h"
 
+#ifndef PRINTF_NO_RETARGET
+#define PRINTF_NO_RETARGET 1
+#endif
+
 #pragma import(__use_no_semihosting_swi)
 
 struct __FILE { int handle; /* Add whatever you need here */ };
@@ -28,7 +32,7 @@ FILE __stdin;
 
 int fputc(int ch, FILE *f)
 {
-#if PRINTF_SERIAL
+#if PRINTF_NO_RETARGET
   serial_putc(ch);
 #else
   ITM_SendChar(ch);
@@ -39,7 +43,7 @@ int fputc(int ch, FILE *f)
 int fgetc(FILE *f)
 {
   char ch = 0;
-#if PRINTF_SERIAL
+#if PRINTF_NO_RETARGET
   ch = serial_getc();
 #endif
   return((int)ch);
@@ -53,7 +57,7 @@ int ferror(FILE *f)
 
 void _ttywrch(int ch)
 {
-#if PRINTF_SERIAL
+#if PRINTF_NO_RETARGET
   serial_putc(ch);
 #else
   ITM_SendChar(ch);
