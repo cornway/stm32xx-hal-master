@@ -1,7 +1,7 @@
-#include <main.h>
 #include <nvic.h>
 #include <tim.h>
 #include <misc_utils.h>
+#include <stm32f7xx.h>
 
 extern uint32_t SystemCoreClock;
 
@@ -207,6 +207,45 @@ void tim_hal_irq_handler (timer_desc_t *desc)
 uint32_t tim_hal_get_cycles (timer_desc_t *desc)
 {
     tim_int_t *tim = container_of(desc, tim_int_t, desc);
-    
     return tim->hal.hw->CNT;
 }
+
+typedef struct {
+    void *hw_base;
+    irqn_t irq;
+    uint32_t flags;
+    d_bool alloced;
+} tim_hw_desc_t;
+
+static const tim_hw_desc_t tim_hw_desc[] =
+{
+    {TIM2, TIM2_IRQn, TIM_RUNREG | TIM_RUNIT},
+};
+
+void *tim_hal_alloc_hw (uint32_t flags, irqn_t *irq)
+{
+    int i;
+    tim_hw_desc_t *hw;
+
+    for (i = 0; i < arrlen(tim_hw_desc); i++) {
+        hw = &tim_hw_desc[i];
+        if (!hw->alloced && (hw->flags & flags) == flags) {
+            hw->alloced = d_true;
+            *irq = hw->irq;
+            return hw->hw_base;
+        }
+    }
+    return NULL;
+}
+
+uint32_t cpu_hal_get_cycles (void)
+{
+    return DWT->CYCCNT;
+}
+
+void cpu_hal_init_cycles (void)
+{
+    DWT->CTRL |= 1 ; // enable the counter
+    DWT->CYCCNT = 0; // reset the counter
+}
+

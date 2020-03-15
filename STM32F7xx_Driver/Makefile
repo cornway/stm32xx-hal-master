@@ -3,23 +3,13 @@ OUT ?= $(OUT)
 TOP ?= $(TOP)
 Q ?= @
 
-include $(TOP)/configs/$(PLATFORM)/boot.mk
-
-CCFLAGS := $(CCFLAGS_MK)
-CCDEFS := $(CCDEFS_MK)
-CCINC := $(CCINC_MK)
-CCINC += -I$(TOP)/main/Inc \
-		-I$(TOP)/common/Utilities/JPEG \
-		-I$(TOP)/ulib/pub \
-		-I$(TOP)/ulib/arch \
-		-I$(TOP)/configs/$(PLATFORM) \
-		$(HALINC_MK)
+include $(TOP)/boot.mk
 
 BSP_OBJ = .output/bsp/obj
 HAL_OBJ = .output/hal/obj
 
 bsp :
-	@echo "Compiling $(BRDNAME_MK) $@ lib..."
+	@echo "[ $(TGT_PLATFORM) $@... ]"
 
 	@mkdir -p ./.output/bsp/Components
 	@mkdir -p ./.output/bsp/src
@@ -44,21 +34,21 @@ ifeq ($(HAVE_TOUCH_SCREEN), 1)
 	@cp -r ./BSP/Components/ft6x06 ./.output/bsp/Components
 endif
 
-	$(Q) $(CC) $(CCFLAGS) $(CCINC) $(CCDEFS) -c ./.output/bsp/Components/*/*.c
-	$(Q) $(CC) $(CCFLAGS) $(CCINC) $(CCDEFS) -c ./.output/bsp/src/*.c
+	$(Q) $(CC) $(CFLAGS) $$CINC $$INC_HAL $(CDEFS) -c ./.output/bsp/Components/*/*.c
+	$(Q) $(CC) $(CFLAGS) $$CINC $$INC_HAL $(CDEFS) -c ./.output/bsp/src/*.c
 
 	@mv ./*.o ./.output/bsp/obj/
 	@cp -r ./.output/bsp/obj/*.o $(OUT)
 
 hal :
-	@echo "Compiling $(BRDNAME_MK) $@ lib..."
+	@echo "[ $(TGT_PLATFORM) $@... ]"
 
 	@mkdir -p ./.output/hal/src
 	@mkdir -p ./.output/hal/obj
 
 	@cp -r ./Src/* ./.output/hal/src
 
-	$(Q) @$(CC) $(CCFLAGS) $(CCINC) $(CCDEFS) -c ./.output/hal/src/*.c
+	$(Q) $(CC) $(CFLAGS) $$CINC $$INC_HAL $(CDEFS) -c ./.output/hal/src/*.c
 
 	@mv ./*.o ./.output/hal/obj
 	@cp -r ./.output/hal/obj/*.o $(OUT)

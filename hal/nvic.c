@@ -1,4 +1,4 @@
-#include "main.h"
+#include <stm32f7xx.h>
 #include <nvic.h>
 #include "config.h"
 #include "debug.h"

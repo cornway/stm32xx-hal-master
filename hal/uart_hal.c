@@ -8,11 +8,37 @@
 
 #include <misc_utils.h>
 
+typedef struct uart_desc_s uart_desc_t;
+
+typedef void (*hal_msp_init_t) (uart_desc_t *uart_desc);
+
+struct uart_desc_s {
+    USART_TypeDef           *hw;
+    UART_HandleTypeDef      handle;
+    UART_InitTypeDef        const * ini;
+    hal_msp_init_t          msp_init;
+    hal_msp_init_t          msp_deinit;
+    irqmask_t               uart_irq_mask;
+    hal_msp_init_t          dma_init;
+    hal_msp_init_t          dma_deinit;
+    irqn_t                  irq_uart;
+    serial_type_t           type;
+    FlagStatus              initialized;
+    FlagStatus              tx_allowed;
 #if SERIAL_TTY_HAS_DMA
+    DMA_HandleTypeDef       hdma_tx;
+    irqn_t                  irq_txdma;
+#endif
+#if DEBUG_SERIAL_USE_RX
+    DMA_HandleTypeDef       hdma_rx;
+    irqn_t                  irq_rxdma;
+    void                    (*rx_handler) (DMA_HandleTypeDef *);
+#endif
+};
+
+static uart_desc_t *uart_find_desc (void *source);
 
 #if SERIAL_TTY_HAS_DMA
-
-#endif /*SERIAL_TTY_HAS_DMA*/
 
 #define TX_FLUSH_TIMEOUT 200 /*MS*/
 timer_desc_t uart_hal_wdog_tim;
@@ -20,7 +46,7 @@ static rxstream_t rxstream;
 #endif
 
 static int          uart_desc_cnt = 0;
-static uart_desc_t *uart_desc_pool[MAX_UARTS];
+static uart_desc_t *uart_desc_pool[MAX_UART_TTY];
 
 static void dma_rx_xfer_hanlder (struct __DMA_HandleTypeDef * hdma);
 
@@ -224,7 +250,6 @@ static void uart_hal_if_setup (uart_desc_t *uart_desc, msp_func_tbl_t *func, hal
 {
     uart_desc->dma_init = func[1].init;
     uart_desc->dma_deinit = func[1].deinit;
-    uart_desc->tx_id = 0;
     uart_desc->tx_allowed = SET;
     uart_desc->hw       = USART1;
     uart_desc->ini      = ini;
@@ -505,7 +530,7 @@ int uart_hal_tty_init (void)
 #else
     const hal_uart_ini_t *def_ini = &uart_115200_8n1_tx;
 #endif
-    if (uart_desc_cnt >= MAX_UARTS) {
+    if (uart_desc_cnt >= MAX_UART_TTY) {
         return -1;
     }
     uart_desc_pool[uart_desc_cnt++] = &uart1_desc;

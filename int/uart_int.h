@@ -33,37 +33,6 @@ typedef struct {
     char fifo[DMA_RX_FIFO_SIZE];
 } rxstream_t;
 
-typedef struct uart_desc_s uart_desc_t;
-
-typedef void (*hal_msp_init_t) (uart_desc_t *uart_desc);
-
-struct uart_desc_s {
-    USART_TypeDef           *hw;
-    UART_HandleTypeDef      handle;
-    UART_InitTypeDef        const * ini;
-    hal_msp_init_t          msp_init;
-    hal_msp_init_t          msp_deinit;
-    irqmask_t               uart_irq_mask;
-    hal_msp_init_t          dma_init;
-    hal_msp_init_t          dma_deinit;
-    irqn_t                  irq_uart;
-    serial_type_t           type;
-    int                     tx_id;
-    FlagStatus              initialized;
-    FlagStatus              tx_allowed;
-#if SERIAL_TTY_HAS_DMA
-    DMA_HandleTypeDef       hdma_tx;
-    irqn_t                  irq_txdma;
-#endif
-#if DEBUG_SERIAL_USE_RX
-    DMA_HandleTypeDef       hdma_rx;
-    irqn_t                  irq_rxdma;
-    void                    (*rx_handler) (DMA_HandleTypeDef *);
-#endif
-};
-
-uart_desc_t *uart_find_desc (void *source);
-
 int uart_hal_tty_init (void);
 
 #endif /*__UART_H__*/

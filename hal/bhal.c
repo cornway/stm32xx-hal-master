@@ -1,5 +1,5 @@
 #include <stdint.h>
-
+#include <stm32f7xx.h>
 #include <stm32f769i_discovery_sdram.h>
 
 #include <debug.h>
@@ -7,7 +7,6 @@
 #include <bsp_mod_int.h>
 
 #include <misc_utils.h>
-#include <main.h>
 #include <bsp_sys.h>
 #include <heap.h>
 
