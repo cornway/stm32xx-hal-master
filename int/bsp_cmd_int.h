@@ -2,42 +2,7 @@
 #define __BSP_CMD_INT_H__
 
 #include <bsp_api.h>
-
-#define CMD_MAX_NAME        (16)
-#define CMD_MAX_PATH        (128)
-#define CMD_MAX_BUF         (256)
-#define CMD_MAX_ARG         (16)
-#define CMD_MAX_RECURSION    (16)
-
-typedef int (*cmd_func_t) (int, const char **);
-typedef int (*cmd_handler_t) (const char *, int);
-
-typedef enum {
-    CMDERR_OK,
-    CMDERR_GENERIC,
-    CMDERR_NOARGS,
-    CMDERR_NOPATH,
-    CMDERR_NOCORE,
-    CMDERR_INVPARM,
-    CMDERR_PERMISS,
-    CMDERR_UNKNOWN,
-    CMDERR_MAX,
-} cmd_errno_t;
-
-typedef enum {
-    DVAR_FUNC,
-    DVAR_INT32,
-    DVAR_FLOAT,
-    DVAR_STR,
-} dvar_obj_t;
-
-typedef struct {
-    void *ptr;
-    uint16_t ptrsize;
-    uint16_t size;
-    dvar_obj_t type;
-    uint32_t flags;
-} cmdvar_t;
+#include <bsp_cmd.h>
 
 typedef struct cmdexec_s {
     struct cmdexec_s *next;

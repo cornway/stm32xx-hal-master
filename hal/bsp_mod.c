@@ -2,7 +2,7 @@
 #include <string.h>
 #include <debug.h>
 #include <boot_int.h>
-#include <bsp_mod_int.h>
+#include <bsp_mod.h>
 #include <bsp_sys.h>
 
 #define MOD_MAX_NAME 24
