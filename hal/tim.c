@@ -130,7 +130,7 @@ int hal_tim_init (timer_desc_t *desc, void *hw, irqn_t irqn)
 
 int hal_tim_deinit (timer_desc_t *desc)
 {
-    tim_int_t *tim = container_of(desc, tim_int_t, desc);
+    tim_int_t *tim = desc->parent;
     TIM_HandleTypeDef *handle = &tim->hal.handle;
 
     if (desc->flags == TIM_RUNIT) {
@@ -141,7 +141,7 @@ int hal_tim_deinit (timer_desc_t *desc)
         assert(0);
     }
     HAL_TIM_Base_DeInit(handle);
-    tim_unlink(desc->parent);
+    tim_unlink(tim);
     return 0;
 }
 
@@ -206,7 +206,7 @@ void tim_hal_irq_handler (timer_desc_t *desc)
 
 uint32_t tim_hal_get_cycles (timer_desc_t *desc)
 {
-    tim_int_t *tim = container_of(desc, tim_int_t, desc);
+    tim_int_t *tim = desc->parent;
     
     return tim->hal.hw->CNT;
 }
