@@ -245,7 +245,7 @@ int uart_hal_submit_tx_direct (uart_desc_t *uart_desc, const void *data, size_t 
 
 #if SERIAL_TTY_HAS_DMA
 
-static void serial_tx_flush_handler (uart_desc_t *uart_desc, int force)
+static void serial_tx_flush_handler (uart_desc_t *uart_desc, d_bool force)
 {
     uint32_t time, tstamp;
     int bufpos;
@@ -259,10 +259,9 @@ static void serial_tx_flush_handler (uart_desc_t *uart_desc, int force)
 
         time = d_time();
 
-        if ((uint32_t)(time - tstamp) > TX_FLUSH_TIMEOUT ||
-            force) {
+        if (((uint32_t)(time - tstamp) > TX_FLUSH_TIMEOUT) || force) {
 
-            serial_submit_tx_data(uart_desc, NULL, 0, d_true, time);
+            serial_submit_tx_data(uart_desc, NULL, 0, d_true);
             if (force) {
                 uart_hal_sync(uart_desc);
             }
@@ -299,7 +298,7 @@ static void serial_timer_handler (timer_desc_t *desc)
 {
     int i;
     for (i = 0; i < uart_desc_cnt; i++) {
-        serial_tx_flush_handler(uart_desc_pool[i], 0);
+        serial_tx_flush_handler(uart_desc_pool[i], d_false);
     }
 }
 
@@ -345,12 +344,21 @@ static void dma_tx_handle_irq (const DMA_Stream_TypeDef *source)
     }
 }
 
+void uart_hal_tx_flush_all (void)
+{
+    int i = 0;
+
+    for (i = 0; i < uart_desc_cnt; i++) {
+        uart_hal_tx_flush(uart_desc_pool[i]);
+    }
+}
+
 void uart_hal_tx_flush (uart_desc_t *desc)
 {
     irqmask_t irq_flags = desc->uart_irq_mask;
 
     irq_save(&irq_flags);
-    serial_tx_flush_handler(desc, 1);
+    serial_tx_flush_handler(desc, d_true);
     irq_restore(irq_flags);
 }
 
@@ -470,8 +478,8 @@ void uart_if_deinit (void)
 {
     int i = 0;
     dprintf("%s() :\n", __func__);
-    serial_flush();
     for (i = 0; i < uart_desc_cnt; i++) {
+        uart_hal_tx_flush(uart_desc_pool[i]);
         uart_hal_if_deinit(uart_desc_pool[i]);
     }
     uart_desc_cnt = 0;

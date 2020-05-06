@@ -30,6 +30,7 @@ typedef struct {
     uint32_t lay_size;
     lcd_layers_t ready_lay_idx;
     uint16_t blutoff;
+    uint32_t bilinear: 1;
 } lcd_wincfg_t;
 
 typedef void (*screen_update_handler_t) (screen_t *in);

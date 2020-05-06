@@ -4,14 +4,14 @@
 
 #include <debug.h>
 #include <boot_int.h>
-#include <bsp_mod_int.h>
+#include <bsp_mod.h>
 
 #include <misc_utils.h>
 #include <main.h>
 #include <bsp_sys.h>
 #include <heap.h>
 
-#define BHAL_MEM_RW_PORTION (1 << 10)
+#define BHAL_MEM_RW_PORTION (1 << 14)
 #define BHAL_DBG_LINE_LEN ((1 << 6) - 1)
 
 exec_region_t g_exec_region = EXEC_DRIVER;

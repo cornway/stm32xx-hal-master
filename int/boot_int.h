@@ -104,7 +104,7 @@ int boot_log_comp_hex_le_u32 (const void *a, const void *b, int size);
 int boot_log_hex (const void *data, int len);
 
 #define B_MAX_LINEBUF (1 << 10)
-#define B_MAX_BIN_SIZE (BHAL_MEM_RW_PORTION * MAX_LINEBUF) /*1 Mbyte*/
+#define B_MAX_BIN_SIZE (1 << 20) /*1 Mbyte*/
 
 void boot_deliver_input_event (void *evt);
 
