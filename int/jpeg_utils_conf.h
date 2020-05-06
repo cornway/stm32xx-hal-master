@@ -30,8 +30,19 @@
 
 
 /* Includes ------------------------------------------------------------------*/
+#if defined(STM32H745xx)
+
+#include "stm32h7xx_hal.h"
+#include "stm32h7xx_hal_jpeg.h"
+
+#elif defined(STM32F769xx)
+
 #include "stm32f7xx_hal.h"
 #include "stm32f7xx_hal_jpeg.h"
+
+#else
+#error ""
+#endif
 
 /* Private define ------------------------------------------------------------*/
 /** @addtogroup JPEG_Private_Defines

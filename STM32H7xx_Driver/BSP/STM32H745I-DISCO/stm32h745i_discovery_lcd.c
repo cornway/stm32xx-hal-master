@@ -183,6 +183,11 @@ int32_t BSP_LCD_Init(uint32_t Instance, uint32_t Orientation)
   return BSP_LCD_InitEx(Instance, Orientation, LTDC_PIXEL_FORMAT_ARGB8888, LCD_DEFAULT_WIDTH, LCD_DEFAULT_HEIGHT);
 }
 
+int BSP_LCD_UseHDMI (void)
+{
+    return 0;
+}
+
 /**
   * @brief  Initializes the LCD.
   * @param  Instance    LCD Instance
@@ -345,6 +350,10 @@ int32_t BSP_LCD_DeInit(uint32_t Instance)
   return ret;
 }
 
+void BSP_LCD_DeInitEx (void)
+{
+    HAL_LTDC_DeInit(&hlcd_ltdc);
+}
 
 /**
   * @brief  Initializes the LTDC.

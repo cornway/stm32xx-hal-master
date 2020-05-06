@@ -1,6 +1,12 @@
 #include <stdint.h>
 
+#if defined(USE_STM32H745I_DISCO)
+#include <stm32h745i_discovery_sdram.h>
+#elif defined(USE_STM32F769I_DISCO)
 #include <stm32f769i_discovery_sdram.h>
+#else
+#error
+#endif
 
 #include <debug.h>
 #include <boot_int.h>
@@ -28,9 +34,15 @@ __bhal_get_memory_type (arch_word_t addr)
     if ((addr >= SDRAM_DEVICE_ADDR) && (addr <= (SDRAM_DEVICE_ADDR + SDRAM_DEVICE_SIZE))) {
         return EXEC_SDRAM;
     }
+#if defined(STM32H745xx)
+    if ((addr >= D1_AXISRAM_BASE) && (addr <= D1_AXISRAM_BASE + 80000)) {
+        return EXEC_SRAM;
+    }    
+#elif defined(STM32F769xx)
     if ((addr >= SRAM1_BASE) && (addr <= SRAM2_BASE)) {
         return EXEC_SRAM;
     }
+#endif
     return EXEC_INVAL;
 }
 
@@ -41,12 +53,15 @@ __bhal_progmode_leave (void)
     HAL_FLASH_Unlock();
 
     HAL_FLASH_OB_Unlock();
-    HAL_FLASHEx_OBGetConfig(&OBInit);
+    HAL_FLASHEx_OBGetConfig(&OBInit);    
+#if defined(STM32H745xx)
 
+#elif defined(STM32F769xx)
 #if defined(DUAL_BANK)
     if((OBInit.USERConfig & OB_NDBANK_SINGLE_BANK) == OB_NDBANK_SINGLE_BANK)
 #else
     if((OBInit.USERConfig & OB_NDBANK_SINGLE_BANK) == OB_NDBANK_DUAL_BANK)
+#endif
 #endif
     {
         assert(0);
@@ -99,9 +114,17 @@ __bhal_FLASH_memory_program (arch_word_t *dst, const arch_word_t *src, int size)
     }
     hdd_led_on();
     while (size > 0) {
+#if defined(STM32H745xx)
+        if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_FLASHWORD, (arch_word_t)dst, *src) != HAL_OK) {
+            errcnt++;
+        }       
+#elif defined(STM32F769xx)
         if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, (arch_word_t)dst, *src) != HAL_OK) {
             errcnt++;
         }
+#else
+#error
+#endif
         src++;
         dst++;
         size--;
@@ -579,6 +602,7 @@ static uint32_t __bhal_FLASH_get_sect_num (uint32_t Address)
   {
     sector = FLASH_SECTOR_7;
   }
+#if !defined(STM32H745xx)
   else if((Address < ADDR_FLASH_SECTOR_9) && (Address >= ADDR_FLASH_SECTOR_8))
   {
     sector = FLASH_SECTOR_8;
@@ -650,5 +674,6 @@ static uint32_t __bhal_FLASH_get_sect_num (uint32_t Address)
     sector = FLASH_SECTOR_11;
   }
 #endif /* DUAL_BANK */  
+#endif /* !defined(STM32H745xx) */
   return sector;
 }

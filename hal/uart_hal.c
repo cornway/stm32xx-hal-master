@@ -1,6 +1,12 @@
 #include <config.h>
 
+#if defined(STM32H745xx)
+#include <stm32h7xx_hal.h>
+#elif defined(STM32F769xx)
 #include <stm32f7xx_hal.h>
+#else
+#error
+#endif
 
 #include <nvic.h>
 #include <tim.h>
@@ -9,10 +15,6 @@
 #include <misc_utils.h>
 
 #if SERIAL_TTY_HAS_DMA
-
-#if SERIAL_TTY_HAS_DMA
-
-#endif /*SERIAL_TTY_HAS_DMA*/
 
 #define TX_FLUSH_TIMEOUT 200 /*MS*/
 timer_desc_t uart_hal_wdog_tim;
@@ -82,6 +84,7 @@ static void uart1_dma_init (uart_desc_t *uart_desc)
 
     hdma_tx = &uart_desc->hdma_tx;
 
+#if defined(STM32F769xx)
     hdma_tx->Instance                 = DMA2_Stream7;
     hdma_tx->Init.Channel             = DMA_CHANNEL_4;
     hdma_tx->Init.Direction           = DMA_MEMORY_TO_PERIPH;
@@ -92,6 +95,24 @@ static void uart1_dma_init (uart_desc_t *uart_desc)
     hdma_tx->Init.Mode                = DMA_NORMAL;
     hdma_tx->Init.Priority            = DMA_PRIORITY_LOW;
 
+#elif defined(STM32H745xx)
+    hdma_tx->Instance                 = DMA2_Stream7;
+
+    hdma_tx->Init.Request             = DMA_REQUEST_UART4_TX;
+    hdma_tx->Init.Direction           = DMA_MEMORY_TO_PERIPH;
+    hdma_tx->Init.PeriphInc           = DMA_PINC_DISABLE;
+    hdma_tx->Init.MemInc              = DMA_MINC_ENABLE;
+    hdma_tx->Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_tx->Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;
+    hdma_tx->Init.Mode                = DMA_NORMAL;
+    hdma_tx->Init.Priority            = DMA_PRIORITY_LOW;
+    hdma_tx->Init.FIFOMode            = DMA_FIFOMODE_DISABLE;
+    hdma_tx->Init.FIFOThreshold       = DMA_FIFO_THRESHOLD_FULL;
+    hdma_tx->Init.MemBurst            = DMA_MBURST_SINGLE;
+    hdma_tx->Init.PeriphBurst         = DMA_PBURST_SINGLE;
+#else
+#error
+#endif
     HAL_DMA_DeInit(hdma_tx);
     HAL_DMA_Init(hdma_tx);
 
@@ -107,7 +128,9 @@ static void uart1_dma_init (uart_desc_t *uart_desc)
 
 #if DEBUG_SERIAL_USE_RX
     hdma_rx = &uart_desc->hdma_rx;
+    uart_desc->rx_handler             = dma_rx_xfer_hanlder;
 
+#if defined(STM32F769xx)
     hdma_rx->Instance                 = DMA2_Stream2;
     hdma_rx->Init.Channel             = DMA_CHANNEL_4;
     hdma_rx->Init.Direction           = DMA_PERIPH_TO_MEMORY;
@@ -117,8 +140,23 @@ static void uart1_dma_init (uart_desc_t *uart_desc)
     hdma_rx->Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;
     hdma_rx->Init.Mode                = DMA_CIRCULAR;
     hdma_rx->Init.Priority            = DMA_PRIORITY_LOW;
-    uart_desc->rx_handler            = dma_rx_xfer_hanlder;
-
+#elif defined(STM32H745xx)
+    hdma_rx->Instance                 = DMA2_Stream2;
+    hdma_tx->Init.Request             = DMA_REQUEST_UART4_RX;
+    hdma_tx->Init.Direction           = DMA_PERIPH_TO_MEMORY;
+    hdma_tx->Init.PeriphInc           = DMA_PINC_DISABLE;
+    hdma_tx->Init.MemInc              = DMA_MINC_ENABLE;
+    hdma_tx->Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_tx->Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;
+    hdma_tx->Init.Mode                = DMA_CIRCULAR;
+    hdma_tx->Init.Priority            = DMA_PRIORITY_LOW;
+    hdma_tx->Init.FIFOMode            = DMA_FIFOMODE_DISABLE;
+    hdma_tx->Init.FIFOThreshold       = DMA_FIFO_THRESHOLD_FULL;
+    hdma_tx->Init.MemBurst            = DMA_MBURST_SINGLE;
+    hdma_tx->Init.PeriphBurst         = DMA_PBURST_SINGLE;
+#else
+#error
+#endif
     HAL_DMA_DeInit(hdma_rx);
     HAL_DMA_Init(hdma_rx);
 

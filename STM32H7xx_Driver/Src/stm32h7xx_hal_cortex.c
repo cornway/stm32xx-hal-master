@@ -162,7 +162,7 @@ void HAL_NVIC_SetPriorityGrouping(uint32_t PriorityGroup)
   *         A lower priority value indicates a higher priority.
   * @retval None
   */
-void HAL_NVIC_SetPriority(IRQn_Type IRQn, uint32_t PreemptPriority, uint32_t SubPriority)
+__weak void HAL_NVIC_SetPriority(IRQn_Type IRQn, uint32_t PreemptPriority, uint32_t SubPriority)
 {
   uint32_t prioritygroup;
 
@@ -184,7 +184,7 @@ void HAL_NVIC_SetPriority(IRQn_Type IRQn, uint32_t PreemptPriority, uint32_t Sub
   *         (For the complete STM32 Devices IRQ Channels list, please refer to the appropriate CMSIS device file (stm32h7xxxx.h))
   * @retval None
   */
-void HAL_NVIC_EnableIRQ(IRQn_Type IRQn)
+__weak void HAL_NVIC_EnableIRQ(IRQn_Type IRQn)
 {
   /* Check the parameters */
   assert_param(IS_NVIC_DEVICE_IRQ(IRQn));
@@ -200,7 +200,7 @@ void HAL_NVIC_EnableIRQ(IRQn_Type IRQn)
   *         (For the complete STM32 Devices IRQ Channels list, please refer to the appropriate CMSIS device file (stm32h7xxxx.h))
   * @retval None
   */
-void HAL_NVIC_DisableIRQ(IRQn_Type IRQn)
+__weak void HAL_NVIC_DisableIRQ(IRQn_Type IRQn)
 {
   /* Check the parameters */
   assert_param(IS_NVIC_DEVICE_IRQ(IRQn));

@@ -1,12 +1,22 @@
 
+#if defined(USE_STM32H745I_DISCO)
+#include <stm32h7xx_it.h>
+#include <stm32h745i_discovery_lcd.h>
+#elif defined(USE_STM32F769I_DISCO)
 #include <stm32f7xx_it.h>
 #include <stm32f769i_discovery_lcd.h>
+#else
+#error
+#endif
 
 #include <lcd_int.h>
 #include <nvic.h>
 
 #include <misc_utils.h>
 #include <bsp_sys.h>
+
+uint32_t lcd_x_size_var;
+uint32_t lcd_y_size_var;
 
 enum {
     V_STATE_IDLE,
@@ -30,13 +40,30 @@ typedef struct screen_hal_ctxt_s {
 #define GET_VHAL_CTXT(cfg) ((screen_hal_ctxt_t *)((lcd_wincfg_t *)(cfg))->hal_ctxt)
 #define GET_VHAL_LTDC(cfg) ((LTDC_HandleTypeDef *)GET_VHAL_CTXT(cfg)->hal_ltdc)
 #define GET_VHAL_DMA2D(cfg) ((DMA2D_HandleTypeDef *)GET_VHAL_CTXT(cfg)->hal_dma)
-#define GET_VHAL_HALCFG(cfg) ((LCD_LayerCfgTypeDef *)GET_VHAL_CTXT(cfg)->hal_cfg)
 #define VHAL_PIX_FMT(cfg, num) (GET_VHAL_LTDC(cfg)->LayerCfg[num].PixelFormat)
+
+#if defined(USE_STM32F769I_DISCO)
+
+#define GET_VHAL_HALCFG(cfg) ((LCD_LayerCfgTypeDef *)GET_VHAL_CTXT(cfg)->hal_cfg)
+
+#define GFX_TRANSPARENT				GFX_ARGB8888_A(LCD_COLOR_TRANSPARENT)
+#define GFX_OPAQUE					GFX_ARGB8888_A(~LCD_COLOR_TRANSPARENT)
+
+#elif defined(USE_STM32H745I_DISCO)
+
+#define GET_VHAL_HALCFG(cfg) ((LTDC_LayerCfgTypeDef *)GET_VHAL_CTXT(cfg)->hal_cfg)
+
+#define GFX_TRANSPARENT				0x00
+#define GFX_OPAQUE					0xff
+#else
+#error
+#endif
 
 void DMA2D_XferCpltCallback (struct __DMA2D_HandleTypeDef * hdma2d);
 
 lcd_layers_t screen_hal_set_layer (lcd_wincfg_t *cfg)
 {
+#if defined(USE_STM32F769I_DISCO)
     lcd_layers_t nextlay;
 
     switch (cfg->ready_lay_idx) {
@@ -58,6 +85,29 @@ lcd_layers_t screen_hal_set_layer (lcd_wincfg_t *cfg)
     }
 
     return nextlay;
+#elif defined(USE_STM32H745I_DISCO)
+    lcd_layers_t nextlay;
+
+    switch (cfg->ready_lay_idx) {
+        case LCD_BACKGROUND:
+            BSP_LCD_SetLayerVisible(0, LCD_FOREGROUND, ENABLE);
+            BSP_LCD_SetLayerVisible(0, LCD_BACKGROUND, DISABLE);
+            nextlay = LCD_BACKGROUND;
+        break;
+        case LCD_FOREGROUND:
+            BSP_LCD_SetLayerVisible(0, LCD_BACKGROUND, ENABLE);
+            BSP_LCD_SetLayerVisible(0, LCD_FOREGROUND, DISABLE);
+            nextlay = LCD_FOREGROUND;
+        break;
+        default:
+            assert(0);
+        break;
+    }
+
+    return nextlay;
+#else
+#error
+#endif
 }
 
 static screen_hal_ctxt_t screen_hal_ctxt = {{0}};
@@ -98,7 +148,13 @@ void screen_hal_set_clut (lcd_wincfg_t *cfg, void *_buf, int size, int layer)
 
 int screen_hal_set_keying (lcd_wincfg_t *cfg, uint32_t color, int layer)
 {
+#if defined(USE_STM32F769I_DISCO)
     BSP_LCD_SetColorKeying(layer, color);
+#elif defined(USE_STM32H745I_DISCO)
+    BSP_LCD_SetColorKeying(0, layer, color);
+#else
+#error
+#endif
     return 0;
 }
 
@@ -107,6 +163,7 @@ int screen_hal_init (int init)
     uint32_t status;
 
     d_memset(&screen_hal_ctxt, 0, sizeof(screen_hal_ctxt));
+#if defined(USE_STM32F769I_DISCO)
     if (init) {
 
         status = BSP_LCD_Init();
@@ -121,17 +178,41 @@ int screen_hal_init (int init)
         BSP_LCD_DeInitEx();
         HAL_Delay(1000);
     }
+#elif defined(USE_STM32H745I_DISCO)
+    if (init) {
+
+        status = BSP_LCD_Init(0, LCD_ORIENTATION_LANDSCAPE);
+        assert(!status);
+
+        BSP_LCD_GetXSize(0, &bsp_lcd_width);
+        BSP_LCD_GetYSize(0, &bsp_lcd_height);
+
+        BSP_LCD_SetBrightness(0, 100);
+    } else {
+        BSP_LCD_SetBrightness(0, 0);
+        BSP_LCD_DeInitEx();
+        HAL_Delay(1000);
+    }
+#else
+#error
+#endif
     return 0;
 }
 
 void screen_hal_attach (lcd_wincfg_t *cfg)
 {
-extern LTDC_HandleTypeDef hltdc_discovery;
+extern LTDC_HandleTypeDef hlcd_ltdc;
     static DMA2D_HandleTypeDef dma2d;
+#if defined(USE_STM32F769I_DISCO)
     static LCD_LayerCfgTypeDef hal_cfg;
+#elif defined(USE_STM32H745I_DISCO)
+    static LTDC_LayerCfgTypeDef hal_cfg;
+#else
+#error
+#endif
 
     cfg->hal_ctxt = &screen_hal_ctxt;
-    GET_VHAL_CTXT(cfg)->hal_ltdc = &hltdc_discovery;
+    GET_VHAL_CTXT(cfg)->hal_ltdc = &hlcd_ltdc;
     GET_VHAL_CTXT(cfg)->hal_dma = &dma2d;
     GET_VHAL_CTXT(cfg)->hal_cfg = &hal_cfg;
     screen_hal_ctxt.lcd_cfg = cfg;
@@ -141,8 +222,13 @@ void *
 screen_hal_set_config (lcd_wincfg_t *cfg, int x, int y, int w, int h, uint8_t colormode)
 {
     int layer;
-    LCD_LayerCfgTypeDef *Layercfg;
-
+#if defined(USE_STM32F769I_DISCO)
+    static LCD_LayerCfgTypeDef *Layercfg;
+#elif defined(USE_STM32H745I_DISCO)
+    static LTDC_LayerCfgTypeDef *Layercfg;
+#else
+#error
+#endif
     screen_hal_attach(cfg);
 
     Layercfg = GET_VHAL_HALCFG(cfg);

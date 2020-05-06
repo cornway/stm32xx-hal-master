@@ -1,4 +1,5 @@
 #include "main.h"
+#include <stdint.h>
 #include <nvic.h>
 #include "config.h"
 #include "debug.h"
@@ -6,10 +7,6 @@
 #include <bsp_sys.h>
 
 #if defined(BSP_DRIVER)
-
-#ifndef USE_STM32F769I_DISCO
-#error "Not supported"
-#endif
 
 #define InvalidIrqNum ((IRQn_Type)(NonMaskableInt_IRQn - 1))
 

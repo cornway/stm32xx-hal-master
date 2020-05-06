@@ -363,6 +363,7 @@ void HAL_JPEG_DecodeCpltCallback(JPEG_HandleTypeDef *hjpeg)
 
 void HAL_JPEG_MspInit(JPEG_HandleTypeDef *hjpeg)
 {
+#if defined(USE_STM32F769_DISCO)
   static DMA_HandleTypeDef   hdmaIn;
   static DMA_HandleTypeDef   hdmaOut;
   
@@ -431,7 +432,7 @@ void HAL_JPEG_MspInit(JPEG_HandleTypeDef *hjpeg)
   
   HAL_NVIC_SetPriority(DMA2_Stream4_IRQn, 0x07, 0x0F);
   HAL_NVIC_EnableIRQ(DMA2_Stream4_IRQn);   
-    
+#endif
 }
 
 int JPEG_UserInit_HAL (void)
@@ -466,6 +467,8 @@ void JPEG_IRQHandler(void)
   HAL_JPEG_IRQHandler(&jpeg_hal_ctxt.hal_jpeg);
 }
 
+#if defined(USE_STM32F769_DISCO)
+
 void DMA2_Stream3_IRQHandler(void)
 {
   HAL_DMA_IRQHandler(jpeg_hal_ctxt.hal_jpeg.hdmain);
@@ -475,6 +478,8 @@ void DMA2_Stream4_IRQHandler(void)
 {
   HAL_DMA_IRQHandler(jpeg_hal_ctxt.hal_jpeg.hdmaout);
 }
+
+#endif
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
 

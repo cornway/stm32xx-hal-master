@@ -14,8 +14,15 @@
 #include <heap.h>
 #include <bsp_sys.h>
 
-#ifdef USE_STM32F769I_DISCO
+#if defined(USE_STM32F769I_DISCO)
+
 #include "stm32f769i_discovery_lcd.h"
+
+int const __cache_line_size = 32;
+
+#elif defined(USE_STM32H745I_DISCO)
+
+#include "stm32h745i_discovery_lcd.h"
 
 int const __cache_line_size = 32;
 
@@ -42,26 +49,35 @@ static void clock_fault (void)
 /*TODO : move to gpio.c/gpio.h*/
 void hdd_led_on (void)
 {
+#if defined(USE_STM32F769I_DISCO)
     BSP_LED_On(LED2);
+#endif
 }
 
 void hdd_led_off (void)
 {
+#if defined(USE_STM32F769I_DISCO)
     BSP_LED_Off(LED2);
+#endif
 }
 
 void serial_led_on (void)
 {
+#if defined(USE_STM32F769I_DISCO)
     BSP_LED_On(LED1);
+#endif
 }
 
 void serial_led_off (void)
 {
+#if defined(USE_STM32F769I_DISCO)
     BSP_LED_Off(LED1);
+#endif
 }
 
 static void SystemClock_Config(void)
 {
+#if defined(USE_STM32F769I_DISCO)
     RCC_ClkInitTypeDef RCC_ClkInitStruct;
     RCC_OscInitTypeDef RCC_OscInitStruct;
     RCC_PeriphCLKInitTypeDef PeriphClkInitStruct;
@@ -115,6 +131,7 @@ static void SystemClock_Config(void)
     ret = HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_6);
     if(ret != HAL_OK)
         clock_fault();
+#endif
 }
 
 void CPU_CACHE_Enable(void)
@@ -142,9 +159,10 @@ int dev_hal_init (void)
     HAL_Init();
     SystemClock_Config();
     CPU_CACHE_Enable();
-
+#if defined(USE_STM32F769I_DISCO)
     BSP_LED_Init(LED1);
     BSP_LED_Init(LED2);
+#endif
     uart_hal_tty_init();
     cs_load_code(NULL, NULL, 0);
     return 0;

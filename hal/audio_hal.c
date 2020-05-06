@@ -1,13 +1,20 @@
 #include <string.h>
 
-#include "stm32f769i_discovery_audio.h"
-#include <audio_int.h>
+#if defined(USE_STM32H745I_DISCO)
+#include <stm32h745i_discovery_audio.h>
+#elif defined(USE_STM32F769I_DISCO)
+#include <stm32f769i_discovery_audio.h>
 #include <wm8994.h>
-#include <nvic.h>
+#else
+#error
+#endif
 
-#include <audio_main.h>
-#include <debug.h>
 #include <config.h>
+#include <nvic.h>
+#include <debug.h>
+
+#include <audio_int.h>
+#include <audio_main.h>
 
 #if AUDIO_MODULE_PRESENT
 
@@ -51,11 +58,26 @@ a_hal_configure (a_intcfg_t *cfg)
   a_buf_t master;
   irqmask_t irq_flags;
   irq_bmap(&irq_flags);
-  BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, cfg->volume, cfg->samplerate);
-  BSP_AUDIO_OUT_SetAudioFrameSlot(CODEC_AUDIOFRAME_SLOT_02);
 
   a_get_master_base(&master);
+#if defined(USE_STM32F769I_DISCO)
+  BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, cfg->volume, cfg->samplerate);
+  BSP_AUDIO_OUT_SetAudioFrameSlot(CODEC_AUDIOFRAME_SLOT_02);
   BSP_AUDIO_OUT_Play((uint16_t *)master.buf, AUDIO_SAMPLES_2_BYTES(master.samples));
+#elif defined(USE_STM32H745I_DISCO)
+  BSP_AUDIO_Init_t init;
+    
+  init.BitsPerSample = cfg->samplebits;
+  init.ChannelsNbr = cfg->channels;
+  init.Device = 0;
+  init.SampleRate = cfg->samplerate;
+  init.Volume = cfg->volume;
+  BSP_AUDIO_OUT_Init(0, &init);
+  BSP_AUDIO_OUT_Play(0, (uint16_t *)master.buf, AUDIO_SAMPLES_2_BYTES(master.samples));
+
+#else
+#error
+#endif
   irq_bmap(&cfg->irq);
   cfg->irq = cfg->irq & (~irq_flags);
 }
@@ -64,6 +86,8 @@ void a_hal_shutdown (void)
 {
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_SW);
 }
+
+#if defined(USE_STM32F769I_DISCO)
 
 void
 a_hal_deinit(void)
@@ -87,6 +111,35 @@ void BSP_AUDIO_OUT_Error_CallBack(void)
     a_hal_shutdown();
     error_handle();
 }
+
+#elif defined(USE_STM32H745I_DISCO)
+
+void
+a_hal_deinit(void)
+{
+  BSP_AUDIO_OUT_DeInit(0);
+  BSP_AUDIO_OUT_DeInit(0);
+}
+
+void BSP_AUDIO_OUT_HalfTransfer_CallBack(uint32_t inst)
+{
+    __DMA_on_tx_complete(A_ISR_HALF);
+}
+
+void BSP_AUDIO_OUT_TransferComplete_CallBack(uint32_t inst)
+{
+    __DMA_on_tx_complete(A_ISR_COMP);
+}
+
+void BSP_AUDIO_OUT_Error_CallBack(uint32_t inst)
+{
+    a_hal_shutdown();
+    error_handle();
+}
+
+#else
+#error
+#endif
 
 void AUDIO_OUT_SAIx_DMAx_IRQHandler(void)
 {

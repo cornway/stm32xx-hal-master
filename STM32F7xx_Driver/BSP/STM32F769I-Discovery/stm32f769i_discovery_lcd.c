@@ -123,8 +123,8 @@ EndDependencies */
 #define LCD_DSI_ID              0x11
 #define LCD_DSI_ID_REG          0xA8
 
-uint32_t lcd_x_size_var;
-uint32_t lcd_y_size_var;
+extern uint32_t lcd_x_size_var;
+extern uint32_t lcd_y_size_var;
 
 static DSI_VidCfgTypeDef hdsivideo_handle;
 /**
@@ -199,7 +199,7 @@ typedef struct
   * @{
   */
 DMA2D_HandleTypeDef hdma2d_discovery;
-LTDC_HandleTypeDef  hltdc_discovery;
+LTDC_HandleTypeDef  hlcd_ltdc;
 DSI_HandleTypeDef hdsi_discovery;
 uint32_t lcd_x_size = OTM8009A_800X480_WIDTH;
 uint32_t lcd_y_size = OTM8009A_800X480_HEIGHT;
@@ -428,14 +428,14 @@ uint8_t BSP_LCD_InitEx(LCD_OrientationTypeDef orientation)
   
 /************************LTDC Initialization***********************************/  
   /* Timing Configuration */    
-  hltdc_discovery.Init.HorizontalSync = (HSA - 1);
-  hltdc_discovery.Init.AccumulatedHBP = (HSA + HBP - 1);
-  hltdc_discovery.Init.AccumulatedActiveW = (lcd_x_size + HSA + HBP - 1);
-  hltdc_discovery.Init.TotalWidth = (lcd_x_size + HSA + HBP + HFP - 1);
+  hlcd_ltdc.Init.HorizontalSync = (HSA - 1);
+  hlcd_ltdc.Init.AccumulatedHBP = (HSA + HBP - 1);
+  hlcd_ltdc.Init.AccumulatedActiveW = (lcd_x_size + HSA + HBP - 1);
+  hlcd_ltdc.Init.TotalWidth = (lcd_x_size + HSA + HBP + HFP - 1);
 
   /* Initialize the LCD pixel width and pixel height */
-  hltdc_discovery.LayerCfg->ImageWidth  = lcd_x_size;
-  hltdc_discovery.LayerCfg->ImageHeight = lcd_y_size;   
+  hlcd_ltdc.LayerCfg->ImageWidth  = lcd_x_size;
+  hlcd_ltdc.LayerCfg->ImageHeight = lcd_y_size;   
 
   /** LCD clock configuration
     * Note: The following values should not be changed as the PLLSAI is also used 
@@ -452,17 +452,17 @@ uint8_t BSP_LCD_InitEx(LCD_OrientationTypeDef orientation)
   HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct);
 
   /* Background value */
-  hltdc_discovery.Init.Backcolor.Blue = 0;
-  hltdc_discovery.Init.Backcolor.Green = 0;
-  hltdc_discovery.Init.Backcolor.Red = 0;
-  hltdc_discovery.Init.PCPolarity = LTDC_PCPOLARITY_IPC;
-  hltdc_discovery.Instance = LTDC;
+  hlcd_ltdc.Init.Backcolor.Blue = 0;
+  hlcd_ltdc.Init.Backcolor.Green = 0;
+  hlcd_ltdc.Init.Backcolor.Red = 0;
+  hlcd_ltdc.Init.PCPolarity = LTDC_PCPOLARITY_IPC;
+  hlcd_ltdc.Instance = LTDC;
 
   /* Get LTDC Configuration from DSI Configuration */
-  HAL_LTDC_StructInitFromVideoConfig(&(hltdc_discovery), &(hdsivideo_handle));
+  HAL_LTDC_StructInitFromVideoConfig(&(hlcd_ltdc), &(hdsivideo_handle));
 
   /* Initialize the LTDC */  
-  HAL_LTDC_Init(&hltdc_discovery);
+  HAL_LTDC_Init(&hlcd_ltdc);
 
   /* Enable the DSI host and wrapper after the LTDC initialization
      To avoid any synchronization issue, the DSI shall be started after enabling the LTDC */
@@ -493,7 +493,7 @@ uint8_t BSP_LCD_InitEx(LCD_OrientationTypeDef orientation)
 
 void BSP_LCD_DeInitEx (void)
 {
-    HAL_LTDC_DeInit(&hltdc_discovery);
+    HAL_LTDC_DeInit(&hlcd_ltdc);
     HAL_DSI_DeInit(&hdsi_discovery);
     BSP_LCD_MspDeInit();
 }
@@ -706,37 +706,37 @@ uint8_t BSP_LCD_HDMIInitEx(void)
     HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct); 
   
     /* Base address of LTDC registers to be set before calling De-Init */
-    hltdc_discovery.Instance = LTDC;
+    hlcd_ltdc.Instance = LTDC;
   
-    HAL_LTDC_DeInit(&(hltdc_discovery));
+    HAL_LTDC_DeInit(&(hlcd_ltdc));
   
     /* Timing Configuration */    
-    hltdc_discovery.Init.HorizontalSync = (HDMI_Format.HSYNC - 1);
-    hltdc_discovery.Init.AccumulatedHBP = (HDMI_Format.HSYNC + HDMI_Format.HBP - 1);
-    hltdc_discovery.Init.AccumulatedActiveW = (HDMI_Format.HACT + HDMI_Format.HSYNC + HDMI_Format.HBP - 1);
-    hltdc_discovery.Init.TotalWidth = (HDMI_Format.HACT + HDMI_Format.HSYNC + HDMI_Format.HBP + HDMI_Format.HFP - 1);
-    hltdc_discovery.Init.VerticalSync = (HDMI_Format.VSYNC - 1);
-    hltdc_discovery.Init.AccumulatedVBP = (HDMI_Format.VSYNC + HDMI_Format.VBP - 1);
-    hltdc_discovery.Init.AccumulatedActiveH = (HDMI_Format.VACT + HDMI_Format.VSYNC + HDMI_Format.VBP - 1);
-    hltdc_discovery.Init.TotalHeigh = (HDMI_Format.VACT + HDMI_Format.VSYNC + HDMI_Format.VBP + HDMI_Format.VFP - 1);
+    hlcd_ltdc.Init.HorizontalSync = (HDMI_Format.HSYNC - 1);
+    hlcd_ltdc.Init.AccumulatedHBP = (HDMI_Format.HSYNC + HDMI_Format.HBP - 1);
+    hlcd_ltdc.Init.AccumulatedActiveW = (HDMI_Format.HACT + HDMI_Format.HSYNC + HDMI_Format.HBP - 1);
+    hlcd_ltdc.Init.TotalWidth = (HDMI_Format.HACT + HDMI_Format.HSYNC + HDMI_Format.HBP + HDMI_Format.HFP - 1);
+    hlcd_ltdc.Init.VerticalSync = (HDMI_Format.VSYNC - 1);
+    hlcd_ltdc.Init.AccumulatedVBP = (HDMI_Format.VSYNC + HDMI_Format.VBP - 1);
+    hlcd_ltdc.Init.AccumulatedActiveH = (HDMI_Format.VACT + HDMI_Format.VSYNC + HDMI_Format.VBP - 1);
+    hlcd_ltdc.Init.TotalHeigh = (HDMI_Format.VACT + HDMI_Format.VSYNC + HDMI_Format.VBP + HDMI_Format.VFP - 1);
   
     /* background value */
-    hltdc_discovery.Init.Backcolor.Blue = 0;
-    hltdc_discovery.Init.Backcolor.Green = 0;
-    hltdc_discovery.Init.Backcolor.Red = 0;
+    hlcd_ltdc.Init.Backcolor.Blue = 0;
+    hlcd_ltdc.Init.Backcolor.Green = 0;
+    hlcd_ltdc.Init.Backcolor.Red = 0;
   
     /* Polarity */
-    hltdc_discovery.Init.HSPolarity = LTDC_HSPOLARITY_AL;
-    hltdc_discovery.Init.VSPolarity = LTDC_VSPOLARITY_AL;
-    hltdc_discovery.Init.DEPolarity = LTDC_DEPOLARITY_AL;
-    hltdc_discovery.Init.PCPolarity = LTDC_PCPOLARITY_IPC;
+    hlcd_ltdc.Init.HSPolarity = LTDC_HSPOLARITY_AL;
+    hlcd_ltdc.Init.VSPolarity = LTDC_VSPOLARITY_AL;
+    hlcd_ltdc.Init.DEPolarity = LTDC_DEPOLARITY_AL;
+    hlcd_ltdc.Init.PCPolarity = LTDC_PCPOLARITY_IPC;
 
   dbg_eval(DBG_INFO) {
-    BSP_DumpLTDCHandle(&hltdc_discovery);
+    BSP_DumpLTDCHandle(&hlcd_ltdc);
   }
 
   /* Initialize & Start the LTDC */  
-  HAL_LTDC_Init(&hltdc_discovery);
+  HAL_LTDC_Init(&hlcd_ltdc);
 #if !defined(DATA_IN_ExtSDRAM)
   /* Initialize the SDRAM */
   BSP_SDRAM_Init();
@@ -839,7 +839,7 @@ uint32_t BSP_LCD_GetYSize(void)
   */
 void BSP_LCD_SetXSize(uint32_t imageWidthPixels)
 {
-  hltdc_discovery.LayerCfg[ActiveLayer].ImageWidth = imageWidthPixels;
+  hlcd_ltdc.LayerCfg[ActiveLayer].ImageWidth = imageWidthPixels;
 }
 
 /**
@@ -848,7 +848,7 @@ void BSP_LCD_SetXSize(uint32_t imageWidthPixels)
   */
 void BSP_LCD_SetYSize(uint32_t imageHeightPixels)
 {
-  hltdc_discovery.LayerCfg[ActiveLayer].ImageHeight = imageHeightPixels;
+  hlcd_ltdc.LayerCfg[ActiveLayer].ImageHeight = imageHeightPixels;
 }
 
 
@@ -879,8 +879,8 @@ void BSP_LCD_LayerDefaultInit(uint16_t LayerIndex, uint32_t FB_Address)
   Layercfg.ImageWidth = BSP_LCD_GetXSize();
   Layercfg.ImageHeight = BSP_LCD_GetYSize();
   
-  //HAL_LTDC_ConfigLayer(&hltdc_discovery, &Layercfg, LayerIndex); 
-  HAL_LTDC_ConfigLayer(&hltdc_discovery, &Layercfg, LayerIndex);
+  //HAL_LTDC_ConfigLayer(&hlcd_ltdc, &Layercfg, LayerIndex); 
+  HAL_LTDC_ConfigLayer(&hlcd_ltdc, &Layercfg, LayerIndex);
   
   DrawProp[LayerIndex].BackColor = LCD_COLOR_WHITE;
   DrawProp[LayerIndex].pFont     = &Font24;
@@ -909,28 +909,28 @@ void BSP_LCD_SetLayerVisible(uint32_t LayerIndex, FunctionalState State)
 {
   if(State == ENABLE)
   {
-    __HAL_LTDC_LAYER_ENABLE(&(hltdc_discovery), LayerIndex);
+    __HAL_LTDC_LAYER_ENABLE(&(hlcd_ltdc), LayerIndex);
   }
   else
   {
-    __HAL_LTDC_LAYER_DISABLE(&(hltdc_discovery), LayerIndex);
+    __HAL_LTDC_LAYER_DISABLE(&(hlcd_ltdc), LayerIndex);
   }
-  __HAL_LTDC_RELOAD_CONFIG(&(hltdc_discovery));
-  HAL_LTDC_Reload(&(hltdc_discovery), LTDC_RELOAD_IMMEDIATE);
+  __HAL_LTDC_RELOAD_CONFIG(&(hlcd_ltdc));
+  HAL_LTDC_Reload(&(hlcd_ltdc), LTDC_RELOAD_IMMEDIATE);
 }
 
 void BSP_LCD_SetLayerVisible_NoReload (uint32_t LayerIndex, FunctionalState State)
 {
   if(State == ENABLE)
   {
-    __HAL_LTDC_LAYER_ENABLE(&(hltdc_discovery), LayerIndex);
+    __HAL_LTDC_LAYER_ENABLE(&(hlcd_ltdc), LayerIndex);
   }
   else
   {
-    __HAL_LTDC_LAYER_DISABLE(&(hltdc_discovery), LayerIndex);
+    __HAL_LTDC_LAYER_DISABLE(&(hlcd_ltdc), LayerIndex);
   }
-  __HAL_LTDC_RELOAD_CONFIG(&(hltdc_discovery));
-  HAL_LTDC_Reload(&(hltdc_discovery), LTDC_RELOAD_VERTICAL_BLANKING);
+  __HAL_LTDC_RELOAD_CONFIG(&(hlcd_ltdc));
+  HAL_LTDC_Reload(&(hlcd_ltdc), LTDC_RELOAD_VERTICAL_BLANKING);
 }
 /**
   * @brief  Configures the transparency.
@@ -941,7 +941,7 @@ void BSP_LCD_SetLayerVisible_NoReload (uint32_t LayerIndex, FunctionalState Stat
 void BSP_LCD_SetTransparency(uint32_t LayerIndex, uint8_t Transparency)
 {
   
-  HAL_LTDC_SetAlpha(&(hltdc_discovery), Transparency, LayerIndex);
+  HAL_LTDC_SetAlpha(&(hlcd_ltdc), Transparency, LayerIndex);
   
 }
 
@@ -953,13 +953,13 @@ void BSP_LCD_SetTransparency(uint32_t LayerIndex, uint8_t Transparency)
 void BSP_LCD_SetLayerAddress(uint32_t LayerIndex, uint32_t Address)
 {
   
-  HAL_LTDC_SetAddress(&(hltdc_discovery), Address, LayerIndex);
+  HAL_LTDC_SetAddress(&(hlcd_ltdc), Address, LayerIndex);
   
 }
 
 void BSP_LCD_SetLayerAddress_NoReload(uint32_t LayerIndex, uint32_t Address)
 {
-  HAL_LTDC_SetAddress_NoReload(&(hltdc_discovery), Address, LayerIndex); 
+  HAL_LTDC_SetAddress_NoReload(&(hlcd_ltdc), Address, LayerIndex); 
 }
 
 
@@ -974,10 +974,10 @@ void BSP_LCD_SetLayerAddress_NoReload(uint32_t LayerIndex, uint32_t Address)
 void BSP_LCD_SetLayerWindow(uint16_t LayerIndex, uint16_t Xpos, uint16_t Ypos, uint16_t Width, uint16_t Height)
 {
   /* Reconfigure the layer size */
-  HAL_LTDC_SetWindowSize(&(hltdc_discovery), Width, Height, LayerIndex);
+  HAL_LTDC_SetWindowSize(&(hlcd_ltdc), Width, Height, LayerIndex);
   
   /* Reconfigure the layer position */
-  HAL_LTDC_SetWindowPosition(&(hltdc_discovery), Xpos, Ypos, LayerIndex);
+  HAL_LTDC_SetWindowPosition(&(hlcd_ltdc), Xpos, Ypos, LayerIndex);
   
 }
 
@@ -989,8 +989,8 @@ void BSP_LCD_SetLayerWindow(uint16_t LayerIndex, uint16_t Xpos, uint16_t Ypos, u
 void BSP_LCD_SetColorKeying(uint32_t LayerIndex, uint32_t RGBValue)
 {
   /* Configure and Enable the color Keying for LCD Layer */
-  HAL_LTDC_ConfigColorKeying(&(hltdc_discovery), RGBValue, LayerIndex);
-  HAL_LTDC_EnableColorKeying(&(hltdc_discovery), LayerIndex);
+  HAL_LTDC_ConfigColorKeying(&(hlcd_ltdc), RGBValue, LayerIndex);
+  HAL_LTDC_EnableColorKeying(&(hlcd_ltdc), LayerIndex);
 }
 
 /**
@@ -1000,7 +1000,7 @@ void BSP_LCD_SetColorKeying(uint32_t LayerIndex, uint32_t RGBValue)
 void BSP_LCD_ResetColorKeying(uint32_t LayerIndex)
 {
   /* Disable the color Keying for LCD Layer */
-  HAL_LTDC_DisableColorKeying(&(hltdc_discovery), LayerIndex);
+  HAL_LTDC_DisableColorKeying(&(hlcd_ltdc), LayerIndex);
 }
 
 /**
@@ -1067,27 +1067,27 @@ uint32_t BSP_LCD_ReadPixel(uint16_t Xpos, uint16_t Ypos)
 {
   uint32_t ret = 0;
 
-  if(hltdc_discovery.LayerCfg[ActiveLayer].PixelFormat == LTDC_PIXEL_FORMAT_ARGB8888)
+  if(hlcd_ltdc.LayerCfg[ActiveLayer].PixelFormat == LTDC_PIXEL_FORMAT_ARGB8888)
   {
     /* Read data value from SDRAM memory */
-    ret = *(__IO uint32_t*) (hltdc_discovery.LayerCfg[ActiveLayer].FBStartAdress + (4*(Ypos*lcd_x_size_var + Xpos)));
+    ret = *(__IO uint32_t*) (hlcd_ltdc.LayerCfg[ActiveLayer].FBStartAdress + (4*(Ypos*lcd_x_size_var + Xpos)));
   }
-  else if(hltdc_discovery.LayerCfg[ActiveLayer].PixelFormat == LTDC_PIXEL_FORMAT_RGB888)
+  else if(hlcd_ltdc.LayerCfg[ActiveLayer].PixelFormat == LTDC_PIXEL_FORMAT_RGB888)
   {
     /* Read data value from SDRAM memory */
-    ret = (*(__IO uint32_t*) (hltdc_discovery.LayerCfg[ActiveLayer].FBStartAdress + (4*(Ypos*lcd_x_size_var + Xpos))) & 0x00FFFFFF);
+    ret = (*(__IO uint32_t*) (hlcd_ltdc.LayerCfg[ActiveLayer].FBStartAdress + (4*(Ypos*lcd_x_size_var + Xpos))) & 0x00FFFFFF);
   }
-  else if((hltdc_discovery.LayerCfg[ActiveLayer].PixelFormat == LTDC_PIXEL_FORMAT_RGB565) || \
-          (hltdc_discovery.LayerCfg[ActiveLayer].PixelFormat == LTDC_PIXEL_FORMAT_ARGB4444) || \
-          (hltdc_discovery.LayerCfg[ActiveLayer].PixelFormat == LTDC_PIXEL_FORMAT_AL88))
+  else if((hlcd_ltdc.LayerCfg[ActiveLayer].PixelFormat == LTDC_PIXEL_FORMAT_RGB565) || \
+          (hlcd_ltdc.LayerCfg[ActiveLayer].PixelFormat == LTDC_PIXEL_FORMAT_ARGB4444) || \
+          (hlcd_ltdc.LayerCfg[ActiveLayer].PixelFormat == LTDC_PIXEL_FORMAT_AL88))
   {
     /* Read data value from SDRAM memory */
-    ret = *(__IO uint16_t*) (hltdc_discovery.LayerCfg[ActiveLayer].FBStartAdress + (2*(Ypos*lcd_x_size_var + Xpos)));
+    ret = *(__IO uint16_t*) (hlcd_ltdc.LayerCfg[ActiveLayer].FBStartAdress + (2*(Ypos*lcd_x_size_var + Xpos)));
   }
   else
   {
     /* Read data value from SDRAM memory */
-    ret = *(__IO uint8_t*) (hltdc_discovery.LayerCfg[ActiveLayer].FBStartAdress + (2*(Ypos*lcd_x_size_var + Xpos)));
+    ret = *(__IO uint8_t*) (hlcd_ltdc.LayerCfg[ActiveLayer].FBStartAdress + (2*(Ypos*lcd_x_size_var + Xpos)));
   }
 
   return ret;
@@ -1100,7 +1100,7 @@ uint32_t BSP_LCD_ReadPixel(uint16_t Xpos, uint16_t Ypos)
 void BSP_LCD_Clear(uint32_t Color)
 {
   /* Clear the LCD */
-  LL_FillBuffer(ActiveLayer, (uint32_t *)(hltdc_discovery.LayerCfg[ActiveLayer].FBStartAdress), lcd_x_size_var, lcd_y_size_var, 0, Color);
+  LL_FillBuffer(ActiveLayer, (uint32_t *)(hlcd_ltdc.LayerCfg[ActiveLayer].FBStartAdress), lcd_x_size_var, lcd_y_size_var, 0, Color);
 }
 
 /**
@@ -1238,7 +1238,7 @@ void BSP_LCD_DrawHLine(uint16_t Xpos, uint16_t Ypos, uint16_t Length)
   uint32_t  Xaddress = 0;
 
   /* Get the line address */
-  Xaddress = (hltdc_discovery.LayerCfg[ActiveLayer].FBStartAdress) + 4*(lcd_x_size_var*Ypos + Xpos);
+  Xaddress = (hlcd_ltdc.LayerCfg[ActiveLayer].FBStartAdress) + 4*(lcd_x_size_var*Ypos + Xpos);
 
   /* Write line */
   LL_FillBuffer(ActiveLayer, (uint32_t *)Xaddress, Length, 1, 0, DrawProp[ActiveLayer].TextColor);
@@ -1255,7 +1255,7 @@ void BSP_LCD_DrawVLine(uint16_t Xpos, uint16_t Ypos, uint16_t Length)
   uint32_t  Xaddress = 0;
 
   /* Get the line address */
-  Xaddress = (hltdc_discovery.LayerCfg[ActiveLayer].FBStartAdress) + 4*(lcd_x_size_var*Ypos + Xpos);
+  Xaddress = (hlcd_ltdc.LayerCfg[ActiveLayer].FBStartAdress) + 4*(lcd_x_size_var*Ypos + Xpos);
 
   /* Write line */
   LL_FillBuffer(ActiveLayer, (uint32_t *)Xaddress, 1, Length, (lcd_x_size_var - 1), DrawProp[ActiveLayer].TextColor);
@@ -1483,7 +1483,7 @@ void BSP_LCD_DrawBitmap(uint32_t Xpos, uint32_t Ypos, uint8_t *pbmp)
   bit_pixel = pbmp[28] + (pbmp[29] << 8);
 
   /* Set the address */
-  Address = hltdc_discovery.LayerCfg[ActiveLayer].FBStartAdress + (((lcd_x_size_var*Ypos) + Xpos)*(4));
+  Address = hlcd_ltdc.LayerCfg[ActiveLayer].FBStartAdress + (((lcd_x_size_var*Ypos) + Xpos)*(4));
 
   /* Get the layer pixel format */
   if ((bit_pixel/8) == 4)
@@ -1529,7 +1529,7 @@ void BSP_LCD_FillRect(uint16_t Xpos, uint16_t Ypos, uint16_t Width, uint16_t Hei
   BSP_LCD_SetTextColor(DrawProp[ActiveLayer].TextColor);
 
   /* Get the rectangle start address */
-  Xaddress = (hltdc_discovery.LayerCfg[ActiveLayer].FBStartAdress) + 4*(lcd_x_size_var*Ypos + Xpos);
+  Xaddress = (hlcd_ltdc.LayerCfg[ActiveLayer].FBStartAdress) + 4*(lcd_x_size_var*Ypos + Xpos);
 
   /* Fill the rectangle */
   LL_FillBuffer(ActiveLayer, (uint32_t *)Xaddress, Width, Height, (lcd_x_size_var - Width), DrawProp[ActiveLayer].TextColor);
@@ -1876,7 +1876,7 @@ __weak void BSP_LCD_MspInit(void)
 void BSP_LCD_DrawPixel(uint16_t Xpos, uint16_t Ypos, uint32_t RGB_Code)
 {
   /* Write data value to all SDRAM memory */
-  *(__IO uint32_t*) (hltdc_discovery.LayerCfg[ActiveLayer].FBStartAdress + (4*(Ypos*lcd_x_size_var + Xpos))) = RGB_Code;
+  *(__IO uint32_t*) (hlcd_ltdc.LayerCfg[ActiveLayer].FBStartAdress + (4*(Ypos*lcd_x_size_var + Xpos))) = RGB_Code;
 }
 
 
