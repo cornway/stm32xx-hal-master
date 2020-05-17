@@ -54,7 +54,7 @@
 /* #define HAL_HRTIM_MODULE_ENABLED */
 #define HAL_HSEM_MODULE_ENABLED
 #define HAL_I2C_MODULE_ENABLED
-#define HAL_I2S_MODULE_ENABLED 
+#define HAL_I2S_MODULE_ENABLED
 /* #define HAL_IRDA_MODULE_ENABLED */
 /* #define HAL_IWDG_MODULE_ENABLED */
 #define HAL_JPEG_MODULE_ENABLED
@@ -86,6 +86,10 @@
 #define HAL_UART_MODULE_ENABLED 
 #define HAL_USART_MODULE_ENABLED
 /* #define HAL_WWDG_MODULE_ENABLED */
+
+#if defined(USE_STM32H747I_DISCO)
+#define HAL_DSI_MODULE_ENABLED
+#endif
 
 /* ########################## Oscillator Values adaptation ####################*/
 /**

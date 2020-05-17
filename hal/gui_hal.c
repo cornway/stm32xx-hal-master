@@ -1,5 +1,7 @@
 
-#if defined(USE_STM32H745I_DISCO)
+#if defined(USE_STM32H747I_DISCO)
+#include <stm32h747i_discovery_lcd.h>
+#elif defined(USE_STM32H745I_DISCO)
 #include <stm32h745i_discovery_lcd.h>
 #elif defined(USE_STM32F769I_DISCO)
 #include <stm32f769i_discovery_lcd.h>
@@ -19,7 +21,7 @@ void gui_rect_fill_HAL (dim_t *dest, dim_t *rect, rgba_t color)
 #if defined(USE_STM32F769I_DISCO)
     BSP_LCD_SetTextColor(color);
     BSP_LCD_FillRect(d.x, d.y, d.w, d.h);
-#elif defined(USE_STM32H745I_DISCO)
+#elif defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
     BSP_LCD_FillRect(0, d.x, d.y, d.w, d.h, color);
 #else
 #error
@@ -32,7 +34,7 @@ void gui_com_fill_HAL (component_t *com, rgba_t color)
 #if defined(USE_STM32F769I_DISCO)
     BSP_LCD_SetTextColor(color);
     BSP_LCD_FillRect(com->dim.x, com->dim.y, com->dim.w, com->dim.h);
-#elif defined(USE_STM32H745I_DISCO)
+#elif defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
     BSP_LCD_FillRect(0, com->dim.x, com->dim.y, com->dim.w, com->dim.h, color);
 #else
 #error

@@ -1,6 +1,8 @@
 #include <string.h>
 
-#if defined(USE_STM32H745I_DISCO)
+#if defined(USE_STM32H747I_DISCO)
+#include <stm32h747i_discovery_audio.h>
+#elif defined(USE_STM32H745I_DISCO)
 #include <stm32h745i_discovery_audio.h>
 #elif defined(USE_STM32F769I_DISCO)
 #include <stm32f769i_discovery_audio.h>
@@ -64,7 +66,7 @@ a_hal_configure (a_intcfg_t *cfg)
   BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, cfg->volume, cfg->samplerate);
   BSP_AUDIO_OUT_SetAudioFrameSlot(CODEC_AUDIOFRAME_SLOT_02);
   BSP_AUDIO_OUT_Play((uint16_t *)master.buf, AUDIO_SAMPLES_2_BYTES(master.samples));
-#elif defined(USE_STM32H745I_DISCO)
+#elif defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
   BSP_AUDIO_Init_t init;
     
   init.BitsPerSample = cfg->samplebits;
@@ -112,7 +114,7 @@ void BSP_AUDIO_OUT_Error_CallBack(void)
     error_handle();
 }
 
-#elif defined(USE_STM32H745I_DISCO)
+#elif defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
 
 void
 a_hal_deinit(void)

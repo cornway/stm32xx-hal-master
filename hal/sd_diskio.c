@@ -53,8 +53,6 @@
 #include "../int/sd_diskio.h"
 #include <nvic.h>
 
-/*TODO : remove from here*/
-#include "stm32f769i_discovery_audio.h"
 #include "stm32f7xx_it.h"
 #include "debug.h"
 #include "heap.h"
@@ -128,7 +126,11 @@ const Diskio_drvTypeDef  SD_Driver =
 static DSTATUS SD_CheckStatus(BYTE lun)
 {
   Stat = STA_NOINIT;
+#if defined(USE_STM32F769I_DISCO)
   if(BSP_SD_GetCardState() == MSD_OK)
+#else
+  if(BSP_SD_GetCardState(0) == HAL_OK)
+ #endif
   {
     Stat &= ~STA_NOINIT;
   }
@@ -149,7 +151,11 @@ DSTATUS SD_initialize(BYTE lun)
 
   irq_save(&irqsave);
   irq_bmap(&irq);
+#if defined(USE_STM32F769I_DISCO)
   if(BSP_SD_Init() == MSD_OK)
+#else
+  if(BSP_SD_Init(0) == HAL_OK)
+#endif
   {
     Stat = SD_CheckStatus(lun);
   }
@@ -164,7 +170,11 @@ DSTATUS SD_initialize(BYTE lun)
 
 void SD_Deinitialize(void)
 {
+#if defined(USE_STM32F769I_DISCO)
     BSP_SD_DeInit();
+#else
+    BSP_SD_DeInit(0);    
+#endif
 }
 
 /**
@@ -186,7 +196,7 @@ DSTATUS SD_status(BYTE lun)
 DRESULT SD_Uread(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 {
     DRESULT result = RES_OK;
-    uint8_t ret = MSD_OK;
+    uint8_t ret = 0;
     DWORD end = sector + count;
     uint32_t *abuf = heap_malloc(_MIN_SS);
 
@@ -195,6 +205,7 @@ DRESULT SD_Uread(BYTE lun, BYTE *buff, DWORD sector, UINT count)
     }
     assert(PTR_ALIGNED(abuf, sizeof(arch_word_t)));
     for (; sector < end;) {
+#if defined(USE_STM32F769I_DISCO)
         ret = BSP_SD_ReadBlocks(abuf, (uint32_t)sector,
                                 SD_BLOCK_SECTOR_CNT,
                                 SD_TIMEOUT);
@@ -204,6 +215,16 @@ DRESULT SD_Uread(BYTE lun, BYTE *buff, DWORD sector, UINT count)
            result = RES_ERROR;
            break;
         }
+#else
+        ret = BSP_SD_ReadBlocks(0, abuf, (uint32_t)sector,
+                                SD_BLOCK_SECTOR_CNT);
+        if (ret == HAL_OK) {
+           while(BSP_SD_GetCardState(0)!= HAL_OK) {}
+        } else {
+           result = RES_ERROR;
+           break;
+        }
+#endif        
         d_memcpy(buff, abuf, _MIN_SS);
         sector += 1;
         buff += _MIN_SS;
@@ -319,7 +340,7 @@ DRESULT _SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 DRESULT _SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 {
   DRESULT res = RES_ERROR;
-  uint8_t msd_res = MSD_ERROR;
+  uint8_t msd_res = 0xff;
 #if SD_UNALIGNED_WA
 
   if (((uint32_t)buff) & 0x3) {
@@ -327,6 +348,7 @@ DRESULT _SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
   } else
 #endif /*SD_UNALIGNED_WA*/
   {
+#if defined(USE_STM32F769I_DISCO)
     msd_res = BSP_SD_ReadBlocks((uint32_t *)buff,
                           (uint32_t)sector,
                           count,
@@ -335,6 +357,15 @@ DRESULT _SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
         res = RES_OK;
         while(BSP_SD_GetCardState()!= MSD_OK) {} 
     }
+#else
+    msd_res = BSP_SD_ReadBlocks(0, (uint32_t *)buff,
+                          (uint32_t)sector,
+                          count);
+    if (msd_res == HAL_OK) {
+        res = RES_OK;
+        while(BSP_SD_GetCardState(0)!= HAL_OK) {} 
+    }    
+#endif
   }
   return res;
 }
@@ -391,9 +422,15 @@ static DRESULT __SD_write (BYTE lun, const BYTE *buff, DWORD sector, UINT count)
   SCB_CleanDCache_by_Addr((uint32_t*)alignedAddr, count*BLOCKSIZE + ((uint32_t)buff - alignedAddr));
 #endif
 
+#if defined(USE_STM32F769I_DISCO)
   if(BSP_SD_WriteBlocks_DMA((uint32_t*)buff,
                             (uint32_t)(sector),
                             count) == MSD_OK)
+#else
+  if(BSP_SD_WriteBlocks_DMA(0, (uint32_t*)buff,
+                            (uint32_t)(sector),
+                            count) == HAL_OK)  
+#endif
   {
     /* Wait that writing process is completed or a timeout occurs */
 
@@ -413,7 +450,11 @@ static DRESULT __SD_write (BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 
       while((HAL_GetTick() - timeout) < SD_TIMEOUT)
       {
-        if (BSP_SD_GetCardState() == SD_TRANSFER_OK)
+#if defined(USE_STM32F769I_DISCO)
+        if (BSP_SD_GetCardState() == SD_TRANSFER_OK) {} 
+#else
+        if (BSP_SD_GetCardState(0) == SD_TRANSFER_OK) {} 
+#endif
         {
           res = RES_OK;
           break;
@@ -462,7 +503,11 @@ static DRESULT SD_UWrite (BYTE lun, const BYTE *buff, DWORD sector, UINT count)
         d_memcpy(abuf, buff, _MIN_SS);
         res = __SD_write(lun, (BYTE *)abuf, sector, 1);
         if (res == RES_OK) {
-           while(BSP_SD_GetCardState()!= MSD_OK) {}
+#if defined(USE_STM32F769I_DISCO)
+        while(BSP_SD_GetCardState()!= MSD_OK) {} 
+#else
+        while(BSP_SD_GetCardState(0)!= HAL_OK) {} 
+#endif
         } else {
            res = RES_ERROR;
            break;
@@ -488,7 +533,11 @@ static DRESULT _SD_write (BYTE lun, const BYTE *buff, DWORD sector, UINT count)
         res = __SD_write(lun, buff, sector, count);
     }
     if (res == RES_OK) {
+#if defined(USE_STM32F769I_DISCO)
         while(BSP_SD_GetCardState()!= MSD_OK) {} 
+#else
+        while(BSP_SD_GetCardState(0)!= HAL_OK) {} 
+#endif
     }
     return res;
 }
@@ -529,7 +578,7 @@ DRESULT SD_ioctl(BYTE lun, BYTE cmd, void *buff)
   case CTRL_SYNC :
     res = RES_OK;
     break;
-
+#if defined(USE_STM32F769I_DISCO)
   /* Get number of sectors on the disk (DWORD) */
   case GET_SECTOR_COUNT :
     BSP_SD_GetCardInfo(&CardInfo);
@@ -550,7 +599,28 @@ DRESULT SD_ioctl(BYTE lun, BYTE cmd, void *buff)
     *(DWORD*)buff = CardInfo.LogBlockSize / SD_DEFAULT_BLOCK_SIZE;
 	res = RES_OK;
     break;
+#else
+  /* Get number of sectors on the disk (DWORD) */
+  case GET_SECTOR_COUNT :
+    BSP_SD_GetCardInfo(0, &CardInfo);
+    *(DWORD*)buff = CardInfo.LogBlockNbr;
+    res = RES_OK;
+    break;
 
+  /* Get R/W sector size (WORD) */
+  case GET_SECTOR_SIZE :
+    BSP_SD_GetCardInfo(0, &CardInfo);
+    *(WORD*)buff = CardInfo.LogBlockSize;
+    res = RES_OK;
+    break;
+
+  /* Get erase block size in unit of sector (DWORD) */
+  case GET_BLOCK_SIZE :
+    BSP_SD_GetCardInfo(0, &CardInfo);
+    *(DWORD*)buff = CardInfo.LogBlockSize / SD_DEFAULT_BLOCK_SIZE;
+	res = RES_OK;
+    break;  
+#endif
   default:
     res = RES_PARERR;
   }
@@ -563,7 +633,11 @@ DRESULT SD_ioctl(BYTE lun, BYTE cmd, void *buff)
   * @brief BSP SD Abort callbacks
   * @retval None
   */
+#if defined(USE_STM32F769I_DISCO)
 void BSP_SD_AbortCallback(void)
+#else
+void BSP_SD_AbortCallback(uint32_t Instance)
+#endif
 {
 
 }
@@ -575,7 +649,11 @@ void BSP_SD_AbortCallback(void)
    ===============================================================================
   */
 //void BSP_SD_WriteCpltCallback(uint32_t SdCard)
+#if defined(USE_STM32F769I_DISCO)
 void BSP_SD_WriteCpltCallback(void)
+#else
+void BSP_SD_WriteCpltCallback(uint32_t Instance)
+#endif
 {
 #if SD_MODE_DMA_WO
   WriteStatus = 1;
@@ -596,12 +674,18 @@ void BSP_SD_WriteCpltCallback(void)
    ===============================================================================
   */
 //void BSP_SD_ReadCpltCallback(uint32_t SdCard)
+#if defined(USE_STM32F769I_DISCO)
 void BSP_SD_ReadCpltCallback(void)
+#else
+void BSP_SD_ReadCpltCallback(uint32_t instance)
+#endif
 {
 #if SD_MODE_DMA_RO
   ReadStatus = 1;
 #endif
 }
+
+#if defined(USE_STM32F769I_DISCO)
 
 extern SD_HandleTypeDef uSdHandle;
 
@@ -619,6 +703,8 @@ void SDMMC2_IRQHandler (void)
 {
     HAL_SD_IRQHandler(&uSdHandle);
 }
+
+#endif
 
 #endif
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

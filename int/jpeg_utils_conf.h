@@ -30,7 +30,7 @@
 
 
 /* Includes ------------------------------------------------------------------*/
-#if defined(STM32H745xx)
+#if defined(STM32H745xx) || defined(STM32H747xx)
 
 #include "stm32h7xx_hal.h"
 #include "stm32h7xx_hal_jpeg.h"

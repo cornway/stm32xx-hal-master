@@ -1,6 +1,6 @@
 #include <config.h>
 
-#if defined(STM32H745xx)
+#if defined(STM32H745xx) || defined(STM32H747xx)
 #include <stm32h7xx_hal.h>
 #elif defined(STM32F769xx)
 #include <stm32f7xx_hal.h>
@@ -95,7 +95,7 @@ static void uart1_dma_init (uart_desc_t *uart_desc)
     hdma_tx->Init.Mode                = DMA_NORMAL;
     hdma_tx->Init.Priority            = DMA_PRIORITY_LOW;
 
-#elif defined(STM32H745xx)
+#elif defined(STM32H745xx) || defined(STM32H747xx)
     hdma_tx->Instance                 = DMA2_Stream7;
 
     hdma_tx->Init.Request             = DMA_REQUEST_UART4_TX;
@@ -140,7 +140,7 @@ static void uart1_dma_init (uart_desc_t *uart_desc)
     hdma_rx->Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;
     hdma_rx->Init.Mode                = DMA_CIRCULAR;
     hdma_rx->Init.Priority            = DMA_PRIORITY_LOW;
-#elif defined(STM32H745xx)
+#elif defined(STM32H745xx) || defined(STM32H747xx)
     hdma_rx->Instance                 = DMA2_Stream2;
     hdma_tx->Init.Request             = DMA_REQUEST_UART4_RX;
     hdma_tx->Init.Direction           = DMA_PERIPH_TO_MEMORY;

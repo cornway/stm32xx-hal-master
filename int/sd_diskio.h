@@ -48,7 +48,11 @@
 #define __SD_DISKIO_H
 
 /* Includes ------------------------------------------------------------------*/
+#if defined(USE_STM32F769I_DISCO)
 #include "stm32f769i_discovery_sd.h"
+#elif defined(USE_STM32H747I_DISCO)
+#include "stm32h747i_discovery_sd.h"
+#endif
 /* Exported types ------------------------------------------------------------*/
 /* Exported constants --------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */

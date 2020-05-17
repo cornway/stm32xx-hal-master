@@ -292,6 +292,7 @@ int32_t BSP_LED_GetState (Led_TypeDef Led)
   */
 int32_t  BSP_PB_Init(Button_TypeDef Button, ButtonMode_TypeDef ButtonMode)
 {
+#if 0
   GPIO_InitTypeDef gpio_init_structure;
   static BSP_EXTI_LineCallback ButtonCallback[BUTTONn] ={BUTTON_WAKEUP_EXTI_Callback};
   static uint32_t  BSP_BUTTON_PRIO [BUTTONn] ={BSP_BUTTON_WAKEUP_IT_PRIORITY};
@@ -323,6 +324,7 @@ int32_t  BSP_PB_Init(Button_TypeDef Button, ButtonMode_TypeDef ButtonMode)
     HAL_NVIC_EnableIRQ((BUTTON_IRQn[Button]));
   }
   return BSP_ERROR_NONE;
+#endif
 }
 
 /**
@@ -598,6 +600,7 @@ int32_t BSP_COM_SelectLogPort(COM_TypeDef COM)
   */
 int32_t BSP_JOY_Init(JOY_TypeDef JOY, JOYMode_TypeDef JoyMode, JOYPin_TypeDef JoyPins)
 {
+#if 0
   int32_t ret = BSP_ERROR_NONE;
   uint32_t joykey, key_pressed;
   GPIO_InitTypeDef gpio_init_structure;
@@ -685,6 +688,7 @@ int32_t BSP_JOY_Init(JOY_TypeDef JOY, JOYMode_TypeDef JoyMode, JOYPin_TypeDef Jo
   }
 
   return ret;
+#endif
 }
 /**
   * @brief  DeInit joystick GPIOs.
