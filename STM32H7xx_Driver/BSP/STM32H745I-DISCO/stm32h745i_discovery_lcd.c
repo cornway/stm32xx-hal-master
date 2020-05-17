@@ -178,7 +178,7 @@ static void TIMx_PWM_Init(TIM_HandleTypeDef *htim);
   * @param  Orientation LCD_ORIENTATION_PORTRAIT or LCD_ORIENTATION_LANDSCAPE
   * @retval BSP status
   */
-int32_t BSP_LCD_Init(uint32_t Instance, uint32_t Orientation)
+int32_t BSP_LCD_Init(uint32_t Instance, void *lay_addr, uint32_t Orientation)
 {
   return BSP_LCD_InitEx(Instance, Orientation, LTDC_PIXEL_FORMAT_ARGB8888, LCD_DEFAULT_WIDTH, LCD_DEFAULT_HEIGHT);
 }
@@ -294,7 +294,7 @@ int32_t BSP_LCD_InitEx(uint32_t Instance, uint32_t Orientation, uint32_t PixelFo
       config.Y0          = 0;
       config.Y1          = Height;
       config.PixelFormat = ltdc_pixel_format;
-      config.Address     = LCD_LAYER_0_ADDRESS;
+      config.Address     = 0x0;
       if(MX_LTDC_ConfigLayer(&hlcd_ltdc, 0, &config) != HAL_OK)
       {
         ret = BSP_ERROR_PERIPH_FAILURE;

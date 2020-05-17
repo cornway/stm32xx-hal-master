@@ -235,7 +235,7 @@ extern BSP_LCD_Ctx_t       LcdCtx[];
   * @{
   */
 /* Initialization APIs */
-int32_t BSP_LCD_Init(uint32_t Instance, uint32_t Orientation);
+int32_t BSP_LCD_Init(uint32_t Instance, void *lay_addr, uint32_t Orientation);
 int32_t BSP_LCD_InitEx(uint32_t Instance, uint32_t Orientation, uint32_t PixelFormat, uint32_t Width, uint32_t Height);
 int32_t BSP_LCD_DeInit(uint32_t Instance);
 
