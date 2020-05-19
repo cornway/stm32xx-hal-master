@@ -63,6 +63,7 @@ struct uart_desc_s {
 };
 
 uart_desc_t *uart_find_desc (void *source);
+uart_desc_t *uart_get_stdio_port (void);
 
 int uart_hal_tty_init (void);
 

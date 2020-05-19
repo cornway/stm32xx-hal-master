@@ -156,6 +156,7 @@ void serial_led_off (void)
 
 static void SystemClock_Config(void)
 {
+    int32_t timeout = 0xFFFF;
     RCC_ClkInitTypeDef RCC_ClkInitStruct;
     RCC_OscInitTypeDef RCC_OscInitStruct;
     HAL_StatusTypeDef ret = HAL_OK;
@@ -223,6 +224,19 @@ static void SystemClock_Config(void)
 
     /* Enables the I/O Compensation Cell */    
     HAL_EnableCompensationCell();  
+
+
+    __HAL_RCC_HSEM_CLK_ENABLE();
+
+    /*Take HSEM */
+    HAL_HSEM_FastTake(0);   
+    /*Release HSEM in order to notify the CPU2(CM4)*/     
+    HAL_HSEM_Release(0,0);
+
+    /* wait until CPU2 wakes up from stop mode */
+    while((__HAL_RCC_GET_FLAG(RCC_FLAG_D2CKRDY) == RESET) && (timeout-- > 0));
+    if ( timeout < 0 )
+        clock_fault();
 }
 
 
@@ -252,9 +266,9 @@ void CPU_CACHE_Reset (void)
 
 int dev_hal_init (void)
 {
+    CPU_CACHE_Enable();
     HAL_Init();
     SystemClock_Config();
-    CPU_CACHE_Enable();
 #if defined(USE_STM32F769I_DISCO)
     BSP_LED_Init(LED1);
     BSP_LED_Init(LED2);

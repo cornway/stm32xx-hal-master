@@ -334,7 +334,7 @@ extern void CPU_CACHE_Disable (void);
 
     arch_dsb();
     arch_set_sp(*spinitial);
-    arch_asmgoto(*entryptr);
+    arch_asmgoto((void *)*entryptr);
 }
 
 void bhal_execute_application (void *addr)
@@ -483,7 +483,8 @@ bhal_install_executable (complete_ind_t clbk, arch_word_t *progptr,
     bsp_heap_api_t heap;
     boot_bin_parm_t parm;
 
-    heap_set_api_shared(&heap);
+    heap.malloc = heap_alloc_shared_ptr;
+    heap.free = heap_free_ptr;
     dprintf("Installing : \'%s\'\n", path);
 
     bindata = bres_cache_file_2_mem(&heap, path, &binsize);

@@ -75,7 +75,7 @@ a_hal_configure (a_intcfg_t *cfg)
   init.SampleRate = cfg->samplerate;
   init.Volume = cfg->volume;
   BSP_AUDIO_OUT_Init(0, &init);
-  BSP_AUDIO_OUT_Play(0, (uint16_t *)master.buf, AUDIO_SAMPLES_2_BYTES(master.samples));
+  BSP_AUDIO_OUT_Play(0, (uint8_t *)master.buf, AUDIO_SAMPLES_2_BYTES(master.samples));
 
 #else
 #error

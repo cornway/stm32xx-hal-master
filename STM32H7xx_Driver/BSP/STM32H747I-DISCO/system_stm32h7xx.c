@@ -382,7 +382,7 @@ void SystemInit_ExtMemCtl(void)
   /* Enable GPIOD, GPIOE, GPIOF, GPIOG, GPIOH and GPIOI interface 
       clock */
   RCC->AHB4ENR |= 0x000001F8;
-
+  
   /* Delay after an RCC peripheral clock enabling */
   tmp = READ_BIT(RCC->AHB4ENR, RCC_AHB4ENR_GPIOEEN);
   
@@ -423,16 +423,16 @@ void SystemInit_ExtMemCtl(void)
   GPIOF->PUPDR   = 0x55400555;
   
   /* Connect PGx pins to FMC Alternate function */
-  GPIOG->AFR[0]  = 0x00CC00CC;
+  GPIOG->AFR[0]  = 0x00CCCCCC;
   GPIOG->AFR[1]  = 0xC000000C;
   /* Configure PGx pins in Alternate function mode */ 
-  GPIOG->MODER   = 0xBFFEFAFA;
+  GPIOG->MODER   = 0xBFFEFAAA;
  /* Configure PGx pins speed to 100 MHz */ 
-  GPIOG->OSPEEDR = 0xC0030F0F;
+  GPIOG->OSPEEDR = 0xC0030FFF;
   /* Configure PGx pins Output type to push-pull */  
   GPIOG->OTYPER  = 0x00000000;
   /* Configure PGx pins in Pull-up */ 
-  GPIOG->PUPDR   = 0x40010505;
+  GPIOG->PUPDR   = 0x40010555;
   
   /* Connect PHx pins to FMC Alternate function */
   GPIOH->AFR[0]  = 0xCCC00000;
@@ -446,6 +446,18 @@ void SystemInit_ExtMemCtl(void)
   /* Configure PHx pins in Pull-up */
   GPIOH->PUPDR   = 0x55555400;
   
+  /* Connect PIx pins to FMC Alternate function */
+  GPIOI->AFR[0]  = 0xCCCCCCCC;
+  GPIOI->AFR[1]  = 0x00000CC0;
+  /* Configure PIx pins in Alternate function mode */ 
+  GPIOI->MODER   = 0xFFEBAAAA;
+  /* Configure PIx pins speed to 100 MHz */ 
+  GPIOI->OSPEEDR = 0x003CFFFF;
+  /* Configure PIx pins Output type to push-pull */  
+  GPIOI->OTYPER  = 0x00000000;
+  /* Configure PIx pins in Pull-up */
+  GPIOI->PUPDR   = 0x00145555;
+  
 /*-- FMC Configuration ------------------------------------------------------*/
   /* Enable the FMC interface clock */
   (RCC->AHB3ENR |= (RCC_AHB3ENR_FMCEN));
@@ -458,9 +470,9 @@ void SystemInit_ExtMemCtl(void)
     RPDelay              = 2
     RCDDelay             = 2
     SDBank             = FMC_SDRAM_BANK2
-    ColumnBitsNumber   = FMC_SDRAM_COLUMN_BITS_NUM_8 
+    ColumnBitsNumber   = FMC_SDRAM_COLUMN_BITS_NUM_9 
     RowBitsNumber      = FMC_SDRAM_ROW_BITS_NUM_12
-    MemoryDataWidth    = FMC_SDRAM_MEM_BUS_WIDTH_16
+    MemoryDataWidth    = FMC_SDRAM_MEM_BUS_WIDTH_32
     InternalBankNumber = FMC_SDRAM_INTERN_BANKS_NUM_4
     CASLatency         = FMC_SDRAM_CAS_LATENCY_2
     WriteProtection    = FMC_SDRAM_WRITE_PROTECTION_DISABLE
@@ -469,7 +481,7 @@ void SystemInit_ExtMemCtl(void)
     ReadPipeDelay      = FMC_SDRAM_RPIPE_DELAY_0*/
   
   FMC_Bank5_6_R->SDCR[0] = 0x00001800;
-  FMC_Bank5_6_R->SDCR[1] = 0x00000154;
+  FMC_Bank5_6_R->SDCR[1] = 0x00000165;
   FMC_Bank5_6_R->SDTR[0] = 0x00105000;
   FMC_Bank5_6_R->SDTR[1] = 0x01010351;
 
@@ -516,7 +528,7 @@ void SystemInit_ExtMemCtl(void)
 
    /*FMC controller Enable*/
   FMC_Bank1_R->BTCR[0]  |= 0x80000000;
-  
+
   (void)(tmp);
 }
 #endif /* DATA_IN_ExtSDRAM */
