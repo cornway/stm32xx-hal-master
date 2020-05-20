@@ -51,6 +51,7 @@ struct uart_desc_s {
     int                     tx_id;
     FlagStatus              initialized;
     FlagStatus              tx_allowed;
+    FlagStatus              tx_direct;
 #if SERIAL_TTY_HAS_DMA
     DMA_HandleTypeDef       hdma_tx;
     irqn_t                  irq_txdma;
@@ -64,6 +65,8 @@ struct uart_desc_s {
 
 uart_desc_t *uart_find_desc (void *source);
 uart_desc_t *uart_get_stdio_port (void);
+int uart_hal_set_tx_mode (uart_desc_t *uart_desc, int dma);
+
 
 int uart_hal_tty_init (void);
 

@@ -136,7 +136,6 @@ void BSP_AUDIO_OUT_TransferComplete_CallBack(uint32_t inst)
 void BSP_AUDIO_OUT_Error_CallBack(uint32_t inst)
 {
     a_hal_shutdown();
-    error_handle();
 }
 
 #else

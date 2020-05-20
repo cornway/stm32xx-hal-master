@@ -82,7 +82,7 @@ uart_desc_t *uart_get_stdio_port (void)
             return uart_desc_pool[i];
         }
     }
-    fatal_error("%s() : fail\n");
+    fatal_error("%s() : fail\n", __func__);
     return NULL;
 }
 
@@ -96,7 +96,6 @@ static void uart1_dma_init (uart_desc_t *uart_desc)
     UART_HandleTypeDef *huart = &uart_desc->handle;
     irqmask_t irqmask, irqmask2;
 
-    /*DMA2_Stream7*/
     __HAL_RCC_DMA2_CLK_ENABLE();
 
     hdma_tx = &uart_desc->hdma_tx;
@@ -114,7 +113,6 @@ static void uart1_dma_init (uart_desc_t *uart_desc)
 
 #elif defined(STM32H745xx) || defined(STM32H747xx)
     hdma_tx->Instance                 = DMA2_Stream7;
-
     hdma_tx->Init.Request             = DMA_REQUEST_USART1_TX;
     hdma_tx->Init.Direction           = DMA_MEMORY_TO_PERIPH;
     hdma_tx->Init.PeriphInc           = DMA_PINC_DISABLE;
@@ -130,11 +128,11 @@ static void uart1_dma_init (uart_desc_t *uart_desc)
 #else
 #error
 #endif
+
+    __HAL_LINKDMA(huart, hdmatx, *hdma_tx);
+
     HAL_DMA_DeInit(hdma_tx);
     HAL_DMA_Init(hdma_tx);
-
-    /* Associate the initialized DMA handle to the UART handle */
-    __HAL_LINKDMA(huart, hdmatx, *hdma_tx);
 
     HAL_NVIC_SetPriority(DMA2_Stream7_IRQn, 0, 1);
     HAL_NVIC_EnableIRQ(DMA2_Stream7_IRQn);
@@ -159,18 +157,16 @@ static void uart1_dma_init (uart_desc_t *uart_desc)
     hdma_rx->Init.Priority            = DMA_PRIORITY_LOW;
 #elif defined(STM32H745xx) || defined(STM32H747xx)
     hdma_rx->Instance                 = DMA2_Stream2;
-    hdma_tx->Init.Request             = DMA_REQUEST_USART1_RX;
-    hdma_tx->Init.Direction           = DMA_PERIPH_TO_MEMORY;
-    hdma_tx->Init.PeriphInc           = DMA_PINC_DISABLE;
-    hdma_tx->Init.MemInc              = DMA_MINC_ENABLE;
-    hdma_tx->Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
-    hdma_tx->Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;
-    hdma_tx->Init.Mode                = DMA_CIRCULAR;
-    hdma_tx->Init.Priority            = DMA_PRIORITY_LOW;
-    hdma_tx->Init.FIFOMode            = DMA_FIFOMODE_DISABLE;
-    hdma_tx->Init.FIFOThreshold       = DMA_FIFO_THRESHOLD_FULL;
-    hdma_tx->Init.MemBurst            = DMA_MBURST_SINGLE;
-    hdma_tx->Init.PeriphBurst         = DMA_PBURST_SINGLE;
+    hdma_rx->Init.Request             = DMA_REQUEST_USART1_RX;
+    hdma_rx->Init.Direction           = DMA_PERIPH_TO_MEMORY;
+    hdma_rx->Init.PeriphInc           = DMA_PINC_DISABLE;
+    hdma_rx->Init.MemInc              = DMA_MINC_ENABLE;
+    hdma_rx->Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_rx->Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;
+    hdma_rx->Init.Mode                = DMA_CIRCULAR;
+    hdma_rx->Init.Priority            = DMA_PRIORITY_LOW;
+    hdma_rx->Init.MemBurst            = DMA_MBURST_SINGLE;
+    hdma_rx->Init.PeriphBurst         = DMA_PBURST_SINGLE;
 #else
 #error
 #endif
@@ -189,7 +185,7 @@ static void uart1_dma_init (uart_desc_t *uart_desc)
 
     if(HAL_UART_Receive_DMA(huart, (uint8_t *)rxstream.dmabuf, sizeof(rxstream.dmabuf)) != HAL_OK)
     {
-        fatal_error("%s() : fail\n");
+        fatal_error("%s() : fail\n", __func__);
     }
     uart_desc->uart_irq_mask |= irqmask2;
 #endif /*DEBUG_SERIAL_USE_RX*/
@@ -268,7 +264,7 @@ static void uart_hal_if_deinit (uart_desc_t *uart_desc)
 
     if(HAL_UART_DeInit(handle) != HAL_OK)
     {
-        fatal_error();
+        fatal_error("Uart deinit\n");
     }
     uart_desc->dma_deinit(uart_desc);
 }
@@ -369,7 +365,7 @@ static void hal_tx_wdog_timer_init (uart_desc_t *uart_desc, timer_desc_t *tim)
     uart_desc->uart_irq_mask = tim->irqmask;
 }
 
-int uart_hal_submit_tx_data (uart_desc_t *uart_desc, const void *data, size_t cnt)
+int uart_hal_submit_tx_dma (uart_desc_t *uart_desc, const void *data, size_t cnt)
 {
     HAL_StatusTypeDef status;
     irqmask_t irq = 0;
@@ -417,14 +413,24 @@ void uart_hal_tx_flush_all (void)
     }
 }
 
-#else /*SERIAL_TTY_HAS_DMA*/
+#endif /*SERIAL_TTY_HAS_DMA*/
 
 int uart_hal_submit_tx_data (uart_desc_t *uart_desc, const void *data, size_t cnt)
 {
-    uart_hal_submit_tx_direct(uart_desc, data, cnt);
+#if SERIAL_TTY_HAS_DMA
+    if (uart_desc->tx_direct == RESET) {
+        uart_hal_submit_tx_dma(uart_desc, data, cnt);
+    } else
+#endif
+    {
+        uart_hal_submit_tx_direct(uart_desc, data, cnt);
+    }
 }
 
-#endif /*SERIAL_TTY_HAS_DMA*/
+int uart_hal_set_tx_mode (uart_desc_t *uart_desc, int dma)
+{
+    uart_desc->tx_direct = dma ? RESET : SET;
+}
 
 
 #if DEBUG_SERIAL_USE_RX
@@ -615,6 +621,11 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *UartHandle)
         return;
     }
     uart_desc->tx_allowed = SET;
+}
+
+void DMA2_Stream5_IRQHandler (void)
+{
+    dma_tx_handle_irq(DMA2_Stream5);
 }
 
 void DMA2_Stream7_IRQHandler (void)

@@ -18,19 +18,19 @@
 
 #if defined(USE_STM32H747I_DISCO)
 
-#include "stm32h747i_discovery_lcd.h"
+#include "stm32h747i_discovery.h"
 
 int const __cache_line_size = 32;
 
 #elif defined(USE_STM32F769I_DISCO)
 
-#include "stm32f769i_discovery_lcd.h"
+#include "stm32f769i_discovery.h"
 
 int const __cache_line_size = 32;
 
 #elif defined(USE_STM32H745I_DISCO)
 
-#include "stm32h745i_discovery_lcd.h"
+#include "stm32h745i_discovery.h"
 
 int const __cache_line_size = 32;
 
@@ -136,22 +136,25 @@ static void SystemClock_Config(void)
 
 #elif defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
 
-
 /*TODO : move to gpio.c/gpio.h*/
 void hdd_led_on (void)
 {
+    BSP_LED_On(LED4);
 }
 
 void hdd_led_off (void)
 {
+    BSP_LED_Off(LED4);
 }
 
 void serial_led_on (void)
 {
+    BSP_LED_On(LED3);
 }
 
 void serial_led_off (void)
 {
+    BSP_LED_Off(LED3);
 }
 
 static void SystemClock_Config(void)
@@ -264,15 +267,25 @@ void CPU_CACHE_Reset (void)
     CPU_CACHE_Enable();
 }
 
+static void dev_hal_gpio_init (void)
+{
+#if defined(USE_STM32F769I_DISCO)
+    BSP_LED_Init(LED1);
+    BSP_LED_Init(LED2);
+#elif defined(USE_STM32H747I_DISCO)
+    BSP_LED_Init(LED1);
+    BSP_LED_Init(LED2);
+    BSP_LED_Init(LED3);
+    BSP_LED_Init(LED4);
+#endif
+}
+
 int dev_hal_init (void)
 {
     CPU_CACHE_Enable();
     HAL_Init();
     SystemClock_Config();
-#if defined(USE_STM32F769I_DISCO)
-    BSP_LED_Init(LED1);
-    BSP_LED_Init(LED2);
-#endif
+    dev_hal_gpio_init();
     uart_hal_tty_init();
     cs_load_code(NULL, NULL, 0);
     return 0;
