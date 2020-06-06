@@ -216,9 +216,9 @@ static void LCD_DeInitSequence(void);
   * @param  Orientation LCD_ORIENTATION_PORTRAIT or LCD_ORIENTATION_LANDSCAPE
   * @retval BSP status
   */
-int32_t BSP_LCD_Init(uint32_t Instance, void *lay_addr, uint32_t Orientation)
+int32_t BSP_LCD_Init(uint32_t Instance, uint32_t Orientation)
 {
-  return BSP_LCD_InitEx(Instance, lay_addr, Orientation, LCD_PIXEL_FORMAT_RGB888, LCD_DEFAULT_WIDTH, LCD_DEFAULT_HEIGHT);
+  return BSP_LCD_InitEx(Instance, Orientation, LCD_PIXEL_FORMAT_RGB888, LCD_DEFAULT_WIDTH, LCD_DEFAULT_HEIGHT);
 }
 
 int BSP_LCD_UseHDMI (void)
@@ -235,7 +235,7 @@ int BSP_LCD_UseHDMI (void)
   * @param  Height      Display height
   * @retval BSP status
   */
-int32_t BSP_LCD_InitEx(uint32_t Instance, void *lay_addr, uint32_t Orientation, uint32_t PixelFormat, uint32_t Width, uint32_t Height)
+int32_t BSP_LCD_InitEx(uint32_t Instance, uint32_t Orientation, uint32_t PixelFormat, uint32_t Width, uint32_t Height)
 {
   int32_t ret = BSP_ERROR_NONE;
   uint32_t ctrl_pixel_format, ltdc_pixel_format, dsi_pixel_format;
@@ -334,20 +334,6 @@ int32_t BSP_LCD_InitEx(uint32_t Instance, void *lay_addr, uint32_t Orientation, 
         return BSP_ERROR_PERIPH_FAILURE;
       }
 #endif /* DATA_IN_ExtSDRAM */
-
-      /* Configure default LTDC Layer 0. This configuration can be override by calling
-      BSP_LCD_ConfigLayer() at application level */
-      config.X0          = 0;
-      config.X1          = Width;
-      config.Y0          = 0;
-      config.Y1          = Height;
-      config.PixelFormat = ltdc_pixel_format;
-      config.Address     = (uint32_t)lay_addr;
-      if(MX_LTDC_ConfigLayer(&hlcd_ltdc, 0, &config) != HAL_OK)
-      {
-        ret = BSP_ERROR_PERIPH_FAILURE;
-      }
-      else
       {
         /* Enable the DSI host and wrapper after the LTDC initialization
         To avoid any synchronization issue, the DSI shall be started after enabling the LTDC */
@@ -373,7 +359,6 @@ int32_t BSP_LCD_InitEx(uint32_t Instance, void *lay_addr, uint32_t Orientation, 
     Lcd_Ctx[Instance].ReloadEnable = 1U;
    }
   }
-
   return ret;
 }
 
@@ -436,7 +421,7 @@ void BSP_LCD_DeInitEx (void)
   * @param  Format      HDMI format could be HDMI_FORMAT_720_480 or HDMI_FORMAT_720_576
   * @retval BSP status
   */
-int32_t BSP_LCD_InitHDMI(uint32_t Instance, void *lay_addr, uint32_t Format)
+int32_t BSP_LCD_InitHDMI(uint32_t Instance, uint32_t Format)
 {
   int32_t ret;
   DSI_PLLInitTypeDef    dsiPllInit;
@@ -585,17 +570,7 @@ int32_t BSP_LCD_InitHDMI(uint32_t Instance, void *lay_addr, uint32_t Format)
       }
 
       /* Initialize LTDC */
-      LTDC_HDMI_Init(&hdmi_timing);
-      hdmi_config.X0          = 0;
-      hdmi_config.X1          = Lcd_Ctx[Instance].XSize;
-      hdmi_config.Y0          = 0;
-      hdmi_config.Y1          = Lcd_Ctx[Instance].YSize;
-      hdmi_config.PixelFormat = LTDC_PIXEL_FORMAT_ARGB8888;
-      hdmi_config.Address     = (uint32_t)lay_addr;
-      if(MX_LTDC_ConfigLayer(&hlcd_ltdc, 0, &hdmi_config) != HAL_OK)
-      {
-        return BSP_ERROR_PERIPH_FAILURE;
-      }
+
       /* Enable the DSI host and wrapper after the LTDC initialization
       To avoid any synchronization issue, the DSI shall be started after enabling the LTDC */
       (void)HAL_DSI_Start(&(hlcd_dsi));
@@ -711,8 +686,8 @@ static void LCD_DeInitSequence(void)
   */
 __weak HAL_StatusTypeDef MX_DSIHOST_DSI_Init(DSI_HandleTypeDef *hdsi, uint32_t Width, uint32_t Height, uint32_t PixelFormat)
 {
-  DSI_PLLInitTypeDef PLLInit;
-  DSI_VidCfgTypeDef VidCfg;
+  DSI_PLLInitTypeDef PLLInit = {0};
+  DSI_VidCfgTypeDef VidCfg = {0};
 
   hdsi->Instance = DSI;
   hdsi->Init.AutomaticClockLaneControl = DSI_AUTO_CLK_LANE_CTRL_DISABLE;
