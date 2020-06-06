@@ -82,7 +82,6 @@ uart_desc_t *uart_get_stdio_port (void)
             return uart_desc_pool[i];
         }
     }
-    fatal_error("%s() : fail\n", __func__);
     return NULL;
 }
 
@@ -287,7 +286,7 @@ static void uart_hal_if_setup (uart_desc_t *uart_desc, const msp_func_tbl_t *fun
 int uart_hal_submit_tx_direct (uart_desc_t *uart_desc, const void *data, size_t cnt)
 {
     HAL_StatusTypeDef status;
-    cnt = __tty_append_crlf(data, cnt);
+    //cnt = __tty_append_crlf(data, cnt);
     serial_led_on();
     status = HAL_UART_Transmit(&uart_desc->handle, (uint8_t *)data, cnt, 1000);
     serial_led_off();
@@ -307,12 +306,12 @@ static void serial_tx_flush_handler (uart_desc_t *uart_desc, d_bool force)
     uint32_t time, tstamp;
     int bufpos;
 
-    serial_hal_get_tx_buf(uart_desc, &tstamp, &bufpos);
-    if (SET != uart_desc->tx_allowed) {
+    if (!uart_desc->tx_allowed || uart_desc->tx_direct) {
         return;
     }
+    serial_hal_get_tx_buf(uart_desc, &tstamp, &bufpos);
 
-    if (0 != bufpos) {
+    if (bufpos) {
 
         time = d_time();
 
@@ -417,19 +416,24 @@ void uart_hal_tx_flush_all (void)
 
 int uart_hal_submit_tx_data (uart_desc_t *uart_desc, const void *data, size_t cnt)
 {
+    if (uart_desc == NULL) {
+        return -1;
+    }
 #if SERIAL_TTY_HAS_DMA
-    if (uart_desc->tx_direct == RESET) {
+    if (!uart_desc->tx_direct) {
         uart_hal_submit_tx_dma(uart_desc, data, cnt);
     } else
 #endif
     {
         uart_hal_submit_tx_direct(uart_desc, data, cnt);
     }
+    return 0;
 }
 
 int uart_hal_set_tx_mode (uart_desc_t *uart_desc, int dma)
 {
     uart_desc->tx_direct = dma ? RESET : SET;
+    return 0;
 }
 
 

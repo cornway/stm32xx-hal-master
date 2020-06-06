@@ -44,9 +44,9 @@ void gui_com_fill_HAL (component_t *com, rgba_t color)
 int gui_draw_string_HAL (component_t *com, int line,
                               rgba_t textcolor, const char *str, int txtmode)
 {
+    int ret = -1;
 #if defined(USE_STM32F669I_DISCO)
     void *font = BSP_LCD_GetFont();
-    int ret;
     dim_t dim;
 
     d_memcpy(&dim, &com->dim, sizeof(dim));
@@ -60,8 +60,8 @@ int gui_draw_string_HAL (component_t *com, int line,
     if (font != com->font) {
         BSP_LCD_SetFont(font);
     }
-    return ret;
 #endif
+    return ret;
 }
 
 void gui_get_font_prop_HAL (fontprop_t *prop, const void *_font)
@@ -77,9 +77,9 @@ void gui_get_font_prop_HAL (fontprop_t *prop, const void *_font)
 const void *
 gui_get_font_4_size_HAL (gui_t *gui, int size, int bestmatch)
 {
+    const void *best = NULL;
 #if defined(USE_STM32F669I_DISCO)
     int err, besterr = size, i;
-    const void *best = NULL;
 
     static const sFONT *fonttbl[] =
         {&Font8, &Font12, &Font16, &Font20, &Font24};
@@ -100,8 +100,8 @@ gui_get_font_4_size_HAL (gui_t *gui, int size, int bestmatch)
             }
         }
     }
-    return best;
 #endif
+    return best;
 }
 
 /*=======================================================================================*/

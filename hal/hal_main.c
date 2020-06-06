@@ -57,6 +57,15 @@ static void clock_fault (void)
 #if defined(USE_STM32F769I_DISCO)
 
 /*TODO : move to gpio.c/gpio.h*/
+
+void status_led_on (void)
+{
+}
+
+void status_led_off (void)
+{
+}
+
 void hdd_led_on (void)
 {
     BSP_LED_On(LED2);
@@ -137,6 +146,17 @@ static void SystemClock_Config(void)
 #elif defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
 
 /*TODO : move to gpio.c/gpio.h*/
+
+void status_led_on (void)
+{
+    BSP_LED_On(LED1);
+}
+
+void status_led_off (void)
+{
+    BSP_LED_Off(LED1);
+}
+
 void hdd_led_on (void)
 {
     BSP_LED_On(LED4);
@@ -157,9 +177,22 @@ void serial_led_off (void)
     BSP_LED_Off(LED3);
 }
 
+HAL_StatusTypeDef MX_LTDC_ClockConfig(LTDC_HandleTypeDef *hltdc)
+{
+    RCC_PeriphCLKInitTypeDef  PeriphClkInitStruct;
+    PeriphClkInitStruct.PeriphClockSelection   = RCC_PERIPHCLK_LTDC;
+    PeriphClkInitStruct.PLL3.PLL3M      = 5U;
+    PeriphClkInitStruct.PLL3.PLL3N      = 132U;
+    PeriphClkInitStruct.PLL3.PLL3P      = 2U;
+    PeriphClkInitStruct.PLL3.PLL3Q      = 2U;
+    PeriphClkInitStruct.PLL3.PLL3R      = 24U;
+    if(HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+        clock_fault();
+    return HAL_OK;
+}
+
 static void SystemClock_Config(void)
 {
-    int32_t timeout = 0xFFFF;
     RCC_ClkInitTypeDef RCC_ClkInitStruct;
     RCC_OscInitTypeDef RCC_OscInitStruct;
     HAL_StatusTypeDef ret = HAL_OK;
@@ -226,22 +259,8 @@ static void SystemClock_Config(void)
     __HAL_RCC_SYSCFG_CLK_ENABLE() ;
 
     /* Enables the I/O Compensation Cell */    
-    HAL_EnableCompensationCell();  
-
-
-    __HAL_RCC_HSEM_CLK_ENABLE();
-
-    /*Take HSEM */
-    HAL_HSEM_FastTake(0);   
-    /*Release HSEM in order to notify the CPU2(CM4)*/     
-    HAL_HSEM_Release(0,0);
-
-    /* wait until CPU2 wakes up from stop mode */
-    while((__HAL_RCC_GET_FLAG(RCC_FLAG_D2CKRDY) == RESET) && (timeout-- > 0));
-    if ( timeout < 0 )
-        clock_fault();
+    HAL_EnableCompensationCell();
 }
-
 
 #else
 #error
@@ -289,4 +308,146 @@ int dev_hal_init (void)
     uart_hal_tty_init();
     cs_load_code(NULL, NULL, 0);
     return 0;
+}
+
+void dev_hal_tickle (void)
+{
+    static uint32_t status_time = 0;
+    static int led_status = 0;
+
+    if (d_time() > status_time) {
+        status_time = d_time() + 1000;
+        led_status = 1 - led_status;
+        if (led_status) {
+            status_led_on();
+        } else {
+            status_led_off();
+        }
+    }
+}
+
+#if defined(STM32H747xx)
+#include "stm32h747i_discovery_ts.h"
+#elif defined(STM32H745xx)
+#include "stm32h745i_discovery_ts.h"
+#elif defined(STM32F769xx)
+#include "stm32f769i_discovery_ts.h"
+#else
+#error
+#endif
+
+static uint8_t ts_prev_state = TS_IDLE;
+static uint8_t ts_state_cooldown_cnt = 0;
+static uint8_t ts_states_map[4][2];
+
+static void input_ts_sm_init (void)
+{
+    ts_states_map[TS_IDLE][TS_PRESS_ON]         = TS_CLICK;
+    ts_states_map[TS_IDLE][TS_PRESS_OFF]        = TS_IDLE;
+    ts_states_map[TS_CLICK][TS_PRESS_ON]        = TS_PRESSED;
+    ts_states_map[TS_CLICK][TS_PRESS_OFF]       = TS_RELEASED;
+    ts_states_map[TS_PRESSED][TS_PRESS_ON]      = TS_PRESSED;
+    ts_states_map[TS_PRESSED][TS_PRESS_OFF]     = TS_RELEASED;
+    ts_states_map[TS_RELEASED][TS_PRESS_ON]     = TS_IDLE;
+    ts_states_map[TS_RELEASED][TS_PRESS_OFF]    = TS_IDLE;
+}
+
+int input_hal_init (void)
+{
+    int err = CMDERR_OK;
+    screen_t screen;
+
+    vid_get_screen(&screen, 0);
+#if defined(STM32H745xx) || defined(STM32H747xx)
+    {
+        TS_Init_t ts;
+        ts.Accuracy = 0;
+        ts.Orientation = 1;
+        ts.Width = screen.width;
+        ts.Height = screen.height;
+        err = BSP_TS_Init(0, &ts);
+    }
+#elif defined(STM32F769xx)
+    err = BSP_TS_Init(screen.width, screen.height);
+#else
+#error
+#endif
+    if (err != BSP_ERROR_NONE) {
+        err = -CMDERR_NOCORE;
+    } else {
+        input_ts_sm_init();
+    }
+    return err;
+}
+
+void input_hal_deinit (void)
+{
+    dprintf("%s() :\n", __func__);
+    if (input_is_touch_avail()) {
+#if defined(STM32H745xx) || defined(STM32H747xx)
+        BSP_TS_DeInit(0);
+#elif defined(STM32F769xx)
+        BSP_TS_DeInit();
+#else
+#error
+#endif
+    }
+}
+
+d_bool input_hal_touch_avail (void)
+{
+    if (BSP_LCD_UseHDMI()) {
+        return d_false;
+    }
+    return d_true;
+}
+
+void input_hal_read_ts (ts_status_t *ts_status)
+{
+    uint8_t state = 0;
+    uint32_t x, y, td;
+#if defined(STM32H745xx) || defined(STM32H747xx)
+    TS_State_t TS_State;
+    if (BSP_TS_GetState(0, &TS_State) != BSP_ERROR_NONE) {
+        fatal_error("BSP_TS_GetState != TS_OK\n");
+    }
+    x = TS_State.TouchX;
+    y = TS_State.TouchY;
+    td = TS_State.TouchDetected;
+#elif defined(STM32F769xx)
+    TS_StateTypeDef  TS_State;
+    if (BSP_TS_GetState(&TS_State) != TS_OK) {
+        fatal_error("BSP_TS_GetState != TS_OK\n");
+    }
+    x = TS_State.touchX[0];
+    y = TS_State.touchY[0];
+    td = TS_State.touchDetected;
+#else
+#error
+#endif
+
+    ts_status->status = TOUCH_IDLE;
+    state = ts_states_map[ts_prev_state][td ? TS_PRESS_ON : TS_PRESS_OFF];
+    switch (state) {
+        case TS_IDLE:
+            if (ts_state_cooldown_cnt) {
+                ts_state_cooldown_cnt--;
+                return;
+            }
+            break;
+        case TS_PRESSED:
+            break;
+        case TS_CLICK:
+            ts_status->status = TOUCH_PRESSED;
+            ts_status->x = x;
+            ts_status->y = y;
+            break;
+        case TS_RELEASED:
+            ts_status->status = TOUCH_RELEASED;
+            ts_state_cooldown_cnt = 1;
+            break;
+        default:
+            break;
+    };
+    ts_prev_state = state;
 }

@@ -119,21 +119,21 @@ static const uint32_t dma2d_color_mode2out_map[] =
 {
     [GFX_COLOR_MODE_CLUT] = DMA2D_OUTPUT_ARGB8888,
     [GFX_COLOR_MODE_RGB565] = DMA2D_OUTPUT_RGB565,
-    [GFX_COLOR_MODE_RGBA8888] = DMA2D_OUTPUT_ARGB8888,
+    [GFX_COLOR_MODE_ARGB8888] = DMA2D_OUTPUT_ARGB8888,
 };
 
 static const uint32_t dma2d_color_mode2in_map[] =
 {
     [GFX_COLOR_MODE_CLUT] = DMA2D_INPUT_L8,
     [GFX_COLOR_MODE_RGB565] = DMA2D_INPUT_RGB565,
-    [GFX_COLOR_MODE_RGBA8888] = DMA2D_INPUT_ARGB8888,
+    [GFX_COLOR_MODE_ARGB8888] = DMA2D_INPUT_ARGB8888,
 };
 
 static const uint32_t screen_mode2fmt_map[] =
 {
     [GFX_COLOR_MODE_CLUT] = LTDC_PIXEL_FORMAT_L8,
     [GFX_COLOR_MODE_RGB565] = LTDC_PIXEL_FORMAT_RGB565,
-    [GFX_COLOR_MODE_RGBA8888] = LTDC_PIXEL_FORMAT_ARGB8888,
+    [GFX_COLOR_MODE_ARGB8888] = LTDC_PIXEL_FORMAT_ARGB8888,
 };
 
 static void screen_dma2d_irq_hdlr (screen_hal_ctxt_t *ctxt);
@@ -184,7 +184,7 @@ int screen_hal_init (int init)
 #elif defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
     if (init) {
 
-        status = BSP_LCD_Init(0, NULL, LCD_ORIENTATION_LANDSCAPE);
+        status = BSP_LCD_Init(0, LCD_ORIENTATION_LANDSCAPE);
         assert(!status);
 
         BSP_LCD_GetXSize(0, &bsp_lcd_width);
@@ -203,13 +203,13 @@ int screen_hal_init (int init)
 }
 
 
-    extern LTDC_HandleTypeDef hlcd_ltdc;
+extern LTDC_HandleTypeDef hlcd_ltdc;
 
-    static DMA2D_HandleTypeDef dma2d;
+static DMA2D_HandleTypeDef dma2d;
 #if defined(USE_STM32F769I_DISCO)
-    static LCD_LayerCfgTypeDef hal_cfg;
+static LCD_LayerCfgTypeDef hal_cfg;
 #elif defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
-    static LTDC_LayerCfgTypeDef hal_cfg;
+static LTDC_LayerCfgTypeDef hal_cfg;
 #else
 #error
 #endif
@@ -257,7 +257,6 @@ screen_hal_set_config (lcd_wincfg_t *cfg, int x, int y, int w, int h, uint8_t co
         Layercfg->FBStartAdress = (uint32_t)cfg->lay_mem[layer];
         HAL_LTDC_ConfigLayer(GET_VHAL_LTDC(cfg), Layercfg, layer);
     }
-
     return Layercfg;
 }
 
@@ -465,7 +464,7 @@ int screen_gfx8888_copy (lcd_wincfg_t *cfg, gfx_2d_buf_t *dest, gfx_2d_buf_t *sr
     void *dptr = __gfx_2_ptr(dest, 4);
     void *sptr = __gfx_2_ptr(src, 4);
 
-    __screen_hal_copy_setup_M2M(GET_VHAL_CTXT(cfg), GFX_COLOR_MODE_RGBA8888, GFX_COLOR_MODE_RGBA8888,
+    __screen_hal_copy_setup_M2M(GET_VHAL_CTXT(cfg), GFX_COLOR_MODE_ARGB8888, GFX_COLOR_MODE_ARGB8888,
                                     0xff, src->w, dest->wtotal, src->wtotal);
 
     GET_VHAL_CTXT(cfg)->state = V_STATE_QCOPY;
