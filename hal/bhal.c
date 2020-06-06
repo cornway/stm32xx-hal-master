@@ -1,4 +1,7 @@
 #include <stdint.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
 
 #if defined(USE_STM32H747I_DISCO)
 #include <stm32h747i_discovery_sdram.h>
@@ -10,14 +13,17 @@
 #error
 #endif
 
-#include <debug.h>
-#include <boot_int.h>
-#include <bsp_mod.h>
+#include <config.h>
 
-#include <misc_utils.h>
-#include <main.h>
-#include <bsp_sys.h>
+#include <arch.h>
+#include <bsp_api.h>
+#include <debug.h>
 #include <heap.h>
+#include <bsp_sys.h>
+#include <bsp_mod.h>
+#include <misc_utils.h>
+#include <boot_int.h>
+#include <bsp_cmd.h>
 
 #define BHAL_MEM_RW_PORTION (1 << 14)
 #define BHAL_DBG_LINE_LEN ((1 << 6) - 1)

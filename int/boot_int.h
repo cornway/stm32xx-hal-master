@@ -1,7 +1,9 @@
-#include <stdint.h>
-#include <heap.h>
-#include <bsp_sys.h>
-#include <misc_utils.h>
+#ifndef __BOOT_INT_H__
+#define __BOOT_INT_H__
+
+#ifdef __cplusplus
+    extern "C" {
+#endif
 
 #define BOOT_MAX_NAME 24
 #define BOOT_MAX_PATH 128
@@ -60,8 +62,6 @@ d_bool bhal_bin_check_in_mem (complete_ind_t cplth, arch_word_t *progaddr,
 void bhal_execute_application (void *addr);
 int bhal_execute_module (arch_word_t addr);
 
-int boot_char_cmd_handler (int argc, const char **argv);
-
 int bsp_open_wave_sfx (const char *name);
 int bsp_play_wave_sfx (int hdl, uint8_t volume);
 int bsp_stop_wave_sfx (int hdl);
@@ -108,3 +108,8 @@ int boot_log_hex (const void *data, int len);
 
 void boot_deliver_input_event (void *evt);
 
+#ifdef __cplusplus
+    }
+#endif
+
+#endif /* __BOOT_INT_H__ */

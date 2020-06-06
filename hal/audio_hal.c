@@ -1,3 +1,6 @@
+#include <stdint.h>
+#include <stdarg.h>
+#include <stdio.h>
 #include <string.h>
 
 #if defined(USE_STM32H747I_DISCO)
@@ -13,10 +16,11 @@
 
 #include <config.h>
 #include <nvic.h>
+#include <bsp_api.h>
 #include <debug.h>
-
-#include <audio_int.h>
+#include <misc_utils.h>
 #include <audio_main.h>
+#include <audio_int.h>
 
 #if AUDIO_MODULE_PRESENT
 
@@ -91,8 +95,7 @@ void a_hal_shutdown (void)
 
 #if defined(USE_STM32F769I_DISCO)
 
-void
-a_hal_deinit(void)
+void a_hal_deinit(void)
 {
   BSP_AUDIO_OUT_DeInit();
   BSP_AUDIO_OUT_DeInit();
@@ -116,8 +119,7 @@ void BSP_AUDIO_OUT_Error_CallBack(void)
 
 #elif defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
 
-void
-a_hal_deinit(void)
+void a_hal_deinit(void)
 {
   BSP_AUDIO_OUT_DeInit(0);
   BSP_AUDIO_OUT_DeInit(0);
@@ -147,8 +149,7 @@ void AUDIO_OUT_SAIx_DMAx_IRQHandler(void)
   HAL_DMA_IRQHandler(haudio_out_sai.hdmatx);
 }
 
-void
-a_hal_check_cfg (a_intcfg_t *cfg)
+void a_hal_check_cfg (a_intcfg_t *cfg)
 {
     
     if((cfg->samplerate == I2S_AUDIOFREQ_8K) ||

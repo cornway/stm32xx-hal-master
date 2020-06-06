@@ -1,20 +1,25 @@
 /* Includes ------------------------------------------------------------------*/
-
+#include <stdint.h>
 #include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
 
-#include "../../common/int/mpu.h"
-
+#include <arch.h>
 #include <bsp_api.h>
 #include <misc_utils.h>
+#include <nvic.h>
 #include <bsp_cmd.h>
+#include <gfx2d_mem.h>
 #include <lcd_main.h>
 #include <audio_main.h>
 #include <input_main.h>
 #include <debug.h>
 #include <dev_io.h>
-#include <nvic.h>
 #include <heap.h>
 #include <bsp_sys.h>
+#include <serial.h>
+
+#include "../../common/int/mpu.h"
 
 #if defined(USE_STM32H747I_DISCO)
 

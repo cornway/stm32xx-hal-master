@@ -1,3 +1,7 @@
+#include <stdint.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
 
 #if defined(USE_STM32H747I_DISCO)
 #include <stm32h7xx_it.h>
@@ -12,10 +16,19 @@
 #error
 #endif
 
+#include <config.h>
+
+#include <arch.h>
+#include <bsp_api.h>
+#include <misc_utils.h>
+#include <heap.h>
+#include <gfx.h>
+#include <gfx2d_mem.h>
+#include <lcd_main.h>
 #include <lcd_int.h>
 #include <nvic.h>
-
-#include <misc_utils.h>
+#include <bsp_cmd.h>
+#include <debug.h>
 #include <bsp_sys.h>
 
 uint32_t lcd_x_size_var;

@@ -1,7 +1,9 @@
 #ifndef __LCD_INT_H__
 #define __LCD_INT_H__
 
-#include <lcd_main.h>
+#ifdef __cplusplus
+    extern "C" {
+#endif
 
 #define LCD_MAX_SCALE 3
 
@@ -64,6 +66,10 @@ extern int bsp_lcd_height;
 extern const lcd_layers_t layer_switch[LCD_MAX_LAYER];
 extern const uint32_t screen_mode2pixdeep[GFX_COLOR_MODE_MAX];
 extern lcd_wincfg_t *lcd_active_cfg;
+
+#ifdef __cplusplus
+    }
+#endif
 
 #endif /*__LCD_INT_H__*/
 

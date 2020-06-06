@@ -43,12 +43,16 @@
   ******************************************************************************
   */
 
-#if defined(BSP_DRIVER)
-
-
 /* Includes ------------------------------------------------------------------*/
+#include <stdint.h>
+#include <stdarg.h>
+#include <stdio.h>
 #include <string.h>
 
+#include <config.h>
+
+#include <arch.h>
+#include <bsp_api.h>
 #include "../../ulib/io/fs/FatFs/src/ff_gen_drv.h"
 #include "../int/sd_diskio.h"
 #include <nvic.h>
@@ -703,8 +707,6 @@ void SDMMC2_IRQHandler (void)
 {
     HAL_SD_IRQHandler(&uSdHandle);
 }
-
-#endif
 
 #endif
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

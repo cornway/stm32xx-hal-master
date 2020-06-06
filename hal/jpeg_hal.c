@@ -18,13 +18,21 @@
   */
 
 /* Includes ------------------------------------------------------------------*/
+#include <stdint.h>
+#include <stdarg.h>
+
 #include <jpeg_utils.h>
 #include <jpeg.h>
 
-
+#include <arch.h>
+#include <bsp_api.h>
 #include <misc_utils.h>
+#include <gfx2d_mem.h>
 #include <heap.h>
 #include <lcd_main.h>
+#include <bsp_cmd.h>
+#include <debug.h>
+#include <bsp_sys.h>
 
 /** @addtogroup STM32F7xx_HAL_Examples
   * @{

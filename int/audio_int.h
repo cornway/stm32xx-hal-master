@@ -1,9 +1,9 @@
 #ifndef _AUDIO_INT_H
 #define _AUDIO_INT_H
 
-#include "config.h"
-#include "misc_utils.h"
-#include <audio_main.h>
+#ifdef __cplusplus
+    extern "C" {
+#endif
 
 #ifndef AUDIO_RATE_DEFAULT
 #define AUDIO_RATE_DEFAULT 22050U
@@ -129,7 +129,7 @@ int a_channel_unlink (a_channel_head_t *head, a_channel_t *node);
 void a_channel_remove (a_channel_t *desc);
 void a_paint_buffer (a_channel_head_t *chanlist, a_buf_t *abuf, int compratio);
 uint8_t a_chanlist_try_reject_all (a_channel_head_t *chanlist);
-a_intcfg_t *a_get_conf (void);
+a_intcfg_t *audio_current_config (void);
 
 void error_handle (void);
 
@@ -141,24 +141,20 @@ a_rev_init (void);
 
 #endif /*USE_REVERB*/
 
-void
-a_mem_init (void);
-
-void
-a_get_master_base (a_buf_t *master);
-
-void
-a_get_master4idx (a_buf_t *master, int idx);
-
-
-void
-a_grab_mixdata (a_channel_t *channel, a_buf_t *track, mixdata_t *mixdata);
-
+void a_mem_init (void);
+void a_hal_deinit(void);
+void a_get_master_base (a_buf_t *master);
+void a_get_master4idx (a_buf_t *master, int idx);
+void a_grab_mixdata (a_channel_t *channel, a_buf_t *track, mixdata_t *mixdata);
 void a_clear_abuf (a_buf_t *abuf);
 void a_clear_master (void);
+d_bool a_wave_supported (wave_t *wave);
+void a_hal_check_cfg (a_intcfg_t *cfg);
 
 void error_handle (void);
 
-d_bool a_wave_supported (wave_t *wave);
+#ifdef __cplusplus
+    }
+#endif
 
 #endif /*_AUDIO_INT_H*/

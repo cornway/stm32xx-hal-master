@@ -1,7 +1,17 @@
+#include <stdint.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+
+#include <config.h>
+
 #include <main.h>
+#include <arch.h>
+#include <bsp_api.h>
 #include <nvic.h>
 #include <tim.h>
 #include <misc_utils.h>
+#include <debug.h>
 
 extern uint32_t SystemCoreClock;
 

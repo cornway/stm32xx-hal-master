@@ -1,8 +1,15 @@
-
 #if defined(HAVE_CODESWAP)
 
+#include <stdint.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+
+#include <arch.h>
+#include <bsp_api.h>
 #include <misc_utils.h>
 #include <heap.h>
+#include "bsp_cmd.h"
 #include <debug.h>
 #include <mpu.h>
 

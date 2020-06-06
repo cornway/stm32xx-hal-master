@@ -1,3 +1,6 @@
+#include <stdint.h>
+#include <stdarg.h>
+
 #include <config.h>
 
 #if defined(STM32H745xx) || defined(STM32H747xx)
@@ -8,11 +11,16 @@
 #error
 #endif
 
+#include <arch.h>
+#include <bsp_api.h>
 #include <nvic.h>
 #include <tim.h>
-#include <uart_int.h>
-
+#include <serial.h>
 #include <misc_utils.h>
+#include <uart_int.h>
+#include <dev_io.h>
+#include <heap.h>
+#include <term.h>
 
 timer_desc_t uart_hal_wdog_tim;
 

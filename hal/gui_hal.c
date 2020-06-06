@@ -1,3 +1,8 @@
+#include <stdint.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+
 
 #if defined(USE_STM32H747I_DISCO)
 #include <stm32h747i_discovery_lcd.h>
@@ -9,7 +14,12 @@
 #error
 #endif
 
+#include <arch.h>
+#include <bsp_api.h>
+#include <misc_utils.h>
+#include <debug.h>
 #include <gui.h>
+#include "bsp_cmd.h"
 
 /*HAL api*/
 /*=======================================================================================*/
