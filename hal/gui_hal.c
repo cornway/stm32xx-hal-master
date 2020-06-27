@@ -6,6 +6,7 @@
 
 #if defined(USE_STM32H747I_DISCO)
 #include <stm32h747i_discovery_lcd.h>
+#include "../Utilities/Basic_GUI/basic_gui.h"
 #elif defined(USE_STM32H745I_DISCO)
 #include <stm32h745i_discovery_lcd.h>
 #elif defined(USE_STM32F769I_DISCO)
@@ -18,100 +19,131 @@
 #include <bsp_api.h>
 #include <misc_utils.h>
 #include <debug.h>
+#include <heap.h>
 #include <gui.h>
 #include "bsp_cmd.h"
+
+#if defined(USE_STM32H747I_DISCO) || defined(USE_STM32H745I_DISCO)
+
+static int32_t LCD_GetXSize(uint32_t Instance, uint32_t *XSize)
+{
+    BSP_LCD_GetXSize(0, XSize);
+    return BSP_ERROR_NONE;
+}
+
+static int32_t LCD_GetYSize(uint32_t Instance, uint32_t *YSize)
+{
+    BSP_LCD_GetYSize(0, YSize);
+    return BSP_ERROR_NONE;
+}
+
+static const GUI_Drv_t LCD_GUI_Driver =
+{
+    BSP_LCD_DrawBitmap,
+    BSP_LCD_FillRGBRect,
+    BSP_LCD_DrawHLine,
+    BSP_LCD_DrawVLine,
+    BSP_LCD_FillRect,
+    BSP_LCD_ReadPixel,
+    BSP_LCD_WritePixel,
+    LCD_GetXSize,
+    LCD_GetYSize,
+    BSP_LCD_SetActiveLayer,
+    BSP_LCD_GetPixelFormat
+};
+
+#else /* defined(USE_STM32H747I_DISCO) || defined(USE_STM32H745I_DISCO) */
+
+#define GUI_SetFuncDriver
+
+#define GUI_GetFont             BSP_LCD_GetFont
+#define GUI_SetFont             BSP_LCD_SetFont
+#define GUI_DisplayStringAt     BSP_LCD_DisplayStringAt
+#define GUI_FillRect(x, y, w, h, color) \
+do {                                    \
+    BSP_LCD_SetTextColor(color);        \
+    BSP_LCD_FillRect(x, y, w, h);       \
+} while (0);
+
+#endif /* defined(USE_STM32H747I_DISCO) || defined(USE_STM32H745I_DISCO) */
 
 /*HAL api*/
 /*=======================================================================================*/
 
-void gui_rect_fill_HAL (dim_t *dest, dim_t *rect, rgba_t color)
+static const sFONT *fontTable[] =
+{
+    &Font8, &Font12, &Font16, &Font20, &Font24
+};
+
+static void __GUI_FillRect (dim_t *dest, dim_t *rect, rgba_t color)
 {
     dim_t d = *rect;
     dim_place(&d, dest);
-#if defined(USE_STM32F769I_DISCO)
-    BSP_LCD_SetTextColor(color);
-    BSP_LCD_FillRect(d.x, d.y, d.w, d.h);
-#elif defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
-    BSP_LCD_FillRect(0, d.x, d.y, d.w, d.h, color);
-#else
-#error
-#endif
-    
+    GUI_FillRect(d.x, d.y, d.w, d.h, color);
 }
 
-void gui_com_fill_HAL (component_t *com, rgba_t color)
+static void __GUI_FillComponent (component_t *com, rgba_t color)
 {
-#if defined(USE_STM32F769I_DISCO)
-    BSP_LCD_SetTextColor(color);
-    BSP_LCD_FillRect(com->dim.x, com->dim.y, com->dim.w, com->dim.h);
-#elif defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
-    BSP_LCD_FillRect(0, com->dim.x, com->dim.y, com->dim.w, com->dim.h, color);
-#else
-#error
-#endif
+    GUI_FillRect(com->dim.x, com->dim.y, com->dim.w, com->dim.h, color);
 }
 
-int gui_draw_string_HAL (component_t *com, int line,
-                              rgba_t textcolor, const char *str, int txtmode)
+static int __GUI_DisplayStringAt (component_t *com, int line, rgba_t textcolor, const char *str, int txtmode)
 {
     int ret = -1;
-#if defined(USE_STM32F669I_DISCO)
-    void *font = BSP_LCD_GetFont();
-    dim_t dim;
-
-    d_memcpy(&dim, &com->dim, sizeof(dim));
+    void *font = GUI_GetFont();
 
     if (font != com->font) {
-        BSP_LCD_SetFont((sFONT *)com->font);
+        GUI_SetFont((sFONT *)com->font);
     }
-    BSP_LCD_SetTextColor(textcolor);
-    ret = BSP_LCD_DisplayStringAt(dim.x, dim.y + LINE(line) + (LINE(0) / 2),
-                                  dim.w, dim.h, (uint8_t *)str, (Text_AlignModeTypdef)txtmode);
+    GUI_SetTextColor(textcolor);
+    GUI_SetBackColor(com->bcolor);
+    ret = GUI_DisplayStringAt(com->dim.x, com->dim.y + LINE(line) + (LINE(0) / 2),
+                                  com->dim.w, com->dim.h, (uint8_t *)str, (Text_AlignModeTypdef)txtmode);
     if (font != com->font) {
-        BSP_LCD_SetFont(font);
+        GUI_SetFont((sFONT *)font);
     }
-#endif
     return ret;
 }
 
-void gui_get_font_prop_HAL (fontprop_t *prop, const void *_font)
+static void __GUI_FontProperties (fontprop_t *prop, const void *_font)
 {
-#if defined(USE_STM32F669I_DISCO)
     const sFONT *font = (const sFONT *)_font;
 
     prop->w = font->Width;
     prop->h = font->Height;
-#endif
 }
 
-const void *
-gui_get_font_4_size_HAL (gui_t *gui, int size, int bestmatch)
+static const void *__GUI_Font_4_Size (gui_t *gui, int size)
 {
     const void *best = NULL;
-#if defined(USE_STM32F669I_DISCO)
     int err, besterr = size, i;
 
-    static const sFONT *fonttbl[] =
-        {&Font8, &Font12, &Font16, &Font20, &Font24};
-
-    for (i = 0; i < arrlen(fonttbl); i++) {
-        err = size - fonttbl[i]->Height;
+    for (i = 0; i < arrlen(fontTable); i++) {
+        err = size - fontTable[i]->Height;
         if (err == 0) {
-            best = fonttbl[i];
+            best = fontTable[i];
             break;
         }
-        if (bestmatch) {
-            if (err < 0) {
-                err = -err;
-            }
-            if (besterr > err) {
-                besterr = err;
-                best = fonttbl[i];
-            }
+        if (err < 0) {
+            err = -err;
+        }
+        if (besterr > err) {
+            besterr = err;
+            best = fontTable[i];
         }
     }
-#endif
     return best;
+}
+
+void gui_draw_attach (gui_bsp_api_t *api)
+{
+    GUI_SetFuncDriver(&LCD_GUI_Driver);
+
+    api->fill_rect = __GUI_FillRect;
+    api->fill_comp = __GUI_FillComponent;
+    api->string_at = __GUI_DisplayStringAt;
+    api->font_prop = __GUI_FontProperties;
+    api->get_font  = __GUI_Font_4_Size;
 }
 
 /*=======================================================================================*/
