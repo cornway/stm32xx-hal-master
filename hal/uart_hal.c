@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdarg.h>
+#include <stdio.h>
 
 #include <config.h>
 
@@ -21,91 +22,104 @@
 #include <dev_io.h>
 #include <heap.h>
 #include <term.h>
+#include <gpio.h>
 
+static uart_hal_t *hal_tty_get_desc_4_phy (void *source);
+static void hal_tty_wdog_init (uart_hal_t *uart_desc, timer_desc_t *tim);
+
+typedef struct {
+    hal_msp_init_t init, deinit;
+} msp_func_tbl_t;
+
+typedef struct {
+    uart_hal_t *pool[MAX_UARTS];
+    int        cnt;
+} hal_usrt_pool_t;
+
+static hal_usrt_pool_t hal_usrt_pool;
 timer_desc_t uart_hal_wdog_tim;
-
-#if SERIAL_TTY_HAS_DMA
-
-#define TX_FLUSH_TIMEOUT 200 /*MS*/
-static rxstream_t rxstream;
-
-#else
-
-void uart_hal_rx_flush (uart_desc_t *desc, char *dest, int *pcnt)
-{
-    *pcnt = 0;
-}
-
-void uart_hal_tx_flush (uart_desc_t *desc)
-{
-}
-
-void uart_hal_tx_flush_all (void)
-{
-}
-
-#endif
-
-static int          uart_desc_cnt = 0;
-static uart_desc_t *uart_desc_pool[MAX_UARTS];
-
-static void dma_rx_xfer_hanlder (struct __DMA_HandleTypeDef * hdma);
-
-
-static const UART_InitTypeDef uart_115200_8n1_tx =
-{
-    .BaudRate       = 115200,
-    .WordLength     = UART_WORDLENGTH_8B,
-    .StopBits       = UART_STOPBITS_1,
-    .Parity         = UART_PARITY_NONE,
-    .Mode           = UART_MODE_TX,
-    .HwFlowCtl      = UART_HWCONTROL_NONE,
-    .OverSampling   = 0,
-    .OneBitSampling = 0,
-};
+static uart_hal_t *uart_vcom_desc;
 
 static const UART_InitTypeDef uart_115200_8n1_txrx =
 {
-    .BaudRate       = 115200,
-    .WordLength     = UART_WORDLENGTH_8B,
-    .StopBits       = UART_STOPBITS_1,
-    .Parity         = UART_PARITY_NONE,
-    .Mode           = UART_MODE_TX_RX,
-    .HwFlowCtl      = UART_HWCONTROL_NONE,
-    .OverSampling   = 0,
-    .OneBitSampling = 0,
+    115200,
+    UART_WORDLENGTH_8B,
+    UART_STOPBITS_1,
+    UART_PARITY_NONE,
+    UART_MODE_TX_RX,
+    UART_HWCONTROL_NONE,
+    0,
+    0,
 };
 
-typedef UART_InitTypeDef hal_uart_ini_t;
+#if defined(STM32F769xx)
 
-uart_desc_t *uart_get_stdio_port (void)
+#elif defined(STM32H745xx) || defined(STM32H747xx)
+
+#define TTY_DMA_TX_Stream DMA2_Stream7
+#define TTY_DMA_RX_Stream DMA2_Stream2
+
+#define TTY_DMA_TX_Irq DMA2_Stream7_IRQn
+#define TTY_DMA_RX_Irq DMA2_Stream2_IRQn
+
+#define TTY_DMA_TX_IRQHandler DMA2_Stream7_IRQHandler
+#define TTY_DMA_RX_IRQHandler DMA2_Stream2_IRQHandler
+
+static const struct uart_dma_conf_s {
+    DMA_InitTypeDef init;
+    DMA_Stream_TypeDef *inst;
+    IRQn_Type irq;
+    int prio, group;
+} uart1_tx_dma_conf =
 {
-    int i;
-
-    for (i = 0; i < uart_desc_cnt; i++) {
-
-        if (uart_desc_pool[i]->initialized &&
-            (uart_desc_pool[i]->type == SERIAL_DEBUG)) {
-
-            return uart_desc_pool[i];
-        }
-    }
-    return NULL;
-}
-
-#if SERIAL_TTY_HAS_DMA
-
-static void hal_tx_wdog_timer_init (uart_desc_t *uart_desc, timer_desc_t *tim);
-
-static void uart1_dma_init (uart_desc_t *uart_desc)
+        {
+            DMA_REQUEST_USART1_TX,
+            DMA_MEMORY_TO_PERIPH,
+            DMA_PINC_DISABLE,
+            DMA_MINC_ENABLE,
+            DMA_PDATAALIGN_BYTE,
+            DMA_MDATAALIGN_BYTE,
+            DMA_NORMAL,
+            DMA_PRIORITY_HIGH,
+            DMA_FIFOMODE_DISABLE,
+            DMA_FIFO_THRESHOLD_FULL,
+            DMA_MBURST_SINGLE,
+            DMA_PBURST_SINGLE,
+        },
+    TTY_DMA_TX_Stream,
+    TTY_DMA_TX_Irq,
+    0, 1
+},
+uart1_rx_dma_conf = 
 {
-    static DMA_HandleTypeDef *hdma_tx, *hdma_rx;
-    UART_HandleTypeDef *huart = &uart_desc->handle;
+        {
+            DMA_REQUEST_USART1_RX,
+            DMA_PERIPH_TO_MEMORY,
+            DMA_PINC_DISABLE,
+            DMA_MINC_ENABLE,
+            DMA_PDATAALIGN_BYTE,
+            DMA_MDATAALIGN_BYTE,
+            DMA_CIRCULAR,
+            DMA_PRIORITY_LOW,
+            DMA_MBURST_SINGLE,
+            DMA_PBURST_SINGLE,
+        },
+    TTY_DMA_RX_Stream,
+    TTY_DMA_RX_Irq,
+    0, 1
+};
+
+#endif /**/
+
+static void uart1_dma_init (uart_hal_t *uart_desc)
+{
+    DMA_HandleTypeDef *hdma_tx, *hdma_rx;
+    UART_HandleTypeDef *huart = &uart_desc->phy->handle;
     irqmask_t irqmask, irqmask2;
 
     __HAL_RCC_DMA2_CLK_ENABLE();
 
-    hdma_tx = &uart_desc->hdma_tx;
+    hdma_tx = &uart_desc->phy->hdma_tx;
 
 #if defined(STM32F769xx)
     hdma_tx->Instance                 = DMA2_Stream7;
@@ -117,41 +131,24 @@ static void uart1_dma_init (uart_desc_t *uart_desc)
     hdma_tx->Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;
     hdma_tx->Init.Mode                = DMA_NORMAL;
     hdma_tx->Init.Priority            = DMA_PRIORITY_LOW;
-
 #elif defined(STM32H745xx) || defined(STM32H747xx)
-    hdma_tx->Instance                 = DMA2_Stream7;
-    hdma_tx->Init.Request             = DMA_REQUEST_USART1_TX;
-    hdma_tx->Init.Direction           = DMA_MEMORY_TO_PERIPH;
-    hdma_tx->Init.PeriphInc           = DMA_PINC_DISABLE;
-    hdma_tx->Init.MemInc              = DMA_MINC_ENABLE;
-    hdma_tx->Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
-    hdma_tx->Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;
-    hdma_tx->Init.Mode                = DMA_NORMAL;
-    hdma_tx->Init.Priority            = DMA_PRIORITY_LOW;
-    hdma_tx->Init.FIFOMode            = DMA_FIFOMODE_DISABLE;
-    hdma_tx->Init.FIFOThreshold       = DMA_FIFO_THRESHOLD_FULL;
-    hdma_tx->Init.MemBurst            = DMA_MBURST_SINGLE;
-    hdma_tx->Init.PeriphBurst         = DMA_PBURST_SINGLE;
+    hdma_tx->Instance                 = uart1_tx_dma_conf.inst;
+    d_memcpy(&hdma_tx->Init, &uart1_tx_dma_conf.init, sizeof(hdma_tx->Init));
 #else
 #error
 #endif
-
     __HAL_LINKDMA(huart, hdmatx, *hdma_tx);
-
     HAL_DMA_DeInit(hdma_tx);
     HAL_DMA_Init(hdma_tx);
+    HAL_NVIC_SetPriority(uart1_tx_dma_conf.irq, uart1_tx_dma_conf.prio, uart1_tx_dma_conf.group);
+    HAL_NVIC_EnableIRQ(uart1_tx_dma_conf.irq);
 
-    HAL_NVIC_SetPriority(DMA2_Stream7_IRQn, 0, 1);
-    HAL_NVIC_EnableIRQ(DMA2_Stream7_IRQn);
+    uart_desc->phy->irq_txdma = uart1_tx_dma_conf.irq;
+    hal_tty_wdog_init(uart_desc, &uart_hal_wdog_tim);
 
-    uart_desc->irq_txdma = DMA2_Stream7_IRQn;
+    uart_desc->tty.irqmask = uart_hal_wdog_tim.irqmask;
 
-    hal_tx_wdog_timer_init(uart_desc, &uart_hal_wdog_tim);
-
-#if DEBUG_SERIAL_USE_RX
-    hdma_rx = &uart_desc->hdma_rx;
-    uart_desc->rx_handler             = dma_rx_xfer_hanlder;
-
+    hdma_rx = &uart_desc->phy->hdma_rx;
 #if defined(STM32F769xx)
     hdma_rx->Instance                 = DMA2_Stream2;
     hdma_rx->Init.Channel             = DMA_CHANNEL_4;
@@ -163,58 +160,42 @@ static void uart1_dma_init (uart_desc_t *uart_desc)
     hdma_rx->Init.Mode                = DMA_CIRCULAR;
     hdma_rx->Init.Priority            = DMA_PRIORITY_LOW;
 #elif defined(STM32H745xx) || defined(STM32H747xx)
-    hdma_rx->Instance                 = DMA2_Stream2;
-    hdma_rx->Init.Request             = DMA_REQUEST_USART1_RX;
-    hdma_rx->Init.Direction           = DMA_PERIPH_TO_MEMORY;
-    hdma_rx->Init.PeriphInc           = DMA_PINC_DISABLE;
-    hdma_rx->Init.MemInc              = DMA_MINC_ENABLE;
-    hdma_rx->Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
-    hdma_rx->Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;
-    hdma_rx->Init.Mode                = DMA_CIRCULAR;
-    hdma_rx->Init.Priority            = DMA_PRIORITY_LOW;
-    hdma_rx->Init.MemBurst            = DMA_MBURST_SINGLE;
-    hdma_rx->Init.PeriphBurst         = DMA_PBURST_SINGLE;
+    hdma_rx->Instance                 = uart1_rx_dma_conf.inst;
+    d_memcpy(&hdma_rx->Init, &uart1_rx_dma_conf.init, sizeof(hdma_rx->Init));
 #else
 #error
 #endif
     HAL_DMA_DeInit(hdma_rx);
     HAL_DMA_Init(hdma_rx);
-
     __HAL_LINKDMA(huart, hdmarx, *hdma_rx);
-
     irq_bmap(&irqmask);
-    HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 0, 1);
-    HAL_NVIC_EnableIRQ(DMA2_Stream2_IRQn);
+    HAL_NVIC_SetPriority(uart1_rx_dma_conf.irq, uart1_rx_dma_conf.prio, uart1_rx_dma_conf.group);
+    HAL_NVIC_EnableIRQ(uart1_rx_dma_conf.irq);
     irq_bmap(&irqmask2);
     irqmask2 = irqmask2 & (~irqmask);
 
-    uart_desc->irq_rxdma = DMA2_Stream2_IRQn;
-
-    if(HAL_UART_Receive_DMA(huart, (uint8_t *)rxstream.dmabuf, sizeof(rxstream.dmabuf)) != HAL_OK)
+    uart_desc->phy->irq_rxdma = uart1_rx_dma_conf.irq;
+    if(HAL_UART_Receive_DMA(huart, (uint8_t *)uart_desc->tty.rxbuf->dmabuf, sizeof(uart_desc->tty.rxbuf->dmabuf)) != HAL_OK)
     {
-        fatal_error("%s() : fail\n", __func__);
+        for (;;) {}
     }
-    uart_desc->uart_irq_mask |= irqmask2;
-#endif /*DEBUG_SERIAL_USE_RX*/
+    uart_desc->phy->uart_irq_mask |= irqmask2;
 }
 
-static void uart1_dma_deinit (uart_desc_t *uart_desc)
+static void uart1_dma_deinit (uart_hal_t *uart_desc)
 {
-    HAL_NVIC_DisableIRQ(uart_desc->irq_txdma);
-    HAL_DMA_DeInit(&uart_desc->hdma_tx);
-#if DEBUG_SERIAL_USE_RX
-    HAL_NVIC_DisableIRQ(uart_desc->irq_rxdma);
-    HAL_DMA_DeInit(&uart_desc->hdma_rx);
-#endif
+    HAL_NVIC_DisableIRQ((IRQn_Type)uart_desc->phy->irq_txdma);
+    HAL_DMA_DeInit(&uart_desc->phy->hdma_tx);
+    HAL_NVIC_DisableIRQ((IRQn_Type)uart_desc->phy->irq_rxdma);
+    HAL_DMA_DeInit(&uart_desc->phy->hdma_rx);
     if (uart_hal_wdog_tim.flags) {
-        hal_tim_deinit(&uart_hal_wdog_tim);
+        hal_timer_deinit(&uart_hal_wdog_tim);
     }
 }
-#endif /*SERIAL_TTY_HAS_DMA*/
 
-static void uart1_msp_init (uart_desc_t *uart_desc)
+static void uart1_msp_init (uart_hal_t *uart_desc)
 {
-    UART_HandleTypeDef *huart = &uart_desc->handle;
+    UART_HandleTypeDef *huart = &uart_desc->phy->handle;
     GPIO_InitTypeDef  GPIO_InitStruct;
 
     __GPIOA_CLK_ENABLE();
@@ -238,150 +219,102 @@ static void uart1_msp_init (uart_desc_t *uart_desc)
     HAL_NVIC_SetPriority(USART1_IRQn, 0, 1);
     HAL_NVIC_EnableIRQ(USART1_IRQn);
 
-    uart_desc->irq_uart  = USART1_IRQn;
+    uart_desc->phy->irq_uart  = USART1_IRQn;
 }
 
-static void uart1_msp_deinit (uart_desc_t *uart_desc)
+static void uart1_msp_deinit (uart_hal_t *uart_desc)
 {
-    HAL_NVIC_DisableIRQ(uart_desc->irq_uart);
+    HAL_NVIC_DisableIRQ((IRQn_Type)uart_desc->phy->irq_uart);
 }
-
-static void hal_msp_dummy (void)
-{
-}
-
-typedef struct {
-    hal_msp_init_t init, deinit;
-} msp_func_tbl_t;
 
 static const msp_func_tbl_t uart1_msp_func[] =
 {
     {uart1_msp_init, uart1_msp_deinit},
-#if SERIAL_TTY_HAS_DMA
     {uart1_dma_init, uart1_dma_deinit},
-#else
-    {hal_msp_dummy, hal_msp_dummy},
-#endif
     {NULL, NULL},
 };
 
-static void uart_hal_if_deinit (uart_desc_t *uart_desc)
+static int hal_tty_uart_deinit (uart_hal_t *uart_desc)
 {
-    UART_HandleTypeDef *handle = &uart_desc->handle;
-
-    if(HAL_UART_DeInit(handle) != HAL_OK)
-    {
-        fatal_error("Uart deinit\n");
+    if(HAL_UART_DeInit(&uart_desc->phy->handle) != HAL_OK) {
+        return -1;
     }
-    uart_desc->dma_deinit(uart_desc);
+    uart_desc->phy->dma_deinit(uart_desc);
+    return 0;
 }
 
-static uart_desc_t uart1_desc;
-
-static void uart_hal_if_setup (uart_desc_t *uart_desc, const msp_func_tbl_t *func, const hal_uart_ini_t *ini)
+static void hal_tty_uart_preinit (uart_hal_t *uart_desc, const msp_func_tbl_t *func)
 {
-    uart_desc->dma_init = func[1].init;
-    uart_desc->dma_deinit = func[1].deinit;
-    uart_desc->tx_id = 0;
-    uart_desc->tx_allowed = SET;
-    uart_desc->hw       = USART1;
-    uart_desc->ini      = ini;
-    uart_desc->msp_init = func[0].init;
-    uart_desc->msp_deinit = func[0].deinit;
-    uart_desc->type     = SERIAL_DEBUG;
-}
-
-int uart_hal_submit_tx_direct (uart_desc_t *uart_desc, const void *data, size_t cnt)
-{
-    HAL_StatusTypeDef status;
-    //cnt = __tty_append_crlf(data, cnt);
-    serial_led_on();
-    status = HAL_UART_Transmit(&uart_desc->handle, (uint8_t *)data, cnt, 1000);
-    serial_led_off();
-    return status == HAL_OK ? 0 : -1;
-}
-
-#if SERIAL_TTY_HAS_DMA
-
-void uart_hal_sync (uart_desc_t *uart_desc)
-{
-    volatile FlagStatus *_ready = &uart_desc->tx_allowed;
-    while (*_ready != SET) { }
-}
-
-static void serial_tx_flush_handler (uart_desc_t *uart_desc, d_bool force)
-{
-    uint32_t time, tstamp;
-    int bufpos;
-
-    if (!uart_desc->tx_allowed || uart_desc->tx_direct) {
-        return;
+    if (uart_desc->phy) {
+        uart_desc->phy->dma_init              = func[1].init;
+        uart_desc->phy->dma_deinit            = func[1].deinit;
+        uart_desc->phy->msp_init              = func[0].init;
+        uart_desc->phy->msp_deinit            = func[0].deinit;
+        uart_desc->phy->tx_dma_ready          = SET;
+        uart_desc->phy->handle.Instance       = USART1;
     }
-    serial_hal_get_tx_buf(uart_desc, &tstamp, &bufpos);
-
-    if (bufpos) {
-
-        time = d_time();
-
-        if (((uint32_t)(time - tstamp) > TX_FLUSH_TIMEOUT) || force) {
-
-            serial_submit_tx_data(uart_desc, NULL, 0, d_true);
-            if (force) {
-                uart_hal_sync(uart_desc);
-            }
-        }
-    }
+    uart_desc->tty.tx_bufsize = 0;
+    uart_desc->tty.initialized = 0;
 }
 
-static inline void dma_tx_sync (uart_desc_t *uart_desc)
-{
-    uart_hal_sync(uart_desc);
-    uart_desc->tx_allowed = RESET;
-}
-
-static void serial_timer_msp_init (timer_desc_t *desc)
+static void hal_tty_wdog_msp_init (timer_desc_t *desc)
 {
     __HAL_RCC_TIM3_CLK_ENABLE();
-    HAL_NVIC_SetPriority(desc->irq, 0, 1);
-    HAL_NVIC_EnableIRQ(desc->irq);
+    HAL_NVIC_SetPriority((IRQn_Type)desc->irq, 0, 1);
+    HAL_NVIC_EnableIRQ((IRQn_Type)desc->irq);
 }
 
-static void serial_timer_msp_deinit (timer_desc_t *desc)
+static void hal_tty_wdog_msp_deinit (timer_desc_t *desc)
 {
     __HAL_RCC_TIM3_CLK_DISABLE();
-    HAL_NVIC_DisableIRQ(desc->irq);
+    HAL_NVIC_DisableIRQ((IRQn_Type)desc->irq);
 }
 
-static void serial_timer_handler (timer_desc_t *desc)
+static void hal_tty_wdog_handler (timer_desc_t *desc)
 {
     int i;
-    for (i = 0; i < uart_desc_cnt; i++) {
-        serial_tx_flush_handler(uart_desc_pool[i], d_false);
+    for (i = 0; i < hal_usrt_pool.cnt; i++) {
+        serial_tty_tx_flush_proc(&hal_usrt_pool.pool[i]->tty, d_false);
     }
 }
 
-static void hal_tx_wdog_timer_init (uart_desc_t *uart_desc, timer_desc_t *tim)
+static void hal_tty_wdog_init (uart_hal_t *uart_desc, timer_desc_t *tim)
 {
     tim->flags = TIM_RUNIT;
     tim->period = 1000;
     tim->presc = 10000;
-    tim->handler = serial_timer_handler;
-    tim->init = serial_timer_msp_init;
-    tim->deinit = serial_timer_msp_deinit;
-    hal_tim_init(tim , TIM3, TIM3_IRQn);
-    uart_desc->uart_irq_mask = tim->irqmask;
+    tim->handler = hal_tty_wdog_handler;
+    tim->init = hal_tty_wdog_msp_init;
+    tim->deinit = hal_tty_wdog_msp_deinit;
+    hal_timer_init(tim , TIM3, TIM3_IRQn);
+    uart_desc->phy->uart_irq_mask = tim->irqmask;
 }
 
-int uart_hal_submit_tx_dma (uart_desc_t *uart_desc, const void *data, size_t cnt)
+int hal_tty_tx_start_poll (uart_hal_t *uart_desc, const void *data, size_t cnt)
+{
+    HAL_StatusTypeDef status;
+    serial_led_on();
+    status = HAL_UART_Transmit(&uart_desc->phy->handle, (uint8_t *)data, cnt, 1000);
+    serial_led_off();
+    return status == HAL_OK ? 0 : -1;
+}
+
+static inline void hal_tty_sync_dma_tx (uart_hal_t *uart_desc)
+{
+    while (uart_desc->phy->tx_dma_ready == RESET) {;}
+    uart_desc->phy->tx_dma_ready = RESET;
+}
+
+int hal_tty_tx_start_dma (uart_hal_t *uart_desc, const void *data, size_t cnt)
 {
     HAL_StatusTypeDef status;
     irqmask_t irq = 0;
 
     serial_led_on();
 
-    dma_tx_sync(uart_desc);
+    hal_tty_sync_dma_tx(uart_desc);
     irq_save(&irq);
-    status = HAL_UART_Transmit_DMA(&uart_desc->handle, (uint8_t *)data, cnt);
+    status = HAL_UART_Transmit_DMA(&uart_desc->phy->handle, (uint8_t *)data, cnt);
     irq_restore(irq);
 
     serial_led_off();
@@ -393,8 +326,8 @@ static void dma_tx_handle_irq (const DMA_Stream_TypeDef *source)
     int i;
     DMA_HandleTypeDef *hdma;
 
-    for (i = 0; i < uart_desc_cnt; i++) {
-        hdma = &uart_desc_pool[i]->hdma_tx;
+    for (i = 0; i < hal_usrt_pool.cnt; i++) {
+        hdma = &hal_usrt_pool.pool[i]->phy->hdma_tx;
         if (hdma->Instance == source) {
             HAL_DMA_IRQHandler(hdma);
             break;
@@ -402,266 +335,272 @@ static void dma_tx_handle_irq (const DMA_Stream_TypeDef *source)
     }
 }
 
-void uart_hal_tx_flush (uart_desc_t *desc)
+void hal_tty_flush (uart_hal_t *desc)
 {
-    irqmask_t irq_flags = desc->uart_irq_mask;
+    irqmask_t irq_flags = desc->phy->uart_irq_mask;
+    int flushed;
 
     irq_save(&irq_flags);
-    serial_tx_flush_handler(desc, d_true);
+    flushed = serial_tty_tx_flush_proc(&desc->tty, d_true);
     irq_restore(irq_flags);
 }
 
-void uart_hal_tx_flush_all (void)
+static int hal_tty_tx_start_hw (serial_tty_t *tty, tty_txbuf_t *txbuf)
 {
-    int i = 0;
-
-    for (i = 0; i < uart_desc_cnt; i++) {
-        uart_hal_tx_flush(uart_desc_pool[i]);
-    }
-}
-
-#endif /*SERIAL_TTY_HAS_DMA*/
-
-int uart_hal_submit_tx_data (uart_desc_t *uart_desc, const void *data, size_t cnt)
-{
-    if (uart_desc == NULL) {
+    uart_hal_t *uart_desc = container_of(tty, uart_hal_t, tty);
+    if (uart_desc->phy == NULL) {
         return -1;
     }
-#if SERIAL_TTY_HAS_DMA
-    if (!uart_desc->tx_direct) {
-        uart_hal_submit_tx_dma(uart_desc, data, cnt);
-    } else
-#endif
-    {
-        uart_hal_submit_tx_direct(uart_desc, data, cnt);
+    tty->txbuf_pending = txbuf;
+    if (!tty->tx_bufsize) {
+        hal_tty_tx_start_poll(uart_desc, txbuf->data, txbuf->data_cnt);
+        tty->txbuf_pending = NULL;
+    } else {
+        hal_tty_tx_start_dma(uart_desc, txbuf->data, txbuf->data_cnt);
     }
     return 0;
 }
-
-int uart_hal_set_tx_mode (uart_desc_t *uart_desc, int dma)
-{
-    uart_desc->tx_direct = dma ? RESET : SET;
-    return 0;
-}
-
-
-#if DEBUG_SERIAL_USE_RX
 
 static void dma_rx_handle_irq (const DMA_Stream_TypeDef *source)
 {
-    uart_desc_t *dsc       = uart_desc_pool[0],
-                *dsc_end   = uart_desc_pool[uart_desc_cnt];
+    uart_hal_t *dsc       = hal_usrt_pool.pool[0],
+               *dsc_end   = hal_usrt_pool.pool[hal_usrt_pool.cnt];
 
     for (; dsc != dsc_end; dsc++) {
-        if (dsc->hdma_rx.Instance == source) {
-            dma_rx_xfer_hanlder(&dsc->hdma_rx);
+        if (dsc->phy->hdma_rx.Instance == source) {
+            HAL_DMA_IRQHandler(&dsc->phy->hdma_rx);
             break;
         }
     }
 }
 
-void serial_rx_cplt_handler (uint8_t full)
+static void hal_tty_rx_cplt_hander (uart_hal_t *uart_desc, uint8_t full)
 {
-extern int32_t g_serial_rxtx_eol_sens;
-    int dmacplt = sizeof(rxstream.dmabuf) / 2;
+    int dmacplt = sizeof(uart_desc->tty.rxbuf->dmabuf) / 2;
     int cnt = dmacplt;
     char *src;
 
-    src = &rxstream.dmabuf[full * dmacplt];
+    src = &uart_desc->tty.rxbuf->dmabuf[full * dmacplt];
 
     while (cnt) {
-        rxstream.fifo[rxstream.fifoidx++ & (DMA_RX_FIFO_SIZE - 1)] = *src;
-        rxstream.eof |= __tty_is_crlf_char(*src);
+        uart_desc->tty.rxbuf->fifo[uart_desc->tty.rxbuf->fifoidx++ & (DMA_RX_FIFO_SIZE - 1)] = *src;
+        uart_desc->tty.rxbuf->eof |= __tty_is_crlf_char(*src);
         src++; cnt--;
-    }
-    if (!g_serial_rxtx_eol_sens) {
-        rxstream.eof = 3; /*\r & \n met*/
     }
 }
 
-int uart_hal_rx_flush (uart_desc_t *uart_desc, char *dest, int *pcnt)
+void hal_tty_rx_cplt_any (uint8_t full)
 {
-    irqmask_t irq = uart_desc->uart_irq_mask;
-    rxstream_t *rx = &rxstream;
+    int i;
+    for (i = 0; i < hal_usrt_pool.cnt; i++) {
+        hal_tty_rx_cplt_hander(hal_usrt_pool.pool[i], full);
+    }
+}
 
-    int cnt = (int)(rx->fifoidx - rx->fifordidx);
-    int bytesleft = 0;
+static int hal_tty_rx_poll (serial_tty_t *tty, char *dest, int *pcnt)
+{
+    uart_hal_t *uart_desc = container_of(tty, uart_hal_t, tty);
+    irqmask_t irq = uart_desc->phy->uart_irq_mask;
+    tty_rxbuf_t *rx = tty->rxbuf;
+    int cnt = (int)(rx->fifoidx - rx->fifordidx), bytesleft = 0;
 
     /*TODO : remove 0x3*/
     if (rx->eof != 0x3) {
         *pcnt = 0;
         return 0;
     }
-
     irq_save(&irq);
-
-    if (cnt < 0) {
-        assert(0);
-    } else if (*pcnt < cnt) {
+    if (*pcnt < cnt) {
         bytesleft = cnt - *pcnt;
         cnt = cnt - bytesleft;
     }
     *pcnt = cnt;
     while (cnt > 0) {
         *dest = rx->fifo[rx->fifordidx++ & (DMA_RX_FIFO_SIZE - 1)];
-        cnt--;
-        dest++;
+        cnt--; dest++;
     }
     *dest = 0;
-    /*TODO : Move next line after crlf to the begining,
-      to handle multiple lines.
-    */
     rx->eof = 0;
     irq_restore(irq);
     return bytesleft;
 }
 
-static void dma_rx_xfer_hanlder (struct __DMA_HandleTypeDef * hdma)
+static void hal_tty_irq_handler (USART_TypeDef *source)
 {
-    HAL_DMA_IRQHandler(hdma);
-}
-#endif /*DEBUG_SERIAL_USE_RX*/
-
-
-static void uart_handle_irq (USART_TypeDef *source)
-{
-    uart_desc_t *uart_desc = uart_find_desc(source);
+    uart_hal_t *uart_desc = hal_tty_get_desc_4_phy(source);
 
     if (uart_desc) {
-        HAL_UART_IRQHandler(&uart_desc->handle);
+        HAL_UART_IRQHandler(&uart_desc->phy->handle);
     }
 }
 
-uart_desc_t *uart_find_desc (void *source)
+void hal_tty_destroy_any (void)
+{
+    int i = 0;
+    uart_hal_t *hal;
+    for (i = 0; i < hal_usrt_pool.cnt; i++) {
+        hal = hal_usrt_pool.pool[i];
+        if (hal->phy) {
+            hal_tty_flush(hal_usrt_pool.pool[i]);
+            hal_tty_uart_deinit(hal_usrt_pool.pool[i]);
+        }
+        heap_free(hal);
+    }
+    hal_usrt_pool.cnt = 0;
+}
+
+static int hal_tty_if_init (uart_hal_t *uart_desc, const UART_InitTypeDef *config)
+{
+    UART_HandleTypeDef *handle = &uart_desc->phy->handle;
+
+    d_memcpy(&handle->Init, config, sizeof(handle->Init));
+    if(HAL_UART_DeInit(handle) != HAL_OK) {
+        return -1;
+    }
+    if(HAL_UART_Init(handle) != HAL_OK) {
+        return -1;
+    }
+    uart_desc->phy->dma_init(uart_desc);
+    return 0;
+}
+
+static void hal_tty_attach_callbacks (uart_hal_t *uart_desc)
+{
+    uart_desc->tty.tx_start = hal_tty_tx_start_hw;
+    uart_desc->tty.rx_poll = hal_tty_rx_poll;
+    uart_desc->tty.inout_hook = bsp_inout_forward;
+}
+
+void HAL_UART_MspInit(UART_HandleTypeDef *huart)
+{
+    uart_hal_t *uart_desc = hal_tty_get_desc_4_phy(huart->Instance);
+
+    if (uart_desc && uart_desc->phy->msp_init) {
+        uart_desc->phy->msp_init(uart_desc);
+    }
+}
+
+void HAL_UART_MspDeInit(UART_HandleTypeDef *huart)
+{
+    uart_hal_t *uart_desc = hal_tty_get_desc_4_phy(huart->Instance);
+
+    if (uart_desc && uart_desc->phy->msp_init) {
+        uart_desc->phy->msp_deinit(uart_desc);
+    }
+}
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *UartHandle)
+{
+    uart_hal_t *uart_desc = hal_tty_get_desc_4_phy(UartHandle->Instance);
+    if (!uart_desc) {
+        return;
+    }
+    uart_desc->phy->tx_dma_ready = SET;
+    if (uart_desc->tty.txbuf_pending) {
+        uart_desc->tty.txbuf_pending = NULL;
+    }
+}
+
+void HAL_UART_RxHalfCpltCallback (UART_HandleTypeDef* huart)
+{
+    hal_tty_rx_cplt_any(0);
+}
+
+void HAL_UART_RxCpltCallback (UART_HandleTypeDef* huart)
+{
+    hal_tty_rx_cplt_any(1);
+}
+
+static uart_hal_t *hal_tty_get_desc_4_phy (void *source)
 {
     int i;
-    uart_desc_t *uart_desc;
+    uart_hal_t *uart_desc;
 
-    for (i = 0; i < uart_desc_cnt; i++) {
-        uart_desc = uart_desc_pool[i];
-
-        if (uart_desc->handle.Instance == source) {
+    for (i = 0; i < hal_usrt_pool.cnt; i++) {
+        uart_desc = hal_usrt_pool.pool[i];
+        if (uart_desc->phy->handle.Instance == source) {
             return uart_desc;
         }
     }
     return NULL;
 }
 
-void uart_if_deinit (void)
+static int hal_tty_atach (uart_hal_t *uart_desc, const msp_func_tbl_t *msp)
 {
-    int i = 0;
-    dprintf("%s() :\n", __func__);
-    for (i = 0; i < uart_desc_cnt; i++) {
-        uart_hal_tx_flush(uart_desc_pool[i]);
-        uart_hal_if_deinit(uart_desc_pool[i]);
+    int err = -1, i;
+
+    if (hal_usrt_pool.cnt >= arrlen(hal_usrt_pool.pool)) {
+        return err;
     }
-    uart_desc_cnt = 0;
-}
+    hal_usrt_pool.pool[hal_usrt_pool.cnt++] = uart_desc;
 
-static void uart_hal_if_init (uart_desc_t *uart_desc)
-{
-    UART_HandleTypeDef *handle = &uart_desc->handle;
-    handle->Instance        = uart_desc->hw;
+    _serial_tty_preinit(&uart_desc->tty);
 
-    d_memcpy(&handle->Init, uart_desc->ini, sizeof(handle->Init));
-
-    if(HAL_UART_DeInit(handle) != HAL_OK)
-    {
-        fatal_error("HAL_UART_DeInit : fail\n");
+    hal_tty_uart_preinit(uart_desc, msp);
+    if (uart_desc->phy) {
+        err = hal_tty_if_init(uart_desc, &uart_115200_8n1_txrx);
     }
-    if(HAL_UART_Init(handle) != HAL_OK)
-    {
-        fatal_error("HAL_UART_Init : fail\n");
+    if (err < 0) {
+        return err;
     }
-#if SERIAL_TTY_HAS_DMA
-    uart_desc->dma_init(uart_desc);
-#endif
-    uart_desc->initialized = SET;
-}
+    hal_tty_attach_callbacks(uart_desc);
 
-int uart_hal_tty_init (void)
-{
-#if DEBUG_SERIAL_USE_RX
-    const hal_uart_ini_t *def_ini = &uart_115200_8n1_txrx;
-#else
-    const hal_uart_ini_t *def_ini = &uart_115200_8n1_tx;
-#endif
-    if (uart_desc_cnt >= MAX_UARTS) {
-        return -1;
-    }
-    uart_desc_pool[uart_desc_cnt++] = &uart1_desc;
+    uart_desc->tty.tx_bufsize = 512;
+    uart_desc->tty.initialized = SET;
+    uart_desc->type     = SERIAL_DEBUG;
 
-    uart_hal_if_setup(&uart1_desc, uart1_msp_func, def_ini);
-    uart_hal_if_init(&uart1_desc);
     return 0;
 }
 
-void HAL_UART_MspInit(UART_HandleTypeDef *huart)
-{
-    uart_desc_t *uart_desc = uart_find_desc(huart->Instance);
 
-    if (uart_desc && uart_desc->msp_init) {
-        uart_desc->msp_init(uart_desc);
+/* Public API */
+
+int hal_tty_vcom_attach (void)
+{
+    uart_hal_t *hal;
+    hal = (uart_hal_t *)heap_calloc(sizeof(uart_hal_t) + sizeof(uart_phy_t));
+    if (!hal) {
+        return -1;
+    }
+    uart_vcom_desc = hal;
+    uart_vcom_desc->phy = (uart_phy_t *)(hal + 1);
+    return hal_tty_atach(hal, uart1_msp_func);
+}
+
+serial_tty_t *hal_tty_get_vcom_port (void)
+{
+    int i;
+    for (i = 0; i < hal_usrt_pool.cnt; i++) {
+        if (hal_usrt_pool.pool[i]->tty.initialized && (hal_usrt_pool.pool[i]->type == SERIAL_DEBUG)) {
+            return &hal_usrt_pool.pool[i]->tty;
+        }
+    }
+    return NULL;
+}
+
+void hal_tty_flush_any (void)
+{
+    int i = 0;
+
+    for (i = 0; i < hal_usrt_pool.cnt; i++) {
+        hal_tty_flush(hal_usrt_pool.pool[i]);
     }
 }
 
-void HAL_UART_MspDeInit(UART_HandleTypeDef *huart)
-{
-    uart_desc_t *uart_desc = uart_find_desc(huart->Instance);
+/* Interrupt handlers */
 
-    if (uart_desc && uart_desc->msp_init) {
-        uart_desc->msp_deinit(uart_desc);
-    }
+void TTY_DMA_TX_IRQHandler (void)
+{
+    dma_tx_handle_irq(uart1_tx_dma_conf.inst);
+}
+
+void TTY_DMA_RX_IRQHandler (void)
+{
+    dma_rx_handle_irq(uart1_rx_dma_conf.inst);
 }
 
 void USART1_IRQHandler (void)
 {
-    uart_handle_irq(USART1);
+    hal_tty_irq_handler(USART1);
 }
-
-#if SERIAL_TTY_HAS_DMA
-
-void TIM3_IRQHandler (void)
-{
-    tim_hal_irq_handler(&uart_hal_wdog_tim);
-}
-
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef *UartHandle)
-{
-    uart_desc_t *uart_desc = uart_find_desc(UartHandle->Instance);
-    if (!uart_desc) {
-        return;
-    }
-    uart_desc->tx_allowed = SET;
-}
-
-void DMA2_Stream5_IRQHandler (void)
-{
-    dma_tx_handle_irq(DMA2_Stream5);
-}
-
-void DMA2_Stream7_IRQHandler (void)
-{
-    dma_tx_handle_irq(DMA2_Stream7);
-}
-
-void DMA2_Stream2_IRQHandler (void)
-{
-    dma_rx_handle_irq(DMA2_Stream2);
-}
-
-#endif /*SERIAL_TTY_HAS_DMA*/
-
-#if DEBUG_SERIAL_USE_RX
-void HAL_UART_RxHalfCpltCallback (UART_HandleTypeDef* huart)
-{
-    serial_rx_cplt_handler(0);
-}
-
-void HAL_UART_RxCpltCallback (UART_HandleTypeDef* huart)
-{
-    serial_rx_cplt_handler(1);
-}
-
-#endif
 
