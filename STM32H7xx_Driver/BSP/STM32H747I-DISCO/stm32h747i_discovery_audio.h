@@ -22,10 +22,6 @@
 #ifndef STM32H747I_DISCO_AUDIO_H
 #define STM32H747I_DISCO_AUDIO_H
 
-#ifdef __cplusplus
- extern "C" {
-#endif
-
 /* Includes ------------------------------------------------------------------*/
 #include "stm32h747i_discovery_conf.h"
 #include "stm32h747i_discovery_errno.h"
@@ -451,10 +447,6 @@ HAL_StatusTypeDef MX_SAI4_Block_A_Init(SAI_HandleTypeDef* hsai, MX_SAI_Config_t 
 /**
   * @}
   */
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* STM32H747I_DISCO_AUDIO_H */
 

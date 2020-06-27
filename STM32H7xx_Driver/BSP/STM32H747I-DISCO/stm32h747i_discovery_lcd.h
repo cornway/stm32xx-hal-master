@@ -22,14 +22,11 @@
 #ifndef STM32H747I_DISCO_LCD_H
 #define STM32H747I_DISCO_LCD_H
 
-#ifdef __cplusplus
- extern "C" {
-#endif
-
 /* Includes ------------------------------------------------------------------*/
 #include "stm32h747i_discovery_conf.h"
 #include "stm32h747i_discovery_errno.h"
 #include "lcd.h"
+#include "../../../Utilities/Fonts/fonts.h"
 
 #if (USE_LCD_CTRL_OTM8009A == 1)
 /* Include OTM8009A LCD Driver IC driver code */
@@ -254,7 +251,9 @@ int32_t BSP_LCD_InitEx(uint32_t Instance, uint32_t Orientation, uint32_t PixelFo
 #if (USE_LCD_CTRL_ADV7533 > 0)
 int32_t BSP_LCD_InitHDMI(uint32_t Instance, uint32_t Format);
 #endif /* (USE_LCD_CTRL_ADV7533 > 0) */
+int BSP_LCD_UseHDMI (void);
 int32_t BSP_LCD_DeInit(uint32_t Instance);
+void BSP_LCD_DeInitEx (void);
 
 /* Register Callbacks APIs */
 #if (USE_HAL_DSI_REGISTER_CALLBACKS == 1)
@@ -314,10 +313,6 @@ int32_t BSP_LCD_GetPixelFormat(uint32_t Instance, uint32_t *PixelFormat);
 /**
   * @}
   */
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* STM32H747I_DISCO_LCD_H */
 

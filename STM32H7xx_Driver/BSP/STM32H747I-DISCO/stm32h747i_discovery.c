@@ -47,16 +47,10 @@ typedef void (* BSP_EXTI_LineCallback) (void);
 /** @defgroup STM32H747I_DISCO_LOW_LEVEL_Private_FunctionPrototypes  Private Function Prototypes
   * @{
   */
- static void BUTTON_WAKEUP_EXTI_Callback(void);
- #if (USE_BSP_COM_FEATURE > 0)
+#if (USE_BSP_COM_FEATURE > 0)
 static void USART1_MspInit(UART_HandleTypeDef *huart);
 static void USART1_MspDeInit(UART_HandleTypeDef *huart);
 #endif
-static void JOY1_UP_EXTI_Callback(void);
-static void JOY1_DOWN_EXTI_Callback(void);
-static void JOY1_LEFT_EXTI_Callback(void);
-static void JOY1_RIGHT_EXTI_Callback(void);
-static void JOY1_SEL_EXTI_Callback(void);
 /**
   * @}
   */
@@ -114,13 +108,6 @@ static const uint16_t JOY1_PIN[JOY_KEY_NUMBER] = {JOY1_SEL_PIN,
                                                   JOY1_RIGHT_PIN,
                                                   JOY1_UP_PIN
                                                  };
-
-static const IRQn_Type JOY1_IRQn[JOY_KEY_NUMBER] = {JOY1_SEL_EXTI_IRQn,
-                                                    JOY1_DOWN_EXTI_IRQn,
-                                                    JOY1_LEFT_EXTI_IRQn,
-                                                    JOY1_RIGHT_EXTI_IRQn,
-                                                    JOY1_UP_EXTI_IRQn
-                                                   };
 static EXTI_HandleTypeDef hjoy_exti[JOY_KEY_NUMBER];
 /**
   * @}
@@ -323,8 +310,8 @@ int32_t  BSP_PB_Init(Button_TypeDef Button, ButtonMode_TypeDef ButtonMode)
     HAL_NVIC_SetPriority((BUTTON_IRQn[Button]), BSP_BUTTON_PRIO[Button], 0x00);
     HAL_NVIC_EnableIRQ((BUTTON_IRQn[Button]));
   }
-  return BSP_ERROR_NONE;
 #endif
+  return BSP_ERROR_NONE;
 }
 
 /**
@@ -368,14 +355,6 @@ void BSP_PB_IRQHandler(Button_TypeDef Button)
   HAL_EXTI_IRQHandler(&hpb_exti[Button]);
 }
 
-/**
-  * @brief  KEY EXTI line detection callbacks.
-  * @retval None
-  */
-static void BUTTON_WAKEUP_EXTI_Callback(void)
-{
-  BSP_PB_Callback(BUTTON_WAKEUP);
-}
 /**
   * @brief  BSP Push Button callback
   * @param  Button Specifies the pin connected EXTI line
@@ -600,8 +579,8 @@ int32_t BSP_COM_SelectLogPort(COM_TypeDef COM)
   */
 int32_t BSP_JOY_Init(JOY_TypeDef JOY, JOYMode_TypeDef JoyMode, JOYPin_TypeDef JoyPins)
 {
-#if 0
   int32_t ret = BSP_ERROR_NONE;
+#if 0
   uint32_t joykey, key_pressed;
   GPIO_InitTypeDef gpio_init_structure;
 
@@ -686,9 +665,8 @@ int32_t BSP_JOY_Init(JOY_TypeDef JOY, JOYMode_TypeDef JoyMode, JOYPin_TypeDef Jo
       }
     }
   }
-
-  return ret;
 #endif
+  return ret;
 }
 /**
   * @brief  DeInit joystick GPIOs.
@@ -815,52 +793,6 @@ __weak void BSP_JOY_Callback(JOY_TypeDef JOY, uint32_t JoyPin)
 /** @defgroup STM32H747I_DISCO_LOW_LEVEL_Private_Functions Private Functions
   * @{
   */
-/**
-  * @brief  JOY1 UP EXTI line detection callbacks.
-  * @retval None
-  */
-static void JOY1_UP_EXTI_Callback(void)
-{
-  BSP_JOY_Callback(JOY1, JOY_UP);
-}
-
-/**
-  * @brief  JOY1 DOWN EXTI line detection callbacks.
-  * @retval None
-  */
-static void JOY1_DOWN_EXTI_Callback(void)
-{
-  BSP_JOY_Callback(JOY1, JOY_DOWN);
-}
-
-/**
-  * @brief  JOY1 SEL EXTI line detection callbacks.
-  * @retval None
-  */
-static void JOY1_SEL_EXTI_Callback(void)
-{
-  BSP_JOY_Callback(JOY1, JOY_SEL);
-}
-
-/**
-  * @brief  JOY1 LEFT EXTI line detection callbacks.
-  * @retval None
-  */
-static void JOY1_LEFT_EXTI_Callback(void)
-{
-  BSP_JOY_Callback(JOY1, JOY_LEFT);
-}
-
-/**
-  * @brief  JOY1 RIGHT EXTI line detection callbacks.
-  * @retval None
-  */
-static void JOY1_RIGHT_EXTI_Callback(void)
-{
-  BSP_JOY_Callback(JOY1, JOY_RIGHT);
-}
-
-
 
 #if (USE_BSP_COM_FEATURE > 0)
 /**

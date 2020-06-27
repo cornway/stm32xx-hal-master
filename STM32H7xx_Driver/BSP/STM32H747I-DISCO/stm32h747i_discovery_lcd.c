@@ -238,8 +238,7 @@ int BSP_LCD_UseHDMI (void)
 int32_t BSP_LCD_InitEx(uint32_t Instance, uint32_t Orientation, uint32_t PixelFormat, uint32_t Width, uint32_t Height)
 {
   int32_t ret = BSP_ERROR_NONE;
-  uint32_t ctrl_pixel_format, ltdc_pixel_format, dsi_pixel_format;
-  MX_LTDC_LayerConfig_t config;
+  uint32_t ctrl_pixel_format, dsi_pixel_format;
 
   if((Orientation > LCD_ORIENTATION_LANDSCAPE) || (Instance >= LCD_INSTANCES_NBR) || \
      ((PixelFormat != LCD_PIXEL_FORMAT_RGB565) && (PixelFormat != LTDC_PIXEL_FORMAT_RGB888)))
@@ -250,14 +249,12 @@ int32_t BSP_LCD_InitEx(uint32_t Instance, uint32_t Orientation, uint32_t PixelFo
   {
     if(PixelFormat == LCD_PIXEL_FORMAT_RGB565)
     {
-      ltdc_pixel_format = LTDC_PIXEL_FORMAT_RGB565;
       dsi_pixel_format = DSI_RGB565;
       ctrl_pixel_format = OTM8009A_FORMAT_RBG565;
       Lcd_Ctx[Instance].BppFactor = 2U;
     }
     else /* LCD_PIXEL_FORMAT_RGB888 */
     {
-      ltdc_pixel_format = LTDC_PIXEL_FORMAT_ARGB8888;
       dsi_pixel_format = DSI_RGB888;
       ctrl_pixel_format = OTM8009A_FORMAT_RGB888;
       Lcd_Ctx[Instance].BppFactor = 4U;
@@ -426,7 +423,6 @@ int32_t BSP_LCD_InitHDMI(uint32_t Instance, uint32_t Format)
   int32_t ret;
   DSI_PLLInitTypeDef    dsiPllInit;
   DSI_PHY_TimerTypeDef  dsiPhyInit;
-  MX_LTDC_LayerConfig_t hdmi_config;
   LCD_HDMI_Timing_t     hdmi_timing;
   DSI_VidCfgTypeDef     hDsiVideoMode;
 
@@ -2018,7 +2014,7 @@ static int32_t ADV7533_Probe(void)
     {
       ret = BSP_ERROR_COMPONENT_FAILURE;
     }
-    else if(ADV7533_Configure(Lcd_CompObj, 2)!= ADV7533_OK)
+    else if(ADV7533_Configure((ADV7533_Object_t *)Lcd_CompObj, 2)!= ADV7533_OK)
     {
       ret = BSP_ERROR_COMPONENT_FAILURE;
     }
@@ -2057,7 +2053,7 @@ static int32_t OTM8009A_Probe(uint32_t ColorCoding, uint32_t Orientation)
   {
     Lcd_CompObj = &OTM8009AObj;
 
-    if(OTM8009A_ReadID(Lcd_CompObj, &id) != OTM8009A_OK)
+    if(OTM8009A_ReadID((OTM8009A_Object_t *)Lcd_CompObj, &id) != OTM8009A_OK)
     {
       ret = BSP_ERROR_COMPONENT_FAILURE;
     }
