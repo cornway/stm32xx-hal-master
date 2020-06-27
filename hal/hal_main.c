@@ -22,23 +22,11 @@
 #include "../../common/int/mpu.h"
 
 #if defined(USE_STM32H747I_DISCO)
-
 #include "stm32h747i_discovery.h"
-
-int const __cache_line_size = 32;
-
 #elif defined(USE_STM32F769I_DISCO)
-
 #include "stm32f769i_discovery.h"
-
-int const __cache_line_size = 32;
-
 #elif defined(USE_STM32H745I_DISCO)
-
 #include "stm32h745i_discovery.h"
-
-int const __cache_line_size = 32;
-
 #else /*USE_STM32F769I_DISCO*/
 #error "Not supported"
 #endif /*USE_STM32F769I_DISCO*/
@@ -51,9 +39,6 @@ int const __cache_line_size = 32;
 #endif
 
 static void SystemClock_Config(void);
-
-static void sys_exception_handler (uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3);
-
 static void clock_fault (void)
 {
     bug();
@@ -304,11 +289,16 @@ static void dev_hal_gpio_init (void)
 #endif
 }
 
-int dev_hal_init (void)
+int dev_hal_preinit (void)
 {
     CPU_CACHE_Enable();
     HAL_Init();
     SystemClock_Config();
+    return 0;
+}
+
+int dev_hal_init (void)
+{
     dev_hal_gpio_init();
     uart_hal_tty_init();
     cs_load_code(NULL, NULL, 0);
@@ -317,18 +307,7 @@ int dev_hal_init (void)
 
 void dev_hal_tickle (void)
 {
-    static uint32_t status_time = 0;
-    static int led_status = 0;
-
-    if (d_time() > status_time) {
-        status_time = d_time() + 1000;
-        led_status = 1 - led_status;
-        if (led_status) {
-            status_led_on();
-        } else {
-            status_led_off();
-        }
-    }
+    HAL_IncTick();
 }
 
 #if defined(STM32H747xx)
@@ -362,7 +341,7 @@ int input_hal_init (void)
     int err = CMDERR_OK;
     screen_t screen;
 
-    vid_get_screen(&screen, 0);
+    vid_wh(&screen);
 #if defined(STM32H745xx) || defined(STM32H747xx)
     {
         TS_Init_t ts;
@@ -397,14 +376,6 @@ void input_hal_deinit (void)
 #error
 #endif
     }
-}
-
-d_bool input_hal_touch_avail (void)
-{
-    if (BSP_LCD_UseHDMI()) {
-        return d_false;
-    }
-    return d_true;
 }
 
 void input_hal_read_ts (ts_status_t *ts_status)

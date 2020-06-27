@@ -108,7 +108,7 @@ void *bspmod_insert (const bsp_heap_api_t *heap, const char *path, const char *n
         return NULL;
     }
 
-    mod = heap_api_malloc(heap, sizeof(*mod));
+    mod = (bspmod_t *)heap_api_malloc(heap, sizeof(*mod));
     assert(mod);
 
     bin = bsp_setup_bin_desc(path, &mod->bin, path, name, bintype);

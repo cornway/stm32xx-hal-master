@@ -13,8 +13,6 @@
 #include <misc_utils.h>
 #include <debug.h>
 
-extern uint32_t SystemCoreClock;
-
 typedef struct {
     TIM_TypeDef *hw;
     TIM_HandleTypeDef handle;
@@ -77,14 +75,26 @@ static void tim_unlink (tim_int_t *tim)
             tim_free(tim);
             return;
         }
-
         prev = cur;
         cur = cur->next;
     }
     assert(0);
 }
 
-int hal_tim_init (timer_desc_t *desc, void *hw, irqn_t irqn)
+timer_desc_t *hal_timer_get_by_hw (void *hw)
+{
+    tim_int_t *tim = timer_desc_head;
+    while (tim) {
+        if (hw == (void *)tim->hal.hw) {
+            return tim->desc;
+        }
+        tim = tim->next;
+    }
+    return NULL;
+}
+
+
+int hal_timer_init (timer_desc_t *desc, void *hw, irqn_t irqn)
 {
     tim_int_t *tim;
     TIM_HandleTypeDef *handle;
@@ -98,7 +108,7 @@ int hal_tim_init (timer_desc_t *desc, void *hw, irqn_t irqn)
     tim->desc = desc;
     desc->parent = tim;
 
-    tim->hal.hw = hw;
+    tim->hal.hw = (TIM_TypeDef *)hw;
     desc->irq = irqn;
 
     handle = &tim->hal.handle;
@@ -138,9 +148,9 @@ int hal_tim_init (timer_desc_t *desc, void *hw, irqn_t irqn)
     return 0;
 }
 
-int hal_tim_deinit (timer_desc_t *desc)
+int hal_timer_deinit (timer_desc_t *desc)
 {
-    tim_int_t *tim = desc->parent;
+    tim_int_t *tim = (tim_int_t *)desc->parent;
     TIM_HandleTypeDef *handle = &tim->hal.handle;
 
     if (desc->flags == TIM_RUNIT) {
@@ -153,6 +163,16 @@ int hal_tim_deinit (timer_desc_t *desc)
     HAL_TIM_Base_DeInit(handle);
     tim_unlink(tim);
     return 0;
+}
+
+static void hal_hires_timer_msp_init (timer_desc_t *desc);
+static void hal_hires_timer_msp_deinit (timer_desc_t *desc);
+
+int hal_hires_timer_init (timer_desc_t *desc)
+{
+    desc->init = hal_hires_timer_msp_init;
+    desc->deinit = hal_hires_timer_msp_deinit;
+    return hal_timer_init(desc, TIM2, TIM2_IRQn);
 }
 
 void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef *htim)
@@ -207,16 +227,46 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     assert(0);
 }
 
-void tim_hal_irq_handler (timer_desc_t *desc)
+void hal_timer_irq_handler (void *hw)
 {
-    tim_int_t *tim = desc->parent;
+    timer_desc_t *desc = hal_timer_get_by_hw(hw);
+    tim_int_t *tim = (tim_int_t *)desc->parent;
 
     HAL_TIM_IRQHandler(&tim->hal.handle);
 }
 
-uint32_t tim_hal_get_cycles (timer_desc_t *desc)
+uint32_t hal_timer_value (timer_desc_t *desc)
 {
-    tim_int_t *tim = desc->parent;
-    
+    tim_int_t *tim = (tim_int_t *)desc->parent;
     return tim->hal.hw->CNT;
 }
+
+static void hal_hires_timer_msp_init (timer_desc_t *desc)
+{
+    tim_int_t *tim = (tim_int_t *)desc->parent;
+
+    if (tim->hal.hw == TIM2) {
+        __HAL_RCC_TIM2_CLK_ENABLE();
+    }
+}
+
+static void hal_hires_timer_msp_deinit (timer_desc_t *desc)
+{
+    tim_int_t *tim = (tim_int_t *)desc->parent;
+
+    if (tim->hal.hw == TIM2) {
+        __HAL_RCC_TIM2_CLK_DISABLE();
+    }
+}
+
+void TIM2_IRQHandler (void)
+{
+    hal_timer_irq_handler(TIM2);
+}
+
+void TIM3_IRQHandler (void)
+{
+    hal_timer_irq_handler(TIM3);
+}
+
+

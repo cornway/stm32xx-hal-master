@@ -100,6 +100,8 @@ static jpeg_hal_ctxt_t jpeg_hal_ctxt = {0};
 int JPEG_Decode_DMA(JPEG_HandleTypeDef *hjpeg, void *data, uint32_t size, uint32_t DestAddress);
 uint32_t JPEG_OutputHandler(JPEG_HandleTypeDef *hjpeg);
 void JPEG_InputHandler(JPEG_HandleTypeDef *hjpeg);
+static int JPEG_Abort (JPEG_HandleTypeDef *hjpeg);
+
 
 static void *bytestream_move (byte_stream_t *stream, uint32_t *len)
 {
@@ -160,19 +162,19 @@ int JPEG_Decode_DMA(JPEG_HandleTypeDef *hjpeg, void *data, uint32_t size, uint32
     jpeg_hal_ctxt.outwrite_idx = 0;
 
     jpeg_hal_ctxt.instream.pos = 0;
-    jpeg_hal_ctxt.instream.ptr = data;
+    jpeg_hal_ctxt.instream.ptr = (uint8_t *)data;
     jpeg_hal_ctxt.instream.size = size;
     jpeg_hal_ctxt.framebuf = (void *)DestAddress;
 
     len = CHUNK_SIZE_IN;
     for(i = 0; i < NB_INPUT_DATA_BUFFERS && len; i++)
     {
-        jpeg_hal_ctxt.intab[i].DataBuffer = bytestream_move(&jpeg_hal_ctxt.instream, &len);
+        jpeg_hal_ctxt.intab[i].DataBuffer = (uint8_t *)bytestream_move(&jpeg_hal_ctxt.instream, &len);
         jpeg_hal_ctxt.intab[i].DataBufferSize = len;
         jpeg_hal_ctxt.intab[i].State = (len == CHUNK_SIZE_IN) ? JPEG_BUFFER_FULL : JPEG_BUFFER_EMPTY;
     }
 
-    ptr = heap_alloc_shared(NB_OUTPUT_DATA_BUFFERS * CHUNK_SIZE_OUT);
+    ptr = (uint8_t *)heap_alloc_shared(NB_OUTPUT_DATA_BUFFERS * CHUNK_SIZE_OUT);
     d_memset(ptr, 0, NB_OUTPUT_DATA_BUFFERS * CHUNK_SIZE_OUT);
 
     for (i = 0; i < NB_OUTPUT_DATA_BUFFERS; i++)
@@ -240,7 +242,7 @@ void JPEG_InputHandler(JPEG_HandleTypeDef *hjpeg)
     uint32_t bufsize = CHUNK_SIZE_IN;
 
     jpeg_hal_ctxt.intab[jpeg_hal_ctxt.inwrite_idx].DataBuffer =
-                                                bytestream_move(&jpeg_hal_ctxt.instream, &bufsize);
+                                                (uint8_t *)bytestream_move(&jpeg_hal_ctxt.instream, &bufsize);
     if (bufsize == 0) {
         return;
     }
@@ -464,7 +466,7 @@ int JPEG_Info_HAL (jpeg_info_t *info)
     return 0;
 }
 
-int JPEG_Abort (JPEG_HandleTypeDef *hjpeg)
+static int JPEG_Abort (JPEG_HandleTypeDef *hjpeg)
 {
     HAL_JPEG_Abort(hjpeg);
     return 0;

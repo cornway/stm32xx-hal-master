@@ -147,6 +147,10 @@ int mpu_lock (arch_word_t addr, arch_word_t *size, const char *mode)
     reg->init.Size = size_to_mpu_size(size);
     reg->size = *size;
 
+    if (!PTR_ALIGNED(addr, *size)) {
+        dprintf("%s() : Not aligned: %x %x\n", addr, *size);
+    }
+
     HAL_MPU_Disable();
     HAL_MPU_ConfigRegion(&reg->init);
     HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);

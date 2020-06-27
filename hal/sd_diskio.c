@@ -57,10 +57,10 @@
 #include "../int/sd_diskio.h"
 #include <nvic.h>
 
-#include "stm32f7xx_it.h"
 #include "debug.h"
 #include "heap.h"
 #include <misc_utils.h>
+#include <gpio.h>
 
 //#ifndef SD_MODE_DMA_RO 
 #define SD_MODE_DMA_RO 0
@@ -97,8 +97,6 @@ static irqmask_t dma_rxtx_irq;
 static volatile  UINT  WriteStatus = 0, ReadStatus = 0;
 #endif /**/
 
-extern void hdd_led_on (void);
-extern void hdd_led_off (void);
 
 /* Private function prototypes -----------------------------------------------*/
 static DSTATUS SD_CheckStatus(BYTE lun);
@@ -202,7 +200,7 @@ DRESULT SD_Uread(BYTE lun, BYTE *buff, DWORD sector, UINT count)
     DRESULT result = RES_OK;
     uint8_t ret = 0;
     DWORD end = sector + count;
-    uint32_t *abuf = heap_malloc(_MIN_SS);
+    uint32_t *abuf = (uint32_t *)heap_malloc(_MIN_SS);
 
     if (!abuf) {
         return RES_NOTRDY;
@@ -496,7 +494,7 @@ static DRESULT SD_UWrite (BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 {
     DRESULT res = RES_OK;
     DWORD end = sector + count;
-    uint32_t *abuf = heap_malloc(_MIN_SS);
+    uint32_t *abuf = (uint32_t *)heap_malloc(_MIN_SS);
 
     if (!abuf) {
         return RES_NOTRDY;

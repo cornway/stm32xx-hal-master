@@ -48,6 +48,7 @@ void screen_hal_sync (lcd_wincfg_t *cfg, int wait);
 int screen_hal_copy_m2m (lcd_wincfg_t *cfg, copybuf_t *copybuf, uint8_t pix_bytes);
 int screen_hal_scale_h8_2x2 (lcd_wincfg_t *cfg, copybuf_t *copybuf, int interleave);
 int screen_gfx8_copy_line (lcd_wincfg_t *cfg, void *dest, void *src, int w);
+int screen_gfx8888_copy (lcd_wincfg_t *cfg, gfx_2d_buf_t *dest, gfx_2d_buf_t *src);
 
 static inline void screen_hal_layreload (lcd_wincfg_t *cfg)
 {
@@ -57,11 +58,13 @@ static inline void screen_hal_layreload (lcd_wincfg_t *cfg)
     cfg->ready_lay_idx = screen_hal_set_layer(cfg);
 }
 
+d_bool screen_hal_ts_available (void);
+
 extern uint32_t lcd_x_size_var;
 extern uint32_t lcd_y_size_var;
 
-extern int bsp_lcd_width;
-extern int bsp_lcd_height;
+extern uint32_t bsp_lcd_width;
+extern uint32_t bsp_lcd_height;
 
 extern const lcd_layers_t layer_switch[LCD_MAX_LAYER];
 extern const uint32_t screen_mode2pixdeep[GFX_COLOR_MODE_MAX];

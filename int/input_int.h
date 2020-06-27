@@ -7,6 +7,10 @@ void joypad_bsp_init (void);
 void joypad_tickle (void);
 void joypad_bsp_deinit (void);
 
+void input_hal_read_ts (ts_status_t *ts_status);
+void input_hal_deinit (void);
+int input_hal_init (void);
+
 
 /*Drivers*/
 

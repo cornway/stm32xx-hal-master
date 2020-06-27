@@ -24,6 +24,7 @@
 #include <misc_utils.h>
 #include <boot_int.h>
 #include <bsp_cmd.h>
+#include <gpio.h>
 
 #define BHAL_MEM_RW_PORTION (1 << 14)
 #define BHAL_DBG_LINE_LEN ((1 << 6) - 1)
@@ -250,7 +251,7 @@ static const prog_func_t func_compare =
     d_true,
     __bhal_memory_compare,
 };
-
+/*
 static const prog_func_t func_read =
 {
     "Reading...",
@@ -261,7 +262,7 @@ static const prog_func_t func_read =
     d_true,
     __bhal_memory_read,
 };
-
+*/
 static const prog_func_t func_write =
 {
     "Writing...",
@@ -452,7 +453,6 @@ int bhal_set_mem_with_value (complete_ind_t cplth, arch_word_t *progaddr,
     switch (exec_mem_type) {
         case EXEC_ROM :
             dprintf("%s() : [EXEC_ROM] not yet\n", __func__);
-            return -1;
         break;
         case EXEC_SDRAM :
         case EXEC_SRAM :

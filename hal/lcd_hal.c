@@ -4,13 +4,10 @@
 #include <string.h>
 
 #if defined(USE_STM32H747I_DISCO)
-#include <stm32h7xx_it.h>
 #include <stm32h747i_discovery_lcd.h>
 #elif defined(USE_STM32H745I_DISCO)
-#include <stm32h7xx_it.h>
 #include <stm32h745i_discovery_lcd.h>
 #elif defined(USE_STM32F769I_DISCO)
-#include <stm32f7xx_it.h>
 #include <stm32f769i_discovery_lcd.h>
 #else
 #error
@@ -30,6 +27,8 @@
 #include <bsp_cmd.h>
 #include <debug.h>
 #include <bsp_sys.h>
+
+#define LCD_COLORMODE_INVALID (0xFFFFFFFF)
 
 uint32_t lcd_x_size_var;
 uint32_t lcd_y_size_var;
@@ -126,27 +125,30 @@ lcd_layers_t screen_hal_set_layer (lcd_wincfg_t *cfg)
 #endif
 }
 
-static screen_hal_ctxt_t screen_hal_ctxt = {{0}};
+static screen_hal_ctxt_t screen_hal_ctxt = {0};
 
 static const uint32_t dma2d_color_mode2out_map[] =
 {
-    [GFX_COLOR_MODE_CLUT] = DMA2D_OUTPUT_ARGB8888,
-    [GFX_COLOR_MODE_RGB565] = DMA2D_OUTPUT_RGB565,
-    [GFX_COLOR_MODE_ARGB8888] = DMA2D_OUTPUT_ARGB8888,
+    LCD_COLORMODE_INVALID,
+    DMA2D_OUTPUT_ARGB8888,
+    DMA2D_OUTPUT_RGB565,
+    DMA2D_OUTPUT_ARGB8888,
 };
 
 static const uint32_t dma2d_color_mode2in_map[] =
 {
-    [GFX_COLOR_MODE_CLUT] = DMA2D_INPUT_L8,
-    [GFX_COLOR_MODE_RGB565] = DMA2D_INPUT_RGB565,
-    [GFX_COLOR_MODE_ARGB8888] = DMA2D_INPUT_ARGB8888,
+    LCD_COLORMODE_INVALID,
+    DMA2D_INPUT_L8,
+    DMA2D_INPUT_RGB565,
+    DMA2D_INPUT_ARGB8888,
 };
 
 static const uint32_t screen_mode2fmt_map[] =
 {
-    [GFX_COLOR_MODE_CLUT] = LTDC_PIXEL_FORMAT_L8,
-    [GFX_COLOR_MODE_RGB565] = LTDC_PIXEL_FORMAT_RGB565,
-    [GFX_COLOR_MODE_ARGB8888] = LTDC_PIXEL_FORMAT_ARGB8888,
+    LCD_COLORMODE_INVALID,
+    LTDC_PIXEL_FORMAT_L8,
+    LTDC_PIXEL_FORMAT_RGB565,
+    LTDC_PIXEL_FORMAT_ARGB8888,
 };
 
 static void screen_dma2d_irq_hdlr (screen_hal_ctxt_t *ctxt);
@@ -155,6 +157,8 @@ static int screen_hal_copy_next (screen_hal_ctxt_t *ctxt);
 
 void screen_hal_set_clut (lcd_wincfg_t *cfg, void *_buf, int size, int layer)
 {
+    assert(LCD_COLORMODE_INVALID != screen_mode2fmt_map[GFX_COLOR_MODE_CLUT]);
+
     if (VHAL_PIX_FMT(cfg, layer) != screen_mode2fmt_map[GFX_COLOR_MODE_CLUT]) {
         return;
     }
@@ -248,6 +252,7 @@ screen_hal_set_config (lcd_wincfg_t *cfg, int x, int y, int w, int h, uint8_t co
 #error
 #endif
     screen_hal_attach(cfg);
+    assert(LCD_COLORMODE_INVALID != screen_mode2fmt_map[colormode]);
 
     Layercfg = GET_VHAL_HALCFG(cfg);
     /* Layer Init */
@@ -294,7 +299,7 @@ void screen_hal_sync (lcd_wincfg_t *cfg, int wait)
     }
 }
 
-static int screen_update_direct (lcd_wincfg_t *cfg, screen_t *psrc)
+int screen_update_direct (lcd_wincfg_t *cfg, screen_t *psrc)
 {
     copybuf_t buf = {NULL};
     screen_t *dest = &buf.dest, *src = &buf.src;
@@ -315,6 +320,7 @@ static int screen_update_direct (lcd_wincfg_t *cfg, screen_t *psrc)
     dest->height = cfg->h;
     dest->colormode = cfg->config.colormode;
     if (GET_VHAL_CTXT(cfg)->poll) {
+        assert(screen_mode2pixdeep[dest->colormode]);
         return screen_hal_copy_m2m(cfg, &buf, screen_mode2pixdeep[dest->colormode]);
     } else {
         irqmask_t irq;
@@ -347,6 +353,8 @@ __screen_hal_copy_setup_M2M
     const int layid = 1;
 
     d_memzero(&hdma2d->Init, sizeof(hdma2d->Init));
+    assert(LCD_COLORMODE_INVALID != dma2d_color_mode2out_map[dst_colormode]);
+    assert(LCD_COLORMODE_INVALID != dma2d_color_mode2in_map[src_colormode]);
 
     hdma2d->Init.Mode         = DMA2D_M2M;
     hdma2d->Init.ColorMode    = dma2d_color_mode2out_map[dst_colormode];
@@ -607,6 +615,7 @@ screen_hal_copy_next (screen_hal_ctxt_t *ctxt)
     }
     buf = bufq;
     bufq = bufq->next;
+    assert(screen_mode2pixdeep[ctxt->lcd_cfg->config.colormode]);
     ret = screen_hal_copy_m2m(ctxt->lcd_cfg, buf, screen_mode2pixdeep[ctxt->lcd_cfg->config.colormode]);
     ctxt->lcd_cfg->config.alloc.free(buf);
     ctxt->bufq = bufq;
@@ -616,7 +625,7 @@ screen_hal_copy_next (screen_hal_ctxt_t *ctxt)
 static copybuf_t *
 screen_hal_copybuf_alloc (screen_hal_ctxt_t *ctxt, screen_t *dest, screen_t *src)
 {
-    copybuf_t *buf = ctxt->lcd_cfg->config.alloc.malloc(sizeof(*buf));
+    copybuf_t *buf = (copybuf_t *)ctxt->lcd_cfg->config.alloc.malloc(sizeof(*buf));
 
     d_memcpy(&buf->dest, dest, sizeof(buf->dest));
     d_memcpy(&buf->src, src, sizeof(buf->src));
@@ -665,6 +674,14 @@ static void screen_copybuf_split (screen_hal_ctxt_t *ctxt, copybuf_t *buf, int p
         src.height = parts;
         screen_hal_copybuf_alloc(ctxt, &dest, &src);
     }
+}
+
+d_bool screen_hal_ts_available (void)
+{
+    if (BSP_LCD_UseHDMI()) {
+        return d_false;
+    }
+    return d_true;
 }
 
 void DMA2D_IRQHandler(void)

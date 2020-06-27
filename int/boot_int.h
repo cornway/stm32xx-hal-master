@@ -80,6 +80,8 @@ void bres_querry_executables_for_range (const exec_desc_t **binarray, int *pstar
 void *bres_get_executable_for_num (int num);
 int bres_get_executables_num (void);
 void bsp_load_exec_title_pic (const char *dirpath, exec_desc_t *bin, const char *path);
+int boot_log_comp_hex_u32 (const void *a, const void *b, int size);
+int boot_input_init (void);
 
 enum {
     BOOT_LOG_NONE = -1,
