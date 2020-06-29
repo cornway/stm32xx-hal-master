@@ -15,7 +15,15 @@
 #include <mpu.h>
 #include <bsp_sys.h>
 
-#define MPU_REG_POOL_MAX (MPU_REGION_NUMBER7 + 1)
+#if defined(STM32H747xx) || defined(STM32H745xx)
+#define MPU_REGION_MAX (MPU_REGION_NUMBER15)
+#elif defined(STM32F769xx)
+#define MPU_REGION_MAX (MPU_REGION_NUMBER7)
+#else
+#error
+#endif
+
+#define MPU_REG_POOL_MAX (MPU_REGION_MAX + 1)
 
 typedef struct {
 
@@ -73,7 +81,7 @@ void mpu_deinit (void)
 int mpu_lock (arch_word_t addr, arch_word_t *size, const char *mode)
 {
     d_bool wr_protect = d_false, r_protect = d_false;
-    d_bool shareable = d_true, cacheable = d_true, bufferable = d_true;
+    d_bool shareable = d_false, cacheable = d_false, bufferable = d_false;
     d_bool exclude_flags = d_false;
     uint8_t tex = 0;
     mpu_reg_t *reg;
@@ -81,21 +89,30 @@ int mpu_lock (arch_word_t addr, arch_word_t *size, const char *mode)
 
     reg = mpu_alloc_reg(&id);
     if (!reg) {
+        dprintf("%s() : [FATAL] Fail to allocate region\n", __func__);
+        assert(0);
         return -1;
     }
 
     if (*mode == '-') {
         exclude_flags = d_true;
         mode++;
+
+        shareable = d_true;
+        cacheable = d_true;
+        bufferable = d_true;
+        wr_protect = d_true;
+        r_protect = d_true;
+        tex = 1;
     }
 
     while (*mode) {
         switch (*mode) {
             case 'w':
-                wr_protect = exclude_flags ? d_true : d_false;
+                wr_protect = exclude_flags ? d_false : d_true;
             break;
             case 'r':
-                r_protect = exclude_flags ? d_true : d_false;
+                r_protect = exclude_flags ? d_false : d_true;
             break;
             case 's':
                 shareable = exclude_flags ? d_false : d_true;
@@ -148,7 +165,7 @@ int mpu_lock (arch_word_t addr, arch_word_t *size, const char *mode)
     reg->size = *size;
 
     if (!PTR_ALIGNED(addr, *size)) {
-        dprintf("%s() : Not aligned: %x %x\n", addr, *size);
+        dprintf("%s() : Not aligned: %x %x\n", __func__, addr, *size);
     }
 
     HAL_MPU_Disable();

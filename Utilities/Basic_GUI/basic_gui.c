@@ -71,8 +71,11 @@
 /* Includes ------------------------------------------------------------------*/
 #include "basic_gui.h"
 #include <term.h>
+#include <debug.h>
+#include <heap.h>
+#include <misc_utils.h>
 
-/** @addtogroup Utilities
+/** @addtogroup Utilities`
   * @{
   */
 
@@ -269,8 +272,35 @@ sFONT *GUI_GetFont(void)
   */
 void GUI_FillRGBRect(uint32_t Xpos, uint32_t Ypos, uint8_t *pData, uint32_t Width, uint32_t Height)
 {
-  /* Write RGB rectangle data */  
-  FuncDriver.FillRGBRect(DrawProp->GuiDevice, Xpos, Ypos, pData, Width, Height);
+  /* Write RGB rectangle data */
+  uint32_t pixels = 0, memsize;
+  void *dma_memory;
+
+  FuncDriver.GetFormat(0, &pixels);
+  switch (pixels) {
+    case LCD_PIXEL_FORMAT_L8 :
+        pixels = 1;
+        break;
+    case LCD_PIXEL_FORMAT_RGB565 :
+        pixels = 2;
+        break;
+    case LCD_PIXEL_FORMAT_ARGB8888 :
+    case LCD_PIXEL_FORMAT_RGB888 :
+        pixels = 4;
+        break;
+    default:
+        dprintf("%s() : Fatal!\n", __func__);
+        return;
+  }
+  memsize = Width * Height * pixels;
+  dma_memory = dma_alloc(memsize);
+  if (!dma_memory) {
+    dprintf("%s() : No memory!\n", __func__);
+    return;
+  }
+  d_memcpy(dma_memory, pData, memsize);
+  FuncDriver.FillRGBRect(DrawProp->GuiDevice, Xpos, Ypos, (uint8_t *)dma_memory, Width, Height);
+  dma_free(dma_memory);
 }
 
 /**
