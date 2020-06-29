@@ -301,55 +301,6 @@ int dev_hal_init (void)
 {
     dev_hal_gpio_init();
     hal_tty_vcom_attach();
-    //serial_safe_mode(1);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
-    dprintf("%d\n", __LINE__);
 
     cs_load_code(NULL, NULL, 0);
     return 0;

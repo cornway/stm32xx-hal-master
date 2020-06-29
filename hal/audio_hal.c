@@ -72,10 +72,10 @@ a_hal_configure (a_intcfg_t *cfg)
   BSP_AUDIO_OUT_Play((uint16_t *)master.buf, AUDIO_SAMPLES_2_BYTES(master.samples));
 #elif defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
   BSP_AUDIO_Init_t init;
-    
+
   init.BitsPerSample = cfg->samplebits;
   init.ChannelsNbr = cfg->channels;
-  init.Device = 0;
+  init.Device = WM8994_OUT_HEADPHONE;
   init.SampleRate = cfg->samplerate;
   init.Volume = cfg->volume;
   BSP_AUDIO_OUT_Init(0, &init);

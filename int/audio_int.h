@@ -150,6 +150,7 @@ void a_clear_abuf (a_buf_t *abuf);
 void a_clear_master (void);
 d_bool a_wave_supported (wave_t *wave);
 void a_hal_check_cfg (a_intcfg_t *cfg);
+void a_mem_deinit (void);
 
 void error_handle (void);
 
