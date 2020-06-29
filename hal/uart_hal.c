@@ -6,8 +6,10 @@
 
 #if defined(STM32H745xx) || defined(STM32H747xx)
 #include <stm32h7xx_hal.h>
+#include <stm32h7xx_hal_uart.h>
 #elif defined(STM32F769xx)
 #include <stm32f7xx_hal.h>
+#include <stm32f7xx_hal_uart.h>
 #else
 #error
 #endif
@@ -148,6 +150,14 @@ static void uart1_dma_init (uart_hal_t *uart_desc)
 
     uart_desc->tty.irqmask = uart_hal_wdog_tim.irqmask;
 
+#if defined(STM32H745xx) || defined(STM32H747xx)
+    if(HAL_UART_Receive_IT(huart, (uint8_t *)&uart_desc->tty.rxbuf.dmabuf[1], 1) != HAL_OK)
+    {
+        for (;;) {}
+    }
+
+#elif defined(STM32F769xx)
+
     hdma_rx = &uart_desc->phy->hdma_rx;
 #if defined(STM32F769xx)
     hdma_rx->Instance                 = DMA2_Stream2;
@@ -175,11 +185,13 @@ static void uart1_dma_init (uart_hal_t *uart_desc)
     irqmask2 = irqmask2 & (~irqmask);
 
     uart_desc->phy->irq_rxdma = uart1_rx_dma_conf.irq;
-    if(HAL_UART_Receive_DMA(huart, (uint8_t *)uart_desc->tty.rxbuf->dmabuf, sizeof(uart_desc->tty.rxbuf->dmabuf)) != HAL_OK)
+    if(HAL_UART_Receive_DMA(huart, (uint8_t *)uart_desc->tty.rxbuf.dmabuf, sizeof(uart_desc->tty.rxbuf.dmabuf)) != HAL_OK)
     {
         for (;;) {}
     }
     uart_desc->phy->uart_irq_mask |= irqmask2;
+
+#endif /*defined(STM32F769xx)*/
 }
 
 static void uart1_dma_deinit (uart_hal_t *uart_desc)
@@ -376,15 +388,15 @@ static void dma_rx_handle_irq (const DMA_Stream_TypeDef *source)
 
 static void hal_tty_rx_cplt_hander (uart_hal_t *uart_desc, uint8_t full)
 {
-    int dmacplt = sizeof(uart_desc->tty.rxbuf->dmabuf) / 2;
+    int dmacplt = sizeof(uart_desc->tty.rxbuf.dmabuf) / 2;
     int cnt = dmacplt;
     char *src;
 
-    src = &uart_desc->tty.rxbuf->dmabuf[full * dmacplt];
+    src = &uart_desc->tty.rxbuf.dmabuf[full * dmacplt];
 
     while (cnt) {
-        uart_desc->tty.rxbuf->fifo[uart_desc->tty.rxbuf->fifoidx++ & (DMA_RX_FIFO_SIZE - 1)] = *src;
-        uart_desc->tty.rxbuf->eof |= __tty_is_crlf_char(*src);
+        uart_desc->tty.rxbuf.fifo[uart_desc->tty.rxbuf.fifoidx++ & (DMA_RX_FIFO_SIZE - 1)] = *src;
+        uart_desc->tty.rxbuf.eof |= __tty_is_crlf_char(*src);
         src++; cnt--;
     }
 }
@@ -401,7 +413,7 @@ static int hal_tty_rx_poll (serial_tty_t *tty, char *dest, int *pcnt)
 {
     uart_hal_t *uart_desc = container_of(tty, uart_hal_t, tty);
     irqmask_t irq = uart_desc->phy->uart_irq_mask;
-    tty_rxbuf_t *rx = tty->rxbuf;
+    tty_rxbuf_t *rx = &tty->rxbuf;
     int cnt = (int)(rx->fifoidx - rx->fifordidx), bytesleft = 0;
 
     /*TODO : remove 0x3*/
@@ -508,7 +520,14 @@ void HAL_UART_RxHalfCpltCallback (UART_HandleTypeDef* huart)
 
 void HAL_UART_RxCpltCallback (UART_HandleTypeDef* huart)
 {
+    uart_hal_t *hal = hal_tty_get_desc_4_phy(huart->Instance);
     hal_tty_rx_cplt_any(1);
+#if defined(STM32H745xx) || defined(STM32H747xx)
+    if(HAL_UART_Receive_IT(huart, (uint8_t *)&hal->tty.rxbuf.dmabuf[1], 1) != HAL_OK)
+    {
+        for (;;) {}
+    }
+#endif
 }
 
 static uart_hal_t *hal_tty_get_desc_4_phy (void *source)
