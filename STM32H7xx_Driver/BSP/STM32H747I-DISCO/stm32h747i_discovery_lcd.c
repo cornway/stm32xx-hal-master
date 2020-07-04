@@ -408,7 +408,7 @@ int32_t BSP_LCD_DeInit(uint32_t Instance)
 
 void BSP_LCD_DeInitEx (void)
 {
-    HAL_LTDC_DeInit(&hlcd_ltdc);
+    BSP_LCD_DeInit(0);
 }
 
 #if (USE_LCD_CTRL_ADV7533 > 0)

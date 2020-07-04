@@ -98,6 +98,7 @@ static jpeg_hal_ctxt_t jpeg_hal_ctxt = {0};
 
 /* Private function prototypes -----------------------------------------------*/
 int JPEG_Decode_DMA(JPEG_HandleTypeDef *hjpeg, void *data, uint32_t size, uint32_t DestAddress);
+int JPEG_Decode(JPEG_HandleTypeDef *hjpeg, void *data, uint32_t size, uint32_t DestAddress);
 uint32_t JPEG_OutputHandler(JPEG_HandleTypeDef *hjpeg);
 void JPEG_InputHandler(JPEG_HandleTypeDef *hjpeg);
 static int JPEG_Abort (JPEG_HandleTypeDef *hjpeg);
@@ -115,13 +116,19 @@ static void *bytestream_move (byte_stream_t *stream, uint32_t *len)
     return stream->ptr + oldpos;
 }
 
+
+#if defined(USE_STM32F769I_DISCO)
+
 int JPEG_Decode_HAL (jpeg_info_t *info, void *tempbuf, void *data, uint32_t size)
 {
     int err, done;
 
     err = JPEG_Decode_DMA(&jpeg_hal_ctxt.hal_jpeg, data, size, (uint32_t)tempbuf);
 
-    if (err < 0) return -1;
+    if (err < 0) {
+        heap_free(jpeg_hal_ctxt.outtab[0].DataBuffer);
+        return -1;
+    }
 
     do
     {
@@ -185,11 +192,90 @@ int JPEG_Decode_DMA(JPEG_HandleTypeDef *hjpeg, void *data, uint32_t size, uint32
         ptr += CHUNK_SIZE_OUT;
     }
 
+
     status = HAL_JPEG_Decode_DMA(hjpeg , jpeg_hal_ctxt.intab[0].DataBuffer ,jpeg_hal_ctxt.intab[0].DataBufferSize,
                                     jpeg_hal_ctxt.outtab[0].DataBuffer, CHUNK_SIZE_OUT);
-
     return status == HAL_OK ? 0 : -1;
 }
+
+#elif defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
+
+int JPEG_Decode_HAL (jpeg_info_t *info, void *tempbuf, void *data, uint32_t size)
+{
+    int err;
+
+    err = JPEG_Decode(&jpeg_hal_ctxt.hal_jpeg, data, size, (uint32_t)tempbuf);
+
+    if (err < 0) {
+        heap_free(jpeg_hal_ctxt.outtab[0].DataBuffer);
+        return -1;
+    }
+
+    heap_free(jpeg_hal_ctxt.outtab[0].DataBuffer);
+
+    JPEG_Info_HAL(info);
+    return 0;
+}
+
+
+/**
+  * @brief  Decode_DMA
+  * @param hjpeg: JPEG handle pointer
+  * @param  FileName    : jpg file path for decode.
+  * @param  DestAddress : ARGB destination Frame Buffer Address.
+  * @retval None
+  */
+int JPEG_Decode(JPEG_HandleTypeDef *hjpeg, void *data, uint32_t size, uint32_t DestAddress)
+{
+    uint32_t i, len;
+    uint8_t *ptr;
+    HAL_StatusTypeDef status;
+
+    jpeg_hal_ctxt.convert_func = NULL;
+    jpeg_hal_ctxt.framebuf = NULL;
+    jpeg_hal_ctxt.hw_end = 0;
+    jpeg_hal_ctxt.inread_idx = 0;
+    jpeg_hal_ctxt.inwrite_idx = 0;
+    jpeg_hal_ctxt.mcuidx = 0;
+    jpeg_hal_ctxt.mcunum = 0;
+    jpeg_hal_ctxt.output_paused = 0;
+    jpeg_hal_ctxt.outread_idx = 0;
+    jpeg_hal_ctxt.outwrite_idx = 0;
+
+    jpeg_hal_ctxt.instream.pos = 0;
+    jpeg_hal_ctxt.instream.ptr = (uint8_t *)data;
+    jpeg_hal_ctxt.instream.size = size;
+    jpeg_hal_ctxt.framebuf = (void *)DestAddress;
+
+    len = CHUNK_SIZE_IN;
+    for(i = 0; i < NB_INPUT_DATA_BUFFERS && len; i++)
+    {
+        jpeg_hal_ctxt.intab[i].DataBuffer = (uint8_t *)bytestream_move(&jpeg_hal_ctxt.instream, &len);
+        jpeg_hal_ctxt.intab[i].DataBufferSize = len;
+        jpeg_hal_ctxt.intab[i].State = (len == CHUNK_SIZE_IN) ? JPEG_BUFFER_FULL : JPEG_BUFFER_EMPTY;
+    }
+
+    ptr = (uint8_t *)heap_alloc_shared(NB_OUTPUT_DATA_BUFFERS * CHUNK_SIZE_OUT);
+    d_memset(ptr, 0, NB_OUTPUT_DATA_BUFFERS * CHUNK_SIZE_OUT);
+
+    for (i = 0; i < NB_OUTPUT_DATA_BUFFERS; i++)
+    {
+        jpeg_hal_ctxt.outtab[i].DataBuffer = ptr;
+        jpeg_hal_ctxt.outtab[i].DataBufferSize = 0;
+        jpeg_hal_ctxt.outtab[i].State = JPEG_BUFFER_EMPTY;
+        ptr += CHUNK_SIZE_OUT;
+    }
+
+    status = HAL_JPEG_Decode(hjpeg , jpeg_hal_ctxt.intab[0].DataBuffer ,jpeg_hal_ctxt.intab[0].DataBufferSize,
+                                    jpeg_hal_ctxt.outtab[0].DataBuffer, CHUNK_SIZE_OUT, 1000);
+    return status == HAL_OK ? 0 : -1;
+}
+
+
+#else
+#error
+#endif
+
 
 /**
   * @brief  JPEG Ouput Data BackGround Postprocessing .
@@ -373,7 +459,7 @@ void HAL_JPEG_DecodeCpltCallback(JPEG_HandleTypeDef *hjpeg)
 
 void HAL_JPEG_MspInit(JPEG_HandleTypeDef *hjpeg)
 {
-#if defined(USE_STM32F769_DISCO)
+#if defined(USE_STM32F769I_DISCO)
   static DMA_HandleTypeDef   hdmaIn;
   static DMA_HandleTypeDef   hdmaOut;
   
@@ -441,7 +527,11 @@ void HAL_JPEG_MspInit(JPEG_HandleTypeDef *hjpeg)
   __HAL_LINKDMA(hjpeg, hdmaout, hdmaOut);
   
   HAL_NVIC_SetPriority(DMA2_Stream4_IRQn, 0x07, 0x0F);
-  HAL_NVIC_EnableIRQ(DMA2_Stream4_IRQn);   
+  HAL_NVIC_EnableIRQ(DMA2_Stream4_IRQn);
+#elif defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
+    __HAL_RCC_JPEG_CLK_ENABLE();
+#else
+#error
 #endif
 }
 
