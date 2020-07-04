@@ -122,7 +122,7 @@
 /** @addtogroup STM32H7xx_System_Private_FunctionPrototypes
   * @{
   */
-#if defined (DATA_IN_ExtSDRAM)
+#if defined (DATA_IN_ExtSDRAM) || defined(APPLICATION)
   static void SystemInit_ExtMemCtl(void); 
 #endif /* DATA_IN_ExtSDRAM */
 
@@ -211,7 +211,7 @@ void SystemInit (void)
     *((__IO uint32_t*)0x51008108) = 0x00000001U;
   }
   
-#if defined (DATA_IN_ExtSDRAM)
+#if defined (DATA_IN_ExtSDRAM) || defined(APPLICATION)
   SystemInit_ExtMemCtl(); 
 #endif /* DATA_IN_ExtSDRAM */
  
@@ -364,7 +364,7 @@ void SystemCoreClockUpdate (void)
   SystemCoreClock = common_system_clock;
 #endif /* DUAL_CORE && CORE_CM4 */
 }
-#if defined (DATA_IN_ExtSDRAM)
+#if defined (DATA_IN_ExtSDRAM) || defined(APPLICATION)
 /**
   * @brief  Setup the external memory controller.
   *         Called in startup_stm32h7xx.s before jump to main.
@@ -531,7 +531,7 @@ void SystemInit_ExtMemCtl(void)
 
   (void)(tmp);
 }
-#endif /* DATA_IN_ExtSDRAM */
+#endif /* DATA_IN_ExtSDRAM || APPLICATION*/
 
   
 /**

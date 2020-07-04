@@ -1,6 +1,10 @@
 
 #include <stm32h7xx_hal.h>
 
+#include <arch.h>
+#include <debug.h>
+#include <heap.h>
+#include <bsp_api.h>
 #include <bsp_sys.h>
 
 #define HSEM_ID_0 (0U)
@@ -27,7 +31,7 @@ void CPU_CACHE_Disable (void)
 
 static void clock_fault (void)
 {
-    arch_rise(NULL);
+    for (;;) {}
 }
 
 static void SystemClock_Config(void)
@@ -51,6 +55,11 @@ static void SystemClock_Config(void)
 
 int dev_hal_init (void)
 {
-    SystemClock_Config();
     HAL_Init();
+
+    /* Configure the Cortex-M4 ART Base address to D2_AXISRAM_BASE : 0x10000000 : */
+    __HAL_ART_CONFIG_BASE_ADDRESS(D2_AXISRAM_BASE);
+
+    while (1)
+    {}
 }

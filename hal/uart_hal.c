@@ -248,10 +248,18 @@ static const msp_func_tbl_t uart1_msp_func[] =
 
 static int hal_tty_uart_deinit (uart_hal_t *uart_desc)
 {
+    tty_txbuf_t *tx, *tx_next = NULL;
     if(HAL_UART_DeInit(&uart_desc->phy->handle) != HAL_OK) {
         return -1;
     }
     uart_desc->phy->dma_deinit(uart_desc);
+
+    tx = uart_desc->tty.txbuf_rdy.head;
+    while (tx) {
+        tx_next = tx->next;
+        heap_free(tx);
+        tx = tx_next;
+    }
     return 0;
 }
 

@@ -61,15 +61,28 @@ __DMA_on_tx_complete (isr_status_e status)
 void
 a_hal_configure (a_intcfg_t *cfg)
 {
+  uint8_t ret;
   a_buf_t master;
   irqmask_t irq_flags;
   irq_bmap(&irq_flags);
 
   a_get_master_base(&master);
 #if defined(USE_STM32F769I_DISCO)
-  BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, cfg->volume, cfg->samplerate);
-  BSP_AUDIO_OUT_SetAudioFrameSlot(CODEC_AUDIOFRAME_SLOT_02);
-  BSP_AUDIO_OUT_Play((uint16_t *)master.buf, AUDIO_SAMPLES_2_BYTES(master.samples));
+  ret = BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, cfg->volume, cfg->samplerate);
+  if (ret) {
+    dprintf("%s() : Init failed!\n", __func__);
+    return;
+  }
+  ret = BSP_AUDIO_OUT_SetAudioFrameSlot(CODEC_AUDIOFRAME_SLOT_02);
+  if (ret) {
+    dprintf("%s() : Set frame slot failed!\n", __func__);
+    return;
+  }
+  ret = BSP_AUDIO_OUT_Play((uint16_t *)master.buf, AUDIO_SAMPLES_2_BYTES(master.samples));
+  if (ret) {
+    dprintf("%s() : Play failed!\n", __func__);
+    return;
+  }
 #elif defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
   BSP_AUDIO_Init_t init;
 
@@ -78,9 +91,16 @@ a_hal_configure (a_intcfg_t *cfg)
   init.Device = WM8994_OUT_HEADPHONE;
   init.SampleRate = cfg->samplerate;
   init.Volume = cfg->volume;
-  BSP_AUDIO_OUT_Init(0, &init);
+  ret = BSP_AUDIO_OUT_Init(0, &init);
+  if (ret) {
+    dprintf("%s() : Init failed!\n", __func__);
+    return;
+  }
   BSP_AUDIO_OUT_Play(0, (uint8_t *)master.buf, AUDIO_SAMPLES_2_BYTES(master.samples));
-
+  if (ret) {
+    dprintf("%s() : Play failed!\n", __func__);
+    return;
+  }
 #else
 #error
 #endif
@@ -97,7 +117,7 @@ void a_hal_shutdown (void)
 
 void a_hal_deinit(void)
 {
-  BSP_AUDIO_OUT_DeInit();
+  BSP_AUDIO_OUT_Stop(CODEC_PDWN_SW);
   BSP_AUDIO_OUT_DeInit();
 }
 
@@ -121,7 +141,7 @@ void BSP_AUDIO_OUT_Error_CallBack(void)
 
 void a_hal_deinit(void)
 {
-  BSP_AUDIO_OUT_DeInit(0);
+  BSP_AUDIO_OUT_Stop(0);
   BSP_AUDIO_OUT_DeInit(0);
 }
 

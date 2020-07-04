@@ -175,7 +175,7 @@ void SD_Deinitialize(void)
 #if defined(USE_STM32F769I_DISCO)
     BSP_SD_DeInit();
 #else
-    BSP_SD_DeInit(0);    
+    BSP_SD_DeInit(0);
 #endif
 }
 

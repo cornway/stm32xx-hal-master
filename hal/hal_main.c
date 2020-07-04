@@ -23,10 +23,12 @@
 
 #if defined(USE_STM32H747I_DISCO)
 #include "stm32h747i_discovery.h"
+#include "stm32h747i_discovery_bus.h"
 #elif defined(USE_STM32F769I_DISCO)
 #include "stm32f769i_discovery.h"
 #elif defined(USE_STM32H745I_DISCO)
 #include "stm32h745i_discovery.h"
+#include "stm32h745i_discovery_bus.h"
 #else /*USE_STM32F769I_DISCO*/
 #error "Not supported"
 #endif /*USE_STM32F769I_DISCO*/
@@ -248,8 +250,23 @@ static void SystemClock_Config(void)
     /* Enable SYSCFG clock mondatory for I/O Compensation Cell */
     __HAL_RCC_SYSCFG_CLK_ENABLE() ;
 
-    /* Enables the I/O Compensation Cell */    
+    /* Enables the I/O Compensation Cell */
     HAL_EnableCompensationCell();
+}
+
+void CM4_LoadCode (void)
+{
+    extern  const char * cm4_code; /* section containing CM4 Code */
+    extern  const char * cm4_code_end; /* section containing CM4 Code */
+
+    /* Copy CM4 code from Flash to D2_SRAM memory */
+    d_memcpy((void *)D2_AXISRAM_BASE,  &cm4_code, &cm4_code_end - &cm4_code);
+    
+    /* Configure the boot address for CPU2 (Cortex-M4) */
+    HAL_SYSCFG_CM4BootAddConfig(SYSCFG_BOOT_ADDR0, D2_AXISRAM_BASE);
+    
+    /* Enable CPU2 (Cortex-M4) boot regardless of option byte values */
+    HAL_RCCEx_EnableBootCore(RCC_BOOT_C2);
 }
 
 #else
@@ -294,15 +311,26 @@ int dev_hal_preinit (void)
     CPU_CACHE_Enable();
     HAL_Init();
     SystemClock_Config();
+#if defined(STM32H745xx) || defined(STM32H747xx)
+    CM4_LoadCode();
+#endif
     return 0;
 }
 
 int dev_hal_init (void)
 {
+    dev_hal_preinit();
     dev_hal_gpio_init();
-    hal_tty_vcom_attach();
+    mpu_init();
+    heap_init();
+    return 0;
+}
 
-    cs_load_code(NULL, NULL, 0);
+int dev_hal_deinit (void)
+{
+#if defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
+    BSP_I2C4_DeInit();
+#endif
     return 0;
 }
 
@@ -428,3 +456,13 @@ void input_hal_read_ts (ts_status_t *ts_status)
     };
     ts_prev_state = state;
 }
+
+#if defined(STM32H745xx) || defined(STM32H747xx)
+
+void CM4_SEV_IRQHandler (void)
+{
+
+}
+
+#endif
+

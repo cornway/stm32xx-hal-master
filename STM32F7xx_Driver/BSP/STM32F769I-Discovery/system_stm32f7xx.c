@@ -61,7 +61,11 @@
   * @{
   */
 
+#if defined(STM32H747xx)
+#include "stm32h7xx.h"
+#else
 #include "stm32f7xx.h"
+#endif
 
 #if !defined  (HSE_VALUE) 
   #define HSE_VALUE    ((uint32_t)25000000) /*!< Default value of the External oscillator in Hz */
