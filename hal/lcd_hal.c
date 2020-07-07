@@ -21,6 +21,7 @@
 #include <heap.h>
 #include <gfx.h>
 #include <gfx2d_mem.h>
+#include <smp.h>
 #include <lcd_main.h>
 #include <lcd_int.h>
 #include <nvic.h>
@@ -691,6 +692,18 @@ d_bool screen_hal_ts_available (void)
         return d_false;
     }
     return d_true;
+}
+
+int screen_hal_smp_avail (void)
+{
+    return 1;
+}
+
+hal_smp_task_t *screen_hal_sched_task (void (*func) (void *), gfx_2d_buf_t *dest, gfx_2d_buf_t *src)
+{
+    gfx_2d_buf_pair_t buf = {*dest, *src};
+
+    return hal_smp_sched_task(func, &buf, sizeof(buf));
 }
 
 void DMA2D_IRQHandler(void)

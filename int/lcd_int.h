@@ -37,7 +37,7 @@ typedef struct {
 
 typedef void (*screen_update_handler_t) (screen_t *in);
 
-lcd_layers_t screen_hal_set_layer (lcd_t *cfg);
+void _screen_hal_reload_layer (lcd_t *cfg);
 int screen_hal_init (int init);
 void screen_hal_attach (lcd_t *cfg);
 void *screen_hal_set_config (lcd_t *cfg, int x, int y,
@@ -51,12 +51,12 @@ int screen_hal_scale_h8_2x2 (lcd_t *cfg, copybuf_t *copybuf, int interleave);
 int screen_gfx8_copy_line (lcd_t *cfg, void *dest, void *src, int w);
 int screen_gfx8888_copy (lcd_t *cfg, gfx_2d_buf_t *dest, gfx_2d_buf_t *src);
 
-static inline void screen_hal_layreload (lcd_t *cfg)
+static inline void screen_hal_reload_layer (lcd_t *lcd)
 {
-    if (cfg->config.laynum < 2) {
+    if (lcd->config.laynum < 2) {
         return;
     }
-    cfg->ready_lay_idx = screen_hal_set_layer(cfg);
+    _screen_hal_reload_layer(lcd);
 }
 
 void vid_line_event_callback (lcd_t *lcd);
@@ -72,6 +72,9 @@ extern uint32_t bsp_lcd_height;
 extern const lcd_layers_t layer_switch[LCD_MAX_LAYER];
 extern const uint32_t screen_mode2pixdeep[GFX_COLOR_MODE_MAX];
 extern lcd_t *lcd;
+
+hal_smp_task_t *screen_hal_sched_task (void (*func) (void *), gfx_2d_buf_t *dest, gfx_2d_buf_t *src);
+int screen_hal_smp_avail (void);
 
 #ifdef __cplusplus
     }

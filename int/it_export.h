@@ -19,6 +19,8 @@ extern void AUDIO_OUT_SAIx_DMAx_IRQHandler(void);
 
 extern void BSP_SDMMC_DMA_Tx_IRQHandler (void);
 extern void BSP_SDMMC_DMA_Rx_IRQHandler (void);
+
+extern void SDMMC1_IRQHandler (void);
 extern void SDMMC2_IRQHandler (void);
 
 extern void USART1_IRQHandler (void);
@@ -45,6 +47,13 @@ extern void DMA2_Stream4_IRQHandler (void);
 extern void DMA2_Stream5_IRQHandler (void);
 extern void DMA2_Stream6_IRQHandler (void);
 extern void DMA2_Stream7_IRQHandler (void);
+
+extern void OTG_HS_IRQHandler(void);
+extern void OTG_FS_IRQHandler(void);
+
+extern void DSI_IRQHandler(void);
+extern void LTDC_IRQHandler (void);
+extern void DMA2D_IRQHandler (void);
 
 
 #ifdef __cplusplus
