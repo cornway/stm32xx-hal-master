@@ -109,7 +109,7 @@ static int screen_hal_copy_next (screen_hal_ctxt_t *ctxt);
 
 #if defined(USE_STM32F769I_DISCO)
 
-lcd_layers_t screen_hal_set_layer (lcd_t *cfg)
+lcd_layers_t _screen_hal_reload_layer (lcd_t *cfg)
 {
     lcd_layers_t nextlay;
 
@@ -136,7 +136,7 @@ lcd_layers_t screen_hal_set_layer (lcd_t *cfg)
 
 #elif defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
 
-lcd_layers_t screen_hal_set_layer (lcd_t *lcd)
+void _screen_hal_reload_layer (lcd_t *lcd)
 {
     lcd_layers_t nextlay;
 
@@ -152,7 +152,9 @@ lcd_layers_t screen_hal_set_layer (lcd_t *lcd)
         break;
     }
     lcd->pending_lay_idx = lcd->ready_lay_idx;
-    return nextlay;
+    lcd->ready_lay_idx = nextlay;
+    GET_VHAL_CTXT(lcd)->waitreload = 1U;
+    HAL_LTDC_ProgramLineEvent(GET_VHAL_LTDC(lcd), 0);
 }
 
 #else /* defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO) */
@@ -245,8 +247,7 @@ void screen_hal_attach (lcd_t *lcd)
     screen_hal_ctxt.lcd = lcd;
 }
 
-void *
-screen_hal_set_config (lcd_t *lcd, int x, int y, int w, int h, uint8_t colormode)
+void *screen_hal_set_config (lcd_t *lcd, int x, int y, int w, int h, uint8_t colormode)
 {
     int layer;
 #if defined(USE_STM32F769I_DISCO)
@@ -279,15 +280,15 @@ screen_hal_set_config (lcd_t *lcd, int x, int y, int w, int h, uint8_t colormode
     layer = 0;
     Layercfg->FBStartAdress = (uint32_t)lcd->lay_mem[layer];
 
-    if (!HAL_LTDC_ConfigLayer(GET_VHAL_LTDC(lcd), Layercfg, layer)) {
-        HAL_LTDC_ProgramLineEvent(GET_VHAL_LTDC(lcd), 0);
+    if (HAL_LTDC_ConfigLayer(GET_VHAL_LTDC(lcd), Layercfg, layer)) {
+        dprintf("%s() Failed\n", __func__);
+        return NULL;
     }
     return Layercfg;
 }
 
 static inline void __screen_hal_vsync (lcd_t *lcd)
 {
-    GET_VHAL_CTXT(lcd)->waitreload = 1;
     while (GET_VHAL_CTXT(lcd)->waitreload) {
         HAL_Delay(1);
     }
@@ -725,8 +726,6 @@ void HAL_LTDC_LineEventCallback(LTDC_HandleTypeDef *hltdc)
       
       lcd->pending_lay_idx = LCD_MAX_LAYER;
     }
-
-    HAL_LTDC_ProgramLineEvent(hltdc, 0);
 }
 
 

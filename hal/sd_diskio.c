@@ -706,6 +706,26 @@ void SDMMC2_IRQHandler (void)
     HAL_SD_IRQHandler(&uSdHandle);
 }
 
+void SDMMC1_IRQHandler (void)
+{
+    HAL_SD_IRQHandler(&uSdHandle);
+}
+
+#else
+
+extern SD_HandleTypeDef hsd_sdmmc[SD_INSTANCES_NBR];
+
+void SDMMC2_IRQHandler (void)
+{
+    HAL_SD_IRQHandler(&hsd_sdmmc[0]);
+}
+
+void SDMMC1_IRQHandler (void)
+{
+    HAL_SD_IRQHandler(&hsd_sdmmc[0]);
+}
+
 #endif
+
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
 

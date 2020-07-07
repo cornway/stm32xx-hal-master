@@ -556,7 +556,7 @@ int JPEG_Info_HAL (jpeg_info_t *info)
     return 0;
 }
 
-static int JPEG_Abort (JPEG_HandleTypeDef *hjpeg)
+int JPEG_Abort (JPEG_HandleTypeDef *hjpeg)
 {
     HAL_JPEG_Abort(hjpeg);
     return 0;
