@@ -24,6 +24,7 @@
 
 #if AUDIO_MODULE_PRESENT
 
+extern audio_t *audio;
 extern SAI_HandleTypeDef haudio_out_sai;
 
 isr_status_e g_audio_isr_status = A_ISR_NONE;
@@ -37,6 +38,7 @@ __DMA_on_tx_complete_isr (isr_status_e status)
     a_buf_t master;
     g_audio_isr_status = status;
     a_get_master4idx(&master, status == A_ISR_HALF ? 0 : 1);
+    master.audio = audio;
     a_paint_buff_helper(&master);
 }
 
@@ -61,46 +63,46 @@ __DMA_on_tx_complete (isr_status_e status)
 void
 a_hal_configure (a_intcfg_t *cfg)
 {
-  uint8_t ret;
-  a_buf_t master;
-  irqmask_t irq_flags;
-  irq_bmap(&irq_flags);
+    uint8_t ret;
+    a_buf_t master;
+    irqmask_t irq_flags;
+    irq_bmap(&irq_flags);
 
-  a_get_master_base(&master);
+    a_get_master_base(&master);
 #if defined(USE_STM32F769I_DISCO)
-  ret = BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, cfg->volume, cfg->samplerate);
-  if (ret) {
-    dprintf("%s() : Init failed!\n", __func__);
-    return;
-  }
-  ret = BSP_AUDIO_OUT_SetAudioFrameSlot(CODEC_AUDIOFRAME_SLOT_02);
-  if (ret) {
-    dprintf("%s() : Set frame slot failed!\n", __func__);
-    return;
-  }
-  ret = BSP_AUDIO_OUT_Play((uint16_t *)master.buf, AUDIO_SAMPLES_2_BYTES(master.samples));
-  if (ret) {
-    dprintf("%s() : Play failed!\n", __func__);
-    return;
-  }
+    ret = BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, cfg->volume, cfg->samplerate);
+    if (ret) {
+        dprintf("%s() : Init failed!\n", __func__);
+        return;
+    }
+    ret = BSP_AUDIO_OUT_SetAudioFrameSlot(CODEC_AUDIOFRAME_SLOT_02);
+    if (ret) {
+        dprintf("%s() : Set frame slot failed!\n", __func__);
+        return;
+    }
+    ret = BSP_AUDIO_OUT_Play((uint16_t *)master.buf, AUDIO_SAMPLES_2_BYTES(master.samples));
+    if (ret) {
+        dprintf("%s() : Play failed!\n", __func__);
+        return;
+    }
 #elif defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
-  BSP_AUDIO_Init_t init;
+    BSP_AUDIO_Init_t init;
 
-  init.BitsPerSample = cfg->samplebits;
-  init.ChannelsNbr = cfg->channels;
-  init.Device = WM8994_OUT_HEADPHONE;
-  init.SampleRate = cfg->samplerate;
-  init.Volume = cfg->volume;
-  ret = BSP_AUDIO_OUT_Init(0, &init);
-  if (ret) {
-    dprintf("%s() : Init failed!\n", __func__);
-    return;
-  }
-  BSP_AUDIO_OUT_Play(0, (uint8_t *)master.buf, AUDIO_SAMPLES_2_BYTES(master.samples));
-  if (ret) {
-    dprintf("%s() : Play failed!\n", __func__);
-    return;
-  }
+    init.BitsPerSample = cfg->samplebits;
+    init.ChannelsNbr = cfg->channels;
+    init.Device = WM8994_OUT_HEADPHONE;
+    init.SampleRate = cfg->samplerate;
+    init.Volume = cfg->volume;
+    ret = BSP_AUDIO_OUT_Init(0, &init);
+    if (ret) {
+        dprintf("%s() : Init failed!\n", __func__);
+        return;
+    }
+    BSP_AUDIO_OUT_Play(0, (uint8_t *)master.buf, AUDIO_SAMPLES_2_BYTES(master.samples));
+    if (ret) {
+        dprintf("%s() : Play failed!\n", __func__);
+        return;
+    }
 #else
 #error
 #endif
@@ -141,8 +143,8 @@ void BSP_AUDIO_OUT_Error_CallBack(void)
 
 void a_hal_deinit(void)
 {
-  BSP_AUDIO_OUT_Stop(0);
-  BSP_AUDIO_OUT_DeInit(0);
+    BSP_AUDIO_OUT_Stop(0);
+    BSP_AUDIO_OUT_DeInit(0);
 }
 
 void BSP_AUDIO_OUT_HalfTransfer_CallBack(uint32_t inst)

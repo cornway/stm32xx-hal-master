@@ -32,7 +32,12 @@ typedef struct {
     d_bool alloced;
 } mpu_reg_t;
 
-static mpu_reg_t mpu_reg_pool[MPU_REG_POOL_MAX];
+typedef struct {
+    mpu_reg_t reg_pool[MPU_REG_POOL_MAX];
+    d_bool initialized;
+} mpu_t;
+
+static mpu_t mpu;
 
 static uint32_t size_to_mpu_size (uint32_t *size_p);
 static int __mpu_unlock (int id);
@@ -41,10 +46,10 @@ static mpu_reg_t *mpu_alloc_reg (int *id)
 {
     int i;
     for (i = 0; i < MPU_REG_POOL_MAX; i++) {
-        if (mpu_reg_pool[i].alloced == d_false) {
-            mpu_reg_pool[i].alloced = d_true;
+        if (mpu.reg_pool[i].alloced == d_false) {
+            mpu.reg_pool[i].alloced = d_true;
             *id = i + MPU_REGION_NUMBER0;
-            return &mpu_reg_pool[i];
+            return &mpu.reg_pool[i];
         }
     }
     return NULL;
@@ -57,7 +62,8 @@ static void mpu_release_reg (mpu_reg_t *reg)
 
 void mpu_init (void)
 {
-    d_memset(mpu_reg_pool, 0, sizeof(mpu_reg_pool));
+    d_memset(&mpu, 0, sizeof(mpu));
+    mpu.initialized = d_true;
 }
 
 void mpu_deinit (void)
@@ -66,16 +72,16 @@ void mpu_deinit (void)
     int i;
 
     for (i = 0; i < MPU_REG_POOL_MAX; i++) {
-        if (mpu_reg_pool[i].alloced) {
-            initptr = &mpu_reg_pool[i].init;
+        if (mpu.reg_pool[i].alloced) {
+            initptr = &mpu.reg_pool[i].init;
 
             dprintf("%s() : unlocked region : <%p> - <%p>\n",
                     __func__, (void *)initptr->BaseAddress,
-                    (void *)(initptr->BaseAddress + mpu_reg_pool[i].size));
+                    (void *)(initptr->BaseAddress + mpu.reg_pool[i].size));
             __mpu_unlock(i);
         }
     }
-    d_memset(mpu_reg_pool, 0, sizeof(mpu_reg_pool));
+    d_memset(&mpu, 0, sizeof(mpu));
 }
 
 int mpu_lock (arch_word_t addr, arch_word_t *size, const char *mode)
@@ -86,6 +92,11 @@ int mpu_lock (arch_word_t addr, arch_word_t *size, const char *mode)
     uint8_t tex = 0;
     mpu_reg_t *reg;
     int id = 0;
+
+    if (!mpu.initialized) {
+        dprintf("%s() : Not initialized\n", __func__);
+        return -1;
+    }
 
     reg = mpu_alloc_reg(&id);
     if (!reg) {
@@ -179,7 +190,7 @@ static int __mpu_unlock (int id)
 {
     mpu_reg_t *reg;
 
-    reg = &mpu_reg_pool[id];
+    reg = &mpu.reg_pool[id];
     reg->init.Enable = MPU_REGION_DISABLE;
 
     HAL_MPU_Disable();
@@ -192,7 +203,13 @@ static int __mpu_unlock (int id)
 
 int mpu_unlock (arch_word_t addr, arch_word_t size)
 {
-    int id = mpu_read(addr, size);
+    int id;
+
+    if (!mpu.initialized) {
+        dprintf("%s() : Not initialized\n", __func__);
+        return -1;
+    }
+    id = mpu_read(addr, size);
 
     if (id < 0) {
         dprintf("%s() : Unable to find MPU region : <%p> - <%p>\n",
@@ -210,7 +227,7 @@ static int mpu_search (arch_word_t addr, arch_word_t size)
     int mpu_size;
 
     for (i = 0; i < MPU_REG_POOL_MAX; i++) {
-        reg = &mpu_reg_pool[i];
+        reg = &mpu.reg_pool[i];
         if (reg->init.BaseAddress == addr) {
             mpu_size = size_to_mpu_size(&size);
             assert(reg->init.Size == mpu_size);

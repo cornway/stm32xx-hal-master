@@ -37,6 +37,12 @@
 #define AUDIO_VOLUME_DEFAULT (60)
 #define A_MAX_MIX_SAMPLES 8
 
+typedef void (*a_mixer_callback_t) (int chan, void *stream, int len, void *udata);
+
+typedef struct a_channel_head_s a_channel_head_t;
+typedef struct a_channel_s a_channel_t;
+typedef struct audio_s audio_t;
+
 typedef struct mixdata_s {
     struct mixdata_s *next;
     int size;
@@ -45,13 +51,11 @@ typedef struct mixdata_s {
 } mixdata_t;
 
 typedef struct {
+    audio_t *audio;
     snd_sample_t *buf;
     int samples;
     d_bool *dirty;
 } a_buf_t;
-
-typedef struct a_channel_head_s a_channel_head_t;
-typedef struct a_channel_s a_channel_t;
 
 struct a_channel_s {
     a_channel_t *next;
@@ -92,6 +96,17 @@ typedef struct {
     irqmask_t irq;
 } a_intcfg_t;
 
+struct audio_s {
+    a_channel_t pool[AUDIO_MUS_CHAN_START + 1/*Music channel*/];
+    a_channel_head_t head;
+
+    d_bool force_stop;
+    irqmask_t irq_mask;
+
+    a_mixer_callback_t amixer_callback = NULL;
+    a_intcfg_t config;
+};
+
 #define a_chunk_len(chan) \
     ((chan)->inst.chunk.alen)
 
@@ -126,9 +141,9 @@ void a_dsr_hung_fuse (isr_status_e status);
 void a_paint_buff_helper (a_buf_t *abuf);
 int a_channel_link (a_channel_head_t *head, a_channel_t *link, uint8_t sort);
 int a_channel_unlink (a_channel_head_t *head, a_channel_t *node);
-void a_channel_remove (a_channel_t *desc);
+void a_channel_remove (audio_t *audio, a_channel_t *desc);
 void a_paint_buffer (a_channel_head_t *chanlist, a_buf_t *abuf, int compratio);
-uint8_t a_chanlist_try_reject_all (a_channel_head_t *chanlist);
+uint8_t a_chanlist_try_reject_all (audio_t *audio, a_channel_head_t *chanlist);
 a_intcfg_t *audio_current_config (void);
 
 void error_handle (void);

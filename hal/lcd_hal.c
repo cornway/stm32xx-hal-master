@@ -110,11 +110,11 @@ static int screen_hal_copy_next (screen_hal_ctxt_t *ctxt);
 
 #if defined(USE_STM32F769I_DISCO)
 
-lcd_layers_t _screen_hal_reload_layer (lcd_t *cfg)
+lcd_layers_t _screen_hal_reload_layer (lcd_t *lcd)
 {
     lcd_layers_t nextlay;
 
-    switch (cfg->ready_lay_idx) {
+    switch (lcd->fb.rd_idx) {
         case LCD_BACKGROUND:
             BSP_LCD_SelectLayer(LCD_BACKGROUND);
             BSP_LCD_SetTransparency(LCD_FOREGROUND, GFX_OPAQUE);
@@ -141,7 +141,7 @@ void _screen_hal_reload_layer (lcd_t *lcd)
 {
     lcd_layers_t nextlay;
 
-    switch (lcd->ready_lay_idx) {
+    switch (lcd->fb.rd_idx) {
         case LCD_BACKGROUND:
             nextlay = LCD_FOREGROUND;
         break;
@@ -152,8 +152,8 @@ void _screen_hal_reload_layer (lcd_t *lcd)
             assert(0);
         break;
     }
-    lcd->pending_lay_idx = lcd->ready_lay_idx;
-    lcd->ready_lay_idx = nextlay;
+    lcd->fb.pend_idx = lcd->fb.rd_idx;
+    lcd->fb.rd_idx = nextlay;
     GET_VHAL_CTXT(lcd)->waitreload = 1U;
     HAL_LTDC_ProgramLineEvent(GET_VHAL_LTDC(lcd), 0);
 }
@@ -279,7 +279,7 @@ void *screen_hal_set_config (lcd_t *lcd, int x, int y, int w, int h, uint8_t col
     Layercfg->ImageHeight = h;
 
     layer = 0;
-    Layercfg->FBStartAdress = (uint32_t)lcd->lay_mem[layer];
+    Layercfg->FBStartAdress = (uint32_t)lcd->fb.frame[layer];
 
     if (HAL_LTDC_ConfigLayer(GET_VHAL_LTDC(lcd), Layercfg, layer)) {
         dprintf("%s() Failed\n", __func__);
@@ -305,43 +305,43 @@ void screen_hal_sync (lcd_t *lcd, int wait)
     }
 }
 
-void screen_hal_post_sync (lcd_t *cfg)
+void screen_hal_post_sync (lcd_t *lcd)
 {
 }
 
-int screen_update_direct (lcd_t *cfg, screen_t *psrc)
+int screen_update_direct (lcd_t *lcd, screen_t *psrc)
 {
     copybuf_t buf = {NULL};
     screen_t *dest = &buf.dest, *src = &buf.src;
 
     if (!psrc) {
         psrc = src;
-        src->buf = cfg->lay_mem[layer_switch[cfg->ready_lay_idx]];
+        src->buf = lcd->fb.frame[layer_switch[lcd->fb.rd_idx]];
         src->x = 0;
         src->y = 0;
-        src->width = cfg->w;
-        src->height = cfg->h;
-        src->colormode = cfg->config.colormode;
+        src->width = lcd->fb.w;
+        src->height = lcd->fb.h;
+        src->colormode = lcd->config.colormode;
     }
-    dest->buf = cfg->lay_mem[cfg->ready_lay_idx];
+    dest->buf = lcd->fb.frame[lcd->fb.rd_idx];
     dest->x = 0;
     dest->y = 0;
-    dest->width = cfg->w;
-    dest->height = cfg->h;
-    dest->colormode = cfg->config.colormode;
-    if (GET_VHAL_CTXT(cfg)->poll) {
+    dest->width = lcd->fb.w;
+    dest->height = lcd->fb.h;
+    dest->colormode = lcd->config.colormode;
+    if (GET_VHAL_CTXT(lcd)->poll) {
         assert(screen_mode2pixdeep[dest->colormode]);
-        return screen_hal_copy_m2m(cfg, &buf, screen_mode2pixdeep[dest->colormode]);
+        return screen_hal_copy_m2m(lcd, &buf, screen_mode2pixdeep[dest->colormode]);
     } else {
         irqmask_t irq;
         int ret;
 
         irq_save(&irq);
-        if (GET_VHAL_CTXT(cfg)->bufq) {
+        if (GET_VHAL_CTXT(lcd)->bufq) {
             return 0;
         }
-        screen_copybuf_split(GET_VHAL_CTXT(cfg), &buf, 4);
-        ret = screen_hal_copy_next(GET_VHAL_CTXT(cfg));
+        screen_copybuf_split(GET_VHAL_CTXT(lcd), &buf, 4);
+        ret = screen_hal_copy_next(GET_VHAL_CTXT(lcd));
         irq_restore(irq);
         return ret;
     }
@@ -708,12 +708,14 @@ hal_smp_task_t *screen_hal_sched_task (void (*func) (void *), gfx_2d_buf_t *dest
 
 void DMA2D_IRQHandler(void)
 {
+    lcd_t *lcd = LCD();
     HAL_DMA2D_IRQHandler(GET_VHAL_DMA2D(lcd));
     GET_VHAL_CTXT(lcd)->busy = 0;
 }
 
 void DMA2D_XferCpltCallback (struct __DMA2D_HandleTypeDef * hdma2d)
 {
+    lcd_t *lcd = LCD();
     if (GET_VHAL_DMA2D(lcd) == hdma2d) {
         screen_dma2d_irq_hdlr(GET_VHAL_CTXT(lcd));
     }
@@ -721,23 +723,26 @@ void DMA2D_XferCpltCallback (struct __DMA2D_HandleTypeDef * hdma2d)
 
 void LTDC_IRQHandler (void)
 {
+    lcd_t *lcd = LCD();
     HAL_LTDC_IRQHandler(GET_VHAL_LTDC(lcd));
 }
 
 void HAL_LTDC_ReloadEventCallback(LTDC_HandleTypeDef *hltdc)
 {
+    lcd_t *lcd = LCD();
     GET_VHAL_CTXT(lcd)->waitreload = 0;
 }
 
 void HAL_LTDC_LineEventCallback(LTDC_HandleTypeDef *hltdc)
 {
+    lcd_t *lcd = LCD();
     GET_VHAL_CTXT(lcd)->waitreload = 0;
 
-    if(lcd->pending_lay_idx != LCD_MAX_LAYER) {
-      LTDC_LAYER(hltdc, LCD_BACKGROUND)->CFBAR = ((uint32_t)lcd->lay_mem[lcd->pending_lay_idx]);
+    if(lcd->fb.pend_idx != LCD_MAX_LAYER) {
+      LTDC_LAYER(hltdc, LCD_BACKGROUND)->CFBAR = ((uint32_t)lcd->fb.frame[lcd->fb.pend_idx]);
       __HAL_LTDC_RELOAD_CONFIG(hltdc); 
       
-      lcd->pending_lay_idx = LCD_MAX_LAYER;
+      lcd->fb.pend_idx = LCD_MAX_LAYER;
     }
 }
 

@@ -257,11 +257,11 @@ static void SystemClock_Config(void)
 
 void CM4_LoadCode (void)
 {
-    extern  const char * cm4_code; /* section containing CM4 Code */
-    extern  const char * cm4_code_end; /* section containing CM4 Code */
+    extern const char *cm4_code; /* section containing CM4 Code */
+    extern const char *cm4_code_end; /* section containing CM4 Code */
 
     /* Copy CM4 code from Flash to D2_SRAM memory */
-    d_memcpy((void *)D2_AXISRAM_BASE,  &cm4_code, &cm4_code_end - &cm4_code);
+    d_memcpy((void *)D2_AXISRAM_BASE,  &cm4_code, (char *)&cm4_code_end - (char *)&cm4_code);
     
     /* Configure the boot address for CPU2 (Cortex-M4) */
     HAL_SYSCFG_CM4BootAddConfig(SYSCFG_BOOT_ADDR0, D2_AXISRAM_BASE);

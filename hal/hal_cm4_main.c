@@ -16,6 +16,16 @@
 #include <smp.h>
 #include "../int/lcd_int.h"
 
+void cm4_led_on (void)
+{
+    BSP_LED_On(LED2);
+}
+
+void cm4_led_off (void)
+{
+    BSP_LED_Off(LED2);
+}
+
 void status_led_on (void)
 {
     BSP_LED_On(LED1);
@@ -44,15 +54,6 @@ void serial_led_on (void)
 void serial_led_off (void)
 {
     BSP_LED_Off(LED3);
-}
-
-static void clock_fault (void)
-{
-    for (;;) {}
-}
-
-static void SystemClock_Config(void)
-{
 }
 
 void msleep (volatile uint32_t sleep)
@@ -90,12 +91,27 @@ int cm4_hal_init (void)
     /* Configure the Cortex-M4 ART Base address to D2_AXISRAM_BASE : 0x10000000 : */
     __HAL_ART_CONFIG_BASE_ADDRESS(D2_AXISRAM_BASE);
 
-    m_init();
     hal_smp_init(1);
+    cm4_led_on();
+}
+
+void HSEM2_IRQHandler(void)
+{
+    HAL_HSEM_IRQHandler();
 }
 
 void SysTick_Handler (void)
 {
     HAL_IncTick();
+}
+
+void TIM3_IRQHandler (void)
+{
+
+}
+
+void USART6_IRQHandler (void)
+{
+
 }
 
