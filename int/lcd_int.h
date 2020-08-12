@@ -73,7 +73,6 @@ extern const lcd_layers_t layer_switch[LCD_MAX_LAYER];
 extern const uint32_t screen_mode2pixdeep[GFX_COLOR_MODE_MAX];
 extern lcd_t *lcd;
 
-hal_smp_task_t *screen_hal_sched_task (void (*func) (void *), gfx_2d_buf_t *dest, gfx_2d_buf_t *src);
 int screen_hal_smp_avail (void);
 
 #ifdef __cplusplus

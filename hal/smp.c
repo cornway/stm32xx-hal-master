@@ -165,7 +165,6 @@ hal_smp_task_t *hal_smp_sched_task (void (*func) (void *), void *usr, size_t usr
     }
     task_list->tail = task;
 
-    task->pending = 1;
     return task;
 }
 
@@ -173,8 +172,6 @@ hal_smp_task_t *hal_smp_next_task (void)
 {
     hal_smp_task_t *task = task_list->head;
     if (task) {
-        task->pending = 0;
-        task->executing = 1;
         if (task_list->tail == task) {
             task_list->head = NULL;
             task_list->tail = NULL;
@@ -187,7 +184,6 @@ hal_smp_task_t *hal_smp_next_task (void)
 
 void hal_smp_remove_task (hal_smp_task_t *task)
 {
-    task->executing = 0;
     m_free(task);
 }
 
