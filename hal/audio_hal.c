@@ -18,9 +18,12 @@
 #include <nvic.h>
 #include <bsp_api.h>
 #include <debug.h>
+#include <heap.h>
 #include <misc_utils.h>
 #include <audio_main.h>
 #include <audio_int.h>
+#include <bsp_cmd.h>
+#include <smp.h>
 
 #if AUDIO_MODULE_PRESENT
 
@@ -58,6 +61,58 @@ __DMA_on_tx_complete (isr_status_e status)
     } else {
         __DMA_on_tx_complete_dsr(status);
     }
+}
+
+typedef struct {
+    mixdata_t mixdata[AUDIO_MUS_CHAN_START + 1];
+    a_buf_t *abuf;
+    int compratio;
+    int mixcnt;
+} a_smp_task_arg_t;
+
+static hal_smp_task_t *task = NULL;
+
+static IRAMFUNC void __a_paint_buf_ex_smp_task (void *_arg);
+
+static IRAMFUNC void __a_paint_buf_ex_smp_task (void *_arg)
+{
+    a_smp_task_arg_t *arg = (a_smp_task_arg_t *)_arg;
+    int i, dirty = 0;
+
+    a_clear_abuf(arg->abuf);
+    for (i = 0; i < arg->mixcnt; i++) {
+        if (arg->mixdata[i].size) {
+            a_mix_single_to_master(arg->abuf->buf, &arg->mixdata[i], arg->compratio);
+        }
+    }
+}
+
+extern void m_free (void *p);
+
+int a_paint_buf_ex_smp_task (a_buf_t *abuf, mixdata_t *mixdata, int mixcnt, int compratio)
+{
+    int i, dirty = 0, hsem;
+    a_smp_task_arg_t arg;
+
+    for (i = 0; i < mixcnt; i++) {
+        if (mixdata[i].size) {
+            dirty++;
+        }
+    }
+    arg.abuf = abuf;
+    arg.compratio = compratio;
+    arg.mixcnt = mixcnt;
+    d_memcpy(arg.mixdata, mixdata, mixcnt * sizeof(mixdata[0]));
+    while (task && task->flags) {;}
+    if (task) {
+        m_free(task);
+    }
+    hsem = hal_smp_hsem_alloc("hsem_task");
+    assert(hsem >= 0);
+    hal_smp_hsem_spinlock(hsem);
+    task = hal_smp_sched_task(__a_paint_buf_ex_smp_task, &arg, sizeof(arg));
+    hal_smp_hsem_release(hsem);
+    return dirty;
 }
 
 void
@@ -108,6 +163,9 @@ a_hal_configure (a_intcfg_t *cfg)
 #endif
   irq_bmap(&cfg->irq);
   cfg->irq = cfg->irq & (~irq_flags);
+
+  audio->cvar_have_smp = 0;
+  cmd_register_i32(&audio->cvar_have_smp, "a_have_smp");
 }
 
 void a_hal_shutdown (void)

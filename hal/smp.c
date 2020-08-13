@@ -165,6 +165,7 @@ hal_smp_task_t *hal_smp_sched_task (void (*func) (void *), void *usr, size_t usr
     }
     task_list->tail = task;
 
+    task->flags |= HAL_SMP_TASK_PEND;
     return task;
 }
 
@@ -178,13 +179,15 @@ hal_smp_task_t *hal_smp_next_task (void)
         } else {
             task_list->head = task->next;
         }
+        task->flags &= ~HAL_SMP_TASK_PEND;
+        task->flags |= HAL_SMP_TASK_EXEC;
     }
     return task;
 }
 
 void hal_smp_remove_task (hal_smp_task_t *task)
 {
-    m_free(task);
+    task->flags = 0;
 }
 
 

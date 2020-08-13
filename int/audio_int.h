@@ -105,6 +105,7 @@ struct audio_s {
 
     a_mixer_callback_t amixer_callback = NULL;
     a_intcfg_t config;
+    int cvar_have_smp;
 };
 
 #define a_chunk_len(chan) \
@@ -146,6 +147,9 @@ void a_paint_buffer (a_channel_head_t *chanlist, a_buf_t *abuf, int compratio);
 uint8_t a_chanlist_try_reject_all (audio_t *audio, a_channel_head_t *chanlist);
 a_intcfg_t *audio_current_config (void);
 
+IRAMFUNC void
+a_mix_single_to_master (snd_sample_t *dest, mixdata_t *mixdata, int compratio);
+
 void error_handle (void);
 
 
@@ -163,6 +167,7 @@ void a_get_master4idx (a_buf_t *master, int idx);
 void a_grab_mixdata (a_channel_t *channel, a_buf_t *track, mixdata_t *mixdata);
 void a_clear_abuf (a_buf_t *abuf);
 void a_clear_master (void);
+int a_paint_buf_ex_smp_task (a_buf_t *abuf, mixdata_t *mixdata, int mixcnt, int compratio);
 d_bool a_wave_supported (wave_t *wave);
 void a_hal_check_cfg (a_intcfg_t *cfg);
 void a_mem_deinit (void);
