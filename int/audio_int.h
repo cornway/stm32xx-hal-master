@@ -165,7 +165,7 @@ void a_hal_deinit(void);
 void a_get_master_base (a_buf_t *master);
 void a_get_master4idx (a_buf_t *master, int idx);
 void a_grab_mixdata (a_channel_t *channel, a_buf_t *track, mixdata_t *mixdata);
-void a_clear_abuf (a_buf_t *abuf);
+IRAMFUNC void a_clear_abuf (a_buf_t *abuf);
 void a_clear_master (void);
 int a_paint_buf_ex_smp_task (a_buf_t *abuf, mixdata_t *mixdata, int mixcnt, int compratio);
 d_bool a_wave_supported (wave_t *wave);

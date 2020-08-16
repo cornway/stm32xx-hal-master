@@ -11,6 +11,10 @@
 #include <misc_utils.h>
 #include <heap.h>
 
+#ifdef CORE_CM7
+#include <mpu.h>
+#endif
+
 extern bspapi_t *_bsp_api_attach (arch_word_t *ptr, arch_word_t size);
 extern size_t _bsp_api_size (void);
 
@@ -46,6 +50,36 @@ void *task_pool;
 task_list_t *task_list;
 int core_id = 0;
 
+#ifdef CORE_CM7
+
+static void __MPU_Config(void)
+{
+  MPU_Region_InitTypeDef MPU_InitStruct;
+
+  /* Disable the MPU */
+  HAL_MPU_Disable();
+
+  /* Configure the MPU attributes as shareable for SRAM */
+  MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+  MPU_InitStruct.BaseAddress = D3_SRAM_BASE;
+  MPU_InitStruct.Size = MPU_REGION_SIZE_64KB;
+  MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+  MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
+  MPU_InitStruct.IsCacheable = MPU_ACCESS_CACHEABLE;
+  MPU_InitStruct.IsShareable = MPU_ACCESS_SHAREABLE;
+  MPU_InitStruct.Number = MPU_REGION_NUMBER15;
+  MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL0;
+  MPU_InitStruct.SubRegionDisable = 0x00;
+  MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_ENABLE;
+
+  HAL_MPU_ConfigRegion(&MPU_InitStruct);
+
+  /* Enable the MPU */
+  HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+}
+
+#endif
+
 int hal_smp_init (int _core_id)
 {
     uint8_t *mem = (uint8_t *)&__cm4_shared_base;
@@ -62,6 +96,12 @@ int hal_smp_init (int _core_id)
     if (_core_id) {
         return 0;
     }
+#ifdef CORE_CM7
+    else {
+        __MPU_Config();
+    }
+#endif
+
     core_id = _core_id;
     d_memzero(hsem_pool, sizeof(hsem_pool_t));
     for (id = 0; id < arrlen(hsem_pool->pool); id++) {
@@ -148,9 +188,9 @@ hal_smp_task_t *hal_smp_sched_task (void (*func) (void *), void *usr, size_t usr
     if (!task) {
         return NULL;
     }
+    d_memzero(task , sizeof(*task));
 
     task->func = func;
-    task->next = NULL;
     task->usr_size = usr_size;
     if (usr) {
         task->arg = task + 1;
@@ -188,6 +228,7 @@ hal_smp_task_t *hal_smp_next_task (void)
 void hal_smp_remove_task (hal_smp_task_t *task)
 {
     task->flags = 0;
+    d_memzero(task, sizeof(*task));
 }
 
 

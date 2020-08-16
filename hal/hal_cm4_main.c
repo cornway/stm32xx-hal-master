@@ -63,7 +63,7 @@ void msleep (volatile uint32_t sleep)
 
 void cm4_hal_tick (void)
 {
-    hal_smp_task_t *task;
+    hal_smp_task_t *task = NULL;
 
     int hsem_id = hal_smp_hsem_alloc("hsem_task");
 

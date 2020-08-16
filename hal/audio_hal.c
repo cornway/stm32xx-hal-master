@@ -65,7 +65,7 @@ __DMA_on_tx_complete (isr_status_e status)
 
 typedef struct {
     mixdata_t mixdata[AUDIO_MUS_CHAN_START + 1];
-    a_buf_t *abuf;
+    a_buf_t abuf;
     int compratio;
     int mixcnt;
 } a_smp_task_arg_t;
@@ -79,10 +79,10 @@ static IRAMFUNC void __a_paint_buf_ex_smp_task (void *_arg)
     a_smp_task_arg_t *arg = (a_smp_task_arg_t *)_arg;
     int i, dirty = 0;
 
-    a_clear_abuf(arg->abuf);
+    a_clear_abuf(&arg->abuf);
     for (i = 0; i < arg->mixcnt; i++) {
         if (arg->mixdata[i].size) {
-            a_mix_single_to_master(arg->abuf->buf, &arg->mixdata[i], arg->compratio);
+            a_mix_single_to_master(arg->abuf.buf, &arg->mixdata[i], arg->compratio);
         }
     }
 }
@@ -99,7 +99,7 @@ int a_paint_buf_ex_smp_task (a_buf_t *abuf, mixdata_t *mixdata, int mixcnt, int 
             dirty++;
         }
     }
-    arg.abuf = abuf;
+    arg.abuf = *abuf;
     arg.compratio = compratio;
     arg.mixcnt = mixcnt;
     d_memcpy(arg.mixdata, mixdata, mixcnt * sizeof(mixdata[0]));
