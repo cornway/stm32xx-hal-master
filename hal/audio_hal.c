@@ -36,30 +36,29 @@ int g_audio_isr_pend[A_ISR_MAX] = {0};
 d_bool g_audio_proc_isr = d_true;
 
 static void
-__DMA_on_tx_complete_isr (isr_status_e status)
+__DMA_on_tx_complete_isr (audio_t *audio, isr_status_e status)
 {
     a_buf_t master;
     g_audio_isr_status = status;
     a_get_master4idx(&master, status == A_ISR_HALF ? 0 : 1);
-    master.audio = audio;
-    a_paint_buff_helper(&master);
+    a_paint_buff_helper(audio, &master);
 }
 
 static void
-__DMA_on_tx_complete_dsr (isr_status_e status)
+__DMA_on_tx_complete_dsr (audio_t *audio, isr_status_e status)
 {
     g_audio_isr_status = status;
     g_audio_isr_pend[status]++;
-    a_dsr_hung_fuse(status);
+    a_dsr_hung_fuse(audio, status);
 }
 
 static void
-__DMA_on_tx_complete (isr_status_e status)
+__DMA_on_tx_complete (audio_t *audio, isr_status_e status)
 {
     if (g_audio_proc_isr) {
-        __DMA_on_tx_complete_isr(status);
+        __DMA_on_tx_complete_isr(audio, status);
     } else {
-        __DMA_on_tx_complete_dsr(status);
+        __DMA_on_tx_complete_dsr(audio, status);
     }
 }
 
@@ -77,7 +76,7 @@ static IRAMFUNC void __a_paint_buf_ex_smp_task (void *_arg);
 static IRAMFUNC void __a_paint_buf_ex_smp_task (void *_arg)
 {
     a_smp_task_arg_t *arg = (a_smp_task_arg_t *)_arg;
-    int i, dirty = 0;
+    int i;
 
     a_clear_abuf(&arg->abuf);
     for (i = 0; i < arg->mixcnt; i++) {
@@ -85,42 +84,38 @@ static IRAMFUNC void __a_paint_buf_ex_smp_task (void *_arg)
             a_mix_single_to_master(arg->abuf.buf, &arg->mixdata[i], arg->compratio);
         }
     }
+    *arg->abuf.dirty = d_true;
 }
 
-extern void m_free (void *p);
-
-int a_paint_buf_ex_smp_task (a_buf_t *abuf, mixdata_t *mixdata, int mixcnt, int compratio)
+void a_paint_buf_ex_smp_task (a_buf_t *abuf, mixdata_t *mixdata, int mixcnt, int compratio)
 {
-    int i, dirty = 0, hsem;
+    int i, hsem;
     a_smp_task_arg_t arg;
 
-    for (i = 0; i < mixcnt; i++) {
-        if (mixdata[i].size) {
-            dirty++;
-        }
-    }
     arg.abuf = *abuf;
     arg.compratio = compratio;
     arg.mixcnt = mixcnt;
     d_memcpy(arg.mixdata, mixdata, mixcnt * sizeof(mixdata[0]));
-    while (task && task->flags) {;}
+
     if (task) {
-        m_free(task);
+        hal_smp_sync_task(task);
+        hal_smp_free_task(task);
     }
     hsem = hal_smp_hsem_alloc("hsem_task");
     assert(hsem >= 0);
     hal_smp_hsem_spinlock(hsem);
     task = hal_smp_sched_task(__a_paint_buf_ex_smp_task, &arg, sizeof(arg));
     hal_smp_hsem_release(hsem);
-    return dirty;
 }
 
 void
-a_hal_configure (a_intcfg_t *cfg)
+a_hal_configure (audio_t *audio)
 {
     uint8_t ret;
     a_buf_t master;
     irqmask_t irq_flags;
+    a_intcfg_t *cfg = &audio->config;
+
     irq_bmap(&irq_flags);
 
     a_get_master_base(&master);
@@ -165,6 +160,7 @@ a_hal_configure (a_intcfg_t *cfg)
   cfg->irq = cfg->irq & (~irq_flags);
 
   audio->cvar_have_smp = 0;
+  audio->irq_mask = audio->config.irq;
   cmd_register_i32(&audio->cvar_have_smp, "a_have_smp");
 }
 
@@ -183,12 +179,12 @@ void a_hal_deinit(void)
 
 void BSP_AUDIO_OUT_HalfTransfer_CallBack(void)
 {
-    __DMA_on_tx_complete(A_ISR_HALF);
+    __DMA_on_tx_complete(audio, A_ISR_HALF);
 }
 
 void BSP_AUDIO_OUT_TransferComplete_CallBack(void)
 {
-    __DMA_on_tx_complete(A_ISR_COMP);
+    __DMA_on_tx_complete(audio, A_ISR_COMP);
 }
 
 void BSP_AUDIO_OUT_Error_CallBack(void)
@@ -207,12 +203,12 @@ void a_hal_deinit(void)
 
 void BSP_AUDIO_OUT_HalfTransfer_CallBack(uint32_t inst)
 {
-    __DMA_on_tx_complete(A_ISR_HALF);
+    __DMA_on_tx_complete(audio, A_ISR_HALF);
 }
 
 void BSP_AUDIO_OUT_TransferComplete_CallBack(uint32_t inst)
 {
-    __DMA_on_tx_complete(A_ISR_COMP);
+    __DMA_on_tx_complete(audio, A_ISR_COMP);
 }
 
 void BSP_AUDIO_OUT_Error_CallBack(uint32_t inst)

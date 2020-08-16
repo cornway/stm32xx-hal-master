@@ -312,18 +312,18 @@ int dev_hal_preinit (void)
     CPU_CACHE_Enable();
     HAL_Init();
     SystemClock_Config();
-    dev_hal_gpio_init();
+    mpu_init();
 #if defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
     hal_smp_init(0);
     hal_smp_hsem_alloc("hsem_task");
 #endif
+    dev_hal_gpio_init();
     return 0;
 }
 
 int dev_hal_init (void)
 {
     dev_hal_preinit();
-    mpu_init();
     heap_init();
     hal_tty_vcom_attach();
     CM4_LoadCode();

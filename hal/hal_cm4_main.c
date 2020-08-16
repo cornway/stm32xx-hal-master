@@ -93,6 +93,7 @@ int cm4_hal_init (void)
 
     hal_smp_init(1);
     cm4_led_on();
+    return 0;
 }
 
 void HSEM2_IRQHandler(void)

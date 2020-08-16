@@ -14,7 +14,11 @@
 
 #define AUDIO_MAX_VOICES 16
 #define AUDIO_MUS_CHAN_START AUDIO_MAX_VOICES + 1
+#if defined(USE_STM32H747I_DISCO)
+#define AUDIO_OUT_BUFFER_SIZE 0x1000
+#else
 #define AUDIO_OUT_BUFFER_SIZE 0x800
+#endif
 #define AUDIO_BUFFER_MS(rate) AUDIO_SIZE_TO_MS(rate, AUDIO_OUT_BUFFER_SIZE)
 
 #define REVERB_DELAY 5/*Ms*/
@@ -51,7 +55,6 @@ typedef struct mixdata_s {
 } mixdata_t;
 
 typedef struct {
-    audio_t *audio;
     snd_sample_t *buf;
     int samples;
     d_bool *dirty;
@@ -136,14 +139,14 @@ for (channel = (head)->first,\
      channel = next,         \
      next = next->next)
 
-void a_hal_configure (a_intcfg_t *cfg);
+void a_hal_configure (audio_t *audio);
 
-void a_dsr_hung_fuse (isr_status_e status);
-void a_paint_buff_helper (a_buf_t *abuf);
+void a_dsr_hung_fuse (audio_t *audio, isr_status_e status);
+void a_paint_buff_helper (audio_t *audio, a_buf_t *abuf);
 int a_channel_link (a_channel_head_t *head, a_channel_t *link, uint8_t sort);
 int a_channel_unlink (a_channel_head_t *head, a_channel_t *node);
 void a_channel_remove (audio_t *audio, a_channel_t *desc);
-void a_paint_buffer (a_channel_head_t *chanlist, a_buf_t *abuf, int compratio);
+void a_paint_buffer (audio_t *audio, a_buf_t *abuf, int compratio);
 uint8_t a_chanlist_try_reject_all (audio_t *audio, a_channel_head_t *chanlist);
 a_intcfg_t *audio_current_config (void);
 
@@ -167,7 +170,7 @@ void a_get_master4idx (a_buf_t *master, int idx);
 void a_grab_mixdata (a_channel_t *channel, a_buf_t *track, mixdata_t *mixdata);
 IRAMFUNC void a_clear_abuf (a_buf_t *abuf);
 void a_clear_master (void);
-int a_paint_buf_ex_smp_task (a_buf_t *abuf, mixdata_t *mixdata, int mixcnt, int compratio);
+void a_paint_buf_ex_smp_task (a_buf_t *abuf, mixdata_t *mixdata, int mixcnt, int compratio);
 d_bool a_wave_supported (wave_t *wave);
 void a_hal_check_cfg (a_intcfg_t *cfg);
 void a_mem_deinit (void);

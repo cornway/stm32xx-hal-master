@@ -48,37 +48,6 @@ typedef struct {
 hsem_pool_t *hsem_pool;
 void *task_pool;
 task_list_t *task_list;
-int core_id = 0;
-
-#ifdef CORE_CM7
-
-static void __MPU_Config(void)
-{
-  MPU_Region_InitTypeDef MPU_InitStruct;
-
-  /* Disable the MPU */
-  HAL_MPU_Disable();
-
-  /* Configure the MPU attributes as shareable for SRAM */
-  MPU_InitStruct.Enable = MPU_REGION_ENABLE;
-  MPU_InitStruct.BaseAddress = D3_SRAM_BASE;
-  MPU_InitStruct.Size = MPU_REGION_SIZE_64KB;
-  MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
-  MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
-  MPU_InitStruct.IsCacheable = MPU_ACCESS_CACHEABLE;
-  MPU_InitStruct.IsShareable = MPU_ACCESS_SHAREABLE;
-  MPU_InitStruct.Number = MPU_REGION_NUMBER15;
-  MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL0;
-  MPU_InitStruct.SubRegionDisable = 0x00;
-  MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_ENABLE;
-
-  HAL_MPU_ConfigRegion(&MPU_InitStruct);
-
-  /* Enable the MPU */
-  HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
-}
-
-#endif
 
 int hal_smp_init (int _core_id)
 {
@@ -98,11 +67,12 @@ int hal_smp_init (int _core_id)
     }
 #ifdef CORE_CM7
     else {
-        __MPU_Config();
+        arch_word_t mpu_addr = (arch_word_t)&__cm4_shared_base;
+        arch_word_t mpu_size = (arch_word_t)&__cm4_shared_limit - (arch_word_t)&__cm4_shared_base;
+        mpu_lock(mpu_addr, &mpu_size, "sc");
     }
 #endif
 
-    core_id = _core_id;
     d_memzero(hsem_pool, sizeof(hsem_pool_t));
     for (id = 0; id < arrlen(hsem_pool->pool); id++) {
         hsem = &hsem_pool->pool[id];
@@ -146,10 +116,6 @@ int hal_smp_hsem_alloc (const char *name)
         hsem = &hsem_pool->pool[first_avail];
         snprintf(hsem->name, sizeof(hsem->name), "%s", name);
         hsem->id = first_avail;
-
-        if (core_id) {
-            HAL_HSEM_ActivateNotification(__HAL_HSEM_SEMID_TO_MASK(hsem->id));
-        }
     }
     return first_avail;
     
@@ -175,7 +141,7 @@ int hal_smp_hsem_spinlock (int s)
 
 int hal_smp_hsem_release (int s)
 {
-    HAL_HSEM_Release(s, core_id);
+    HAL_HSEM_Release(s, 0);
     return 0;
 }
 
@@ -191,7 +157,7 @@ hal_smp_task_t *hal_smp_sched_task (void (*func) (void *), void *usr, size_t usr
     d_memzero(task , sizeof(*task));
 
     task->func = func;
-    task->usr_size = usr_size;
+    task->arg_size = usr_size;
     if (usr) {
         task->arg = task + 1;
         d_memcpy(task->arg, usr, usr_size);
@@ -207,6 +173,16 @@ hal_smp_task_t *hal_smp_sched_task (void (*func) (void *), void *usr, size_t usr
 
     task->flags |= HAL_SMP_TASK_PEND;
     return task;
+}
+
+void hal_smp_sync_task (hal_smp_task_t *task)
+{
+    while (task->flags) {__asm("WFE");}
+}
+
+void hal_smp_free_task (hal_smp_task_t *task)
+{
+    m_free(task);
 }
 
 hal_smp_task_t *hal_smp_next_task (void)
