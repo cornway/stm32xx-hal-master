@@ -27,7 +27,7 @@ typedef struct {
     uint32_t bytes_total;
     uint32_t bytes_frame;
     void *base;
-    void *frame[LCD_MAX_LAYER];
+    void *frame;
     void *buf;
     void *frame_ext;
 } framebuf_t;
@@ -77,7 +77,6 @@ extern uint32_t lcd_y_size_var;
 extern uint32_t bsp_lcd_width;
 extern uint32_t bsp_lcd_height;
 
-extern const lcd_layers_t layer_switch[LCD_MAX_LAYER];
 extern const uint32_t screen_mode2pixdeep[GFX_COLOR_MODE_MAX];
 extern lcd_t *g_lcd_inst;
 

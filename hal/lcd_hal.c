@@ -279,7 +279,7 @@ void *screen_hal_set_config (lcd_t *lcd, int x, int y, int w, int h, uint8_t col
     Layercfg->ImageHeight = h;
 
     layer = 0;
-    Layercfg->FBStartAdress = (uint32_t)lcd->fb.frame[layer];
+    Layercfg->FBStartAdress = (uint32_t)lcd->fb.frame;
 
     if (HAL_LTDC_ConfigLayer(GET_VHAL_LTDC(lcd), Layercfg, layer)) {
         dprintf("%s() Failed\n", __func__);
@@ -316,14 +316,14 @@ int screen_update_direct (lcd_t *lcd, screen_t *psrc)
 
     if (!psrc) {
         psrc = src;
-        src->buf = lcd->fb.frame[layer_switch[lcd->fb.rd_idx]];
+        src->buf = lcd->fb.frame;
         src->x = 0;
         src->y = 0;
         src->width = lcd->fb.w;
         src->height = lcd->fb.h;
         src->colormode = lcd->config.colormode;
     }
-    dest->buf = lcd->fb.frame[lcd->fb.rd_idx];
+    dest->buf = lcd->fb.frame;
     dest->x = 0;
     dest->y = 0;
     dest->width = lcd->fb.w;
@@ -739,7 +739,7 @@ void HAL_LTDC_LineEventCallback(LTDC_HandleTypeDef *hltdc)
     GET_VHAL_CTXT(lcd)->waitreload = 0;
 
     if(lcd->fb.pend_idx != LCD_MAX_LAYER) {
-      LTDC_LAYER(hltdc, LCD_BACKGROUND)->CFBAR = ((uint32_t)lcd->fb.frame[lcd->fb.pend_idx]);
+      LTDC_LAYER(hltdc, LCD_BACKGROUND)->CFBAR = ((uint32_t)lcd->fb.frame);
       __HAL_LTDC_RELOAD_CONFIG(hltdc); 
       
       lcd->fb.pend_idx = LCD_MAX_LAYER;
