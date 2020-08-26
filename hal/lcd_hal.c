@@ -54,10 +54,11 @@ typedef struct screen_hal_ctxt_s {
     uint8_t waitreload;
 } screen_hal_ctxt_t;
 
-#define GET_VHAL_CTXT(cfg) ((screen_hal_ctxt_t *)((lcd_t *)(cfg))->hal_ctxt)
-#define GET_VHAL_LTDC(cfg) ((LTDC_HandleTypeDef *)GET_VHAL_CTXT(cfg)->hal_ltdc)
-#define GET_VHAL_DMA2D(cfg) ((DMA2D_HandleTypeDef *)GET_VHAL_CTXT(cfg)->hal_dma)
-#define VHAL_PIX_FMT(cfg, num) (GET_VHAL_LTDC(cfg)->LayerCfg[num].PixelFormat)
+#define GET_VHAL_CTXT(lcd) ((screen_hal_ctxt_t *)((lcd_t *)(lcd))->hal_ctxt)
+#define GET_VHAL_LTDC(lcd) ((LTDC_HandleTypeDef *)GET_VHAL_CTXT(lcd)->hal_ltdc)
+#define GET_VHAL_DSI(lcd) ((DSI_HandleTypeDef *)GET_VHAL_CTXT(lcd)->hal_dsi)
+#define GET_VHAL_DMA2D(lcd) ((DMA2D_HandleTypeDef *)GET_VHAL_CTXT(lcd)->hal_dma)
+#define VHAL_PIX_FMT(lcd, num) (GET_VHAL_LTDC(lcd)->LayerCfg[num].PixelFormat)
 
 #if defined(USE_STM32F769I_DISCO)
 
@@ -108,77 +109,25 @@ static void screen_dma2d_irq_hdlr (screen_hal_ctxt_t *ctxt);
 static void screen_copybuf_split (screen_hal_ctxt_t *ctxt, copybuf_t *buf, int parts);
 static int screen_hal_copy_next (screen_hal_ctxt_t *ctxt);
 
-#if defined(USE_STM32F769I_DISCO)
-
-lcd_layers_t _screen_hal_reload_layer (lcd_t *lcd)
-{
-    lcd_layers_t nextlay;
-
-    switch (lcd->fb.rd_idx) {
-        case LCD_BACKGROUND:
-            BSP_LCD_SelectLayer(LCD_BACKGROUND);
-            BSP_LCD_SetTransparency(LCD_FOREGROUND, GFX_OPAQUE);
-            BSP_LCD_SetTransparency(LCD_BACKGROUND, GFX_TRANSPARENT);
-            nextlay = LCD_BACKGROUND;
-        break;
-        case LCD_FOREGROUND:
-            BSP_LCD_SelectLayer(LCD_FOREGROUND);
-            BSP_LCD_SetTransparency(LCD_BACKGROUND, GFX_OPAQUE);
-            BSP_LCD_SetTransparency(LCD_FOREGROUND, GFX_TRANSPARENT);
-            nextlay = LCD_FOREGROUND;
-        break;
-        default:
-            assert(0);
-        break;
-    }
-
-    return nextlay;
-}
-
-#elif defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
-
-void _screen_hal_reload_layer (lcd_t *lcd)
-{
-    lcd_layers_t nextlay;
-
-    switch (lcd->fb.rd_idx) {
-        case LCD_BACKGROUND:
-            nextlay = LCD_FOREGROUND;
-        break;
-        case LCD_FOREGROUND:
-            nextlay = LCD_BACKGROUND;
-        break;
-        default:
-            assert(0);
-        break;
-    }
-    lcd->fb.pend_idx = lcd->fb.rd_idx;
-    lcd->fb.rd_idx = nextlay;
-    GET_VHAL_CTXT(lcd)->waitreload = 1U;
-    HAL_LTDC_ProgramLineEvent(GET_VHAL_LTDC(lcd), 0);
-}
-
-#else /* defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO) */
-#error
-#endif
-
-void screen_hal_set_clut (lcd_t *cfg, void *_buf, int size, int layer)
+void screen_hal_set_clut (lcd_t *lcd, void *_buf, int size)
 {
     assert(LCD_COLORMODE_INVALID != screen_mode2fmt_map[GFX_COLOR_MODE_CLUT]);
 
-    if (VHAL_PIX_FMT(cfg, layer) != screen_mode2fmt_map[GFX_COLOR_MODE_CLUT]) {
+    if (VHAL_PIX_FMT(lcd, 0) != screen_mode2fmt_map[GFX_COLOR_MODE_CLUT]) {
         return;
     }
-    HAL_LTDC_ConfigCLUT(GET_VHAL_LTDC(cfg), (uint32_t *)_buf, size, layer);
-    HAL_LTDC_EnableCLUT(GET_VHAL_LTDC(cfg), layer);
+    __HAL_DSI_WRAPPER_DISABLE(GET_VHAL_DSI(lcd));
+    HAL_LTDC_ConfigCLUT(GET_VHAL_LTDC(lcd), (uint32_t *)_buf, size, 0);
+    HAL_LTDC_EnableCLUT(GET_VHAL_LTDC(lcd), 0);
+    __HAL_DSI_WRAPPER_ENABLE(GET_VHAL_DSI(lcd));
 }
 
-int screen_hal_set_keying (lcd_t *cfg, uint32_t color, int layer)
+int screen_hal_set_keying (lcd_t *cfg, uint32_t color)
 {
 #if defined(USE_STM32F769I_DISCO)
-    BSP_LCD_SetColorKeying(layer, color);
+    BSP_LCD_SetColorKeying(0, color);
 #elif defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
-    BSP_LCD_SetColorKeying(0, layer, color);
+    BSP_LCD_SetColorKeying(0, 0, color);
 #else
 #error
 #endif
@@ -189,10 +138,10 @@ int screen_hal_init (int init)
 {
     uint32_t status;
 
-    d_memset(&screen_hal_ctxt, 0, sizeof(screen_hal_ctxt));
 #if defined(USE_STM32F769I_DISCO)
     if (init) {
 
+        d_memset(&screen_hal_ctxt, 0, sizeof(screen_hal_ctxt));
         status = BSP_LCD_Init();
         assert(!status);
 
@@ -203,12 +152,18 @@ int screen_hal_init (int init)
     } else {
         BSP_LCD_SetBrightness(0);
         BSP_LCD_DeInitEx();
+        d_memset(&screen_hal_ctxt, 0, sizeof(screen_hal_ctxt));
         HAL_Delay(10);
     }
 #elif defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
     if (init) {
 
-        status = BSP_LCD_Init(0, LCD_ORIENTATION_LANDSCAPE);
+        d_memset(&screen_hal_ctxt, 0, sizeof(screen_hal_ctxt));
+        if (EXEC_REGION_DRIVER()) {
+            status = BSP_LCD_Init(0, LCD_ORIENTATION_LANDSCAPE);
+        } else {
+            status = BSP_LCD_CMD_Init();
+        }
         assert(!status);
 
         BSP_LCD_GetXSize(0, &bsp_lcd_width);
@@ -217,6 +172,7 @@ int screen_hal_init (int init)
     } else {
         BSP_LCD_SetBrightness(0, 0);
         BSP_LCD_DeInitEx();
+        d_memset(&screen_hal_ctxt, 0, sizeof(screen_hal_ctxt));
         HAL_Delay(10);
     }
 #else
@@ -250,11 +206,10 @@ void screen_hal_attach (lcd_t *lcd)
 
 void *screen_hal_set_config (lcd_t *lcd, int x, int y, int w, int h, uint8_t colormode)
 {
-    int layer;
 #if defined(USE_STM32F769I_DISCO)
-    static LCD_LayerCfgTypeDef *Layercfg;
+    LCD_LayerCfgTypeDef *Layercfg;
 #elif defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
-    static LTDC_LayerCfgTypeDef *Layercfg;
+    LTDC_LayerCfgTypeDef *Layercfg;
 #else
 #error
 #endif
@@ -278,35 +233,30 @@ void *screen_hal_set_config (lcd_t *lcd, int x, int y, int w, int h, uint8_t col
     Layercfg->ImageWidth = w;
     Layercfg->ImageHeight = h;
 
-    layer = 0;
     Layercfg->FBStartAdress = (uint32_t)lcd->fb.frame;
 
-    if (HAL_LTDC_ConfigLayer(GET_VHAL_LTDC(lcd), Layercfg, layer)) {
+    __HAL_DSI_WRAPPER_DISABLE(GET_VHAL_DSI(lcd));
+    if (HAL_LTDC_ConfigLayer(GET_VHAL_LTDC(lcd), Layercfg, 0)) {
         dprintf("%s() Failed\n", __func__);
-        return NULL;
+        Layercfg =  NULL;
     }
+    __HAL_DSI_WRAPPER_ENABLE(GET_VHAL_DSI(lcd));
     return Layercfg;
 }
 
-static inline void __screen_hal_vsync (lcd_t *lcd)
+void screen_hal_sync (lcd_t *lcd)
 {
-    while (GET_VHAL_CTXT(lcd)->waitreload) {
-        HAL_Delay(1);
-    }
+#if defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
+    GET_VHAL_CTXT(lcd)->waitreload = 1U;
+    HAL_DSI_Refresh(GET_VHAL_DSI(lcd));
+#endif
+    while (GET_VHAL_CTXT(lcd)->waitreload ||
+           GET_VHAL_CTXT(lcd)->state != V_STATE_IDLE) {}
 }
 
-void screen_hal_sync (lcd_t *lcd, int wait)
+void screen_hal_refresh_direct (lcd_t *lcd)
 {
-    while (GET_VHAL_CTXT(lcd)->state != V_STATE_IDLE) {
-        HAL_Delay(1);
-    }
-    if (wait) {
-        __screen_hal_vsync(lcd);
-    }
-}
-
-void screen_hal_post_sync (lcd_t *lcd)
-{
+    HAL_DSI_Refresh(GET_VHAL_DSI(lcd));
 }
 
 int screen_update_direct (lcd_t *lcd, screen_t *psrc)
@@ -727,23 +677,22 @@ void LTDC_IRQHandler (void)
     HAL_LTDC_IRQHandler(GET_VHAL_LTDC(lcd));
 }
 
+void DSI_IRQHandler(void)
+{
+    lcd_t *lcd = LCD();
+    HAL_DSI_IRQHandler(GET_VHAL_DSI(lcd));
+}
+
 void HAL_LTDC_ReloadEventCallback(LTDC_HandleTypeDef *hltdc)
 {
     lcd_t *lcd = LCD();
     GET_VHAL_CTXT(lcd)->waitreload = 0;
 }
 
-void HAL_LTDC_LineEventCallback(LTDC_HandleTypeDef *hltdc)
+void HAL_DSI_EndOfRefreshCallback(DSI_HandleTypeDef *hdsi)
 {
     lcd_t *lcd = LCD();
     GET_VHAL_CTXT(lcd)->waitreload = 0;
-
-    if(lcd->fb.pend_idx != LCD_MAX_LAYER) {
-      LTDC_LAYER(hltdc, LCD_BACKGROUND)->CFBAR = ((uint32_t)lcd->fb.frame);
-      __HAL_LTDC_RELOAD_CONFIG(hltdc); 
-      
-      lcd->fb.pend_idx = LCD_MAX_LAYER;
-    }
 }
 
 

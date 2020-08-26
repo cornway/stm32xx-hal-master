@@ -22,6 +22,8 @@
 #include <heap.h>
 #include <gui.h>
 #include "bsp_cmd.h"
+#include <gfx2d_mem.h>
+#include <lcd_main.h>
 
 #if defined(USE_STM32H747I_DISCO) || defined(USE_STM32H745I_DISCO)
 
@@ -135,6 +137,11 @@ static const void *__GUI_Font_4_Size (gui_t *gui, int size)
     return best;
 }
 
+static void __GUI_Refresh (gui_t *gui)
+{
+    vid_refresh_direct();
+}
+
 void gui_draw_attach (gui_bsp_api_t *api)
 {
     GUI_SetFuncDriver(&LCD_GUI_Driver);
@@ -144,6 +151,7 @@ void gui_draw_attach (gui_bsp_api_t *api)
     api->string_at = __GUI_DisplayStringAt;
     api->font_prop = __GUI_FontProperties;
     api->get_font  = __GUI_Font_4_Size;
+    api->refresh   = __GUI_Refresh;
 }
 
 /*=======================================================================================*/

@@ -302,15 +302,7 @@ uint8_t BSP_LCD_CMD_Init(void)
   /* Toggle Hardware Reset of the DSI LCD using
      its XRES signal (active low) */
   BSP_LCD_Reset(0);
-  
-  /* Call first MSP Initialize only in case of first initialization
-  * This will set IP blocks LTDC, DSI and DMA2D
-  * - out of reset
-  * - clocked
-  * - NVIC IRQ related to IP blocks enabled
-  */
-  LCD_CMD_MspInit();
- 
+
   /* LCD clock configuration */
   /* LCD clock configuration */
   /* PLL3_VCO Input = HSE_VALUE/PLL3M = 5 Mhz */
@@ -324,23 +316,30 @@ uint8_t BSP_LCD_CMD_Init(void)
   PeriphClkInitStruct.PLL3.PLL3P = 2;
   PeriphClkInitStruct.PLL3.PLL3Q = 2;  
   PeriphClkInitStruct.PLL3.PLL3R = 19;
-  HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct);   
-  
+  HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct);
+
+  /* Call first MSP Initialize only in case of first initialization
+  * This will set IP blocks LTDC, DSI and DMA2D
+  * - out of reset
+  * - clocked
+  * - NVIC IRQ related to IP blocks enabled
+  */
+  LCD_CMD_MspInit();
+
   /* Base address of DSI Host/Wrapper registers to be set before calling De-Init */
   hlcd_dsi.Instance = DSI;
-  
+
   HAL_DSI_DeInit(&(hlcd_dsi));
-  
+
   dsiPllInit.PLLNDIV  = 100;
   dsiPllInit.PLLIDF   = DSI_PLL_IN_DIV5;
   dsiPllInit.PLLODF  = DSI_PLL_OUT_DIV1;  
 
   hlcd_dsi.Init.NumberOfLanes = DSI_TWO_DATA_LANES;
   hlcd_dsi.Init.TXEscapeCkdiv = 0x4;
-  
-  
+
   HAL_DSI_Init(&(hlcd_dsi), &(dsiPllInit));
-    
+
   /* Configure the DSI for Command mode */
   CmdCfg.VirtualChannelID      = 0;
   CmdCfg.HSPolarity            = DSI_HSYNC_ACTIVE_HIGH;
@@ -354,7 +353,7 @@ uint8_t BSP_LCD_CMD_Init(void)
   CmdCfg.AutomaticRefresh      = DSI_AR_DISABLE;
   CmdCfg.TEAcknowledgeRequest  = DSI_TE_ACKNOWLEDGE_ENABLE;
   HAL_DSI_ConfigAdaptedCommandMode(&hlcd_dsi, &CmdCfg);
-  
+
   LPCmd.LPGenShortWriteNoP    = DSI_LP_GSW0P_ENABLE;
   LPCmd.LPGenShortWriteOneP   = DSI_LP_GSW1P_ENABLE;
   LPCmd.LPGenShortWriteTwoP   = DSI_LP_GSW2P_ENABLE;
@@ -370,10 +369,10 @@ uint8_t BSP_LCD_CMD_Init(void)
 
   /* Initialize LTDC */
   LTDC_CMD_Init();
-  
+
   /* Start DSI */
   HAL_DSI_Start(&(hlcd_dsi));
- 
+
   /* Configure DSI PHY HS2LP and LP2HS timings */
   PhyTimings.ClockLaneHS2LPTime = 35;
   PhyTimings.ClockLaneLP2HSTime = 35;

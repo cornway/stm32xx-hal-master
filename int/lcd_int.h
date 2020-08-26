@@ -23,7 +23,6 @@ typedef struct copybuf_s {
 
 typedef struct {
     uint16_t w, h;
-    uint16_t pend_idx, rd_idx;
     uint32_t bytes_total;
     uint32_t bytes_frame;
     void *base;
@@ -43,29 +42,21 @@ typedef struct {
 } lcd_t;
 
 void vid_direct_copy (gfx_2d_buf_t *dest2d, gfx_2d_buf_t *src2d);
-void _screen_hal_reload_layer (lcd_t *lcd);
 int screen_hal_init (int init);
 void screen_hal_attach (lcd_t *cfg);
 void *screen_hal_set_config (lcd_t *lcd, int x, int y,
                                             int w, int h, uint8_t colormode);
-void screen_hal_set_clut (lcd_t *lcd, void *_buf, int size, int layer);
-int screen_hal_set_keying (lcd_t *lcd, uint32_t color, int layer);
-void screen_hal_sync (lcd_t *lcd, int wait);
+void screen_hal_set_clut (lcd_t *lcd, void *_buf, int size);
+void screen_hal_sync (lcd_t *lcd);
 void screen_hal_post_sync (lcd_t *lcd);
+int screen_hal_set_keying (lcd_t *lcd, uint32_t color);
+void screen_hal_sync (lcd_t *lcd);
+void screen_hal_refresh_direct (lcd_t *lcd);
 int screen_hal_copy_m2m (lcd_t *lcd, copybuf_t *copybuf, uint8_t pix_bytes);
 int screen_hal_scale_h8_2x2 (lcd_t *lcd, copybuf_t *copybuf, int interleave);
 int screen_gfx8_copy_line (lcd_t *lcd, void *dest, void *src, int w);
 int screen_gfx8888_copy (lcd_t *lcd, gfx_2d_buf_t *dest, gfx_2d_buf_t *src);
 int screen_hal_post_config (lcd_t *lcd);
-
-
-static inline void screen_hal_reload_layer (lcd_t *lcd)
-{
-    if (lcd->config.laynum < 2) {
-        return;
-    }
-    _screen_hal_reload_layer(lcd);
-}
 
 void vid_line_event_callback (lcd_t *lcd);
 
