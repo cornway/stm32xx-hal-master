@@ -210,6 +210,201 @@ static void LCD_DeInitSequence(void);
 /** @defgroup STM32H747I_DISCO_LCD_Exported_Functions LCD Exported Functions
   * @{
   */
+
+
+#define LTDC_VSYNC               1 
+#define LTDC_VBP                 1 
+#define LTDC_VFP                 1
+#define LTDC_VACT                480
+#define LTDC_HSYNC               1
+#define LTDC_HBP                 1
+#define LTDC_HFP                 1
+#define LTDC_HACT                800
+
+void LTDC_CMD_Init(void)
+{
+  /* DeInit */
+  HAL_LTDC_DeInit(&hlcd_ltdc);
+  
+  /* LTDC Config */
+  /* Timing and polarity */
+  hlcd_ltdc.Init.HorizontalSync = LTDC_HSYNC;
+  hlcd_ltdc.Init.VerticalSync = LTDC_VSYNC;
+  hlcd_ltdc.Init.AccumulatedHBP = LTDC_HSYNC+LTDC_HBP;
+  hlcd_ltdc.Init.AccumulatedVBP = LTDC_VSYNC+LTDC_VBP;
+  hlcd_ltdc.Init.AccumulatedActiveH = LTDC_VSYNC+LTDC_VBP+LTDC_VACT;
+  hlcd_ltdc.Init.AccumulatedActiveW = LTDC_HSYNC+LTDC_HBP+LTDC_HACT;
+  hlcd_ltdc.Init.TotalHeigh = LTDC_VSYNC+LTDC_VBP+LTDC_VACT+LTDC_VFP;
+  hlcd_ltdc.Init.TotalWidth = LTDC_HSYNC+LTDC_HBP+LTDC_HACT+LTDC_HFP;
+  
+  /* background value */
+  hlcd_ltdc.Init.Backcolor.Blue = 0;
+  hlcd_ltdc.Init.Backcolor.Green = 0;
+  hlcd_ltdc.Init.Backcolor.Red = 0;
+  
+  /* Polarity */
+  hlcd_ltdc.Init.HSPolarity = LTDC_HSPOLARITY_AL;
+  hlcd_ltdc.Init.VSPolarity = LTDC_VSPOLARITY_AL;
+  hlcd_ltdc.Init.DEPolarity = LTDC_DEPOLARITY_AL;
+  hlcd_ltdc.Init.PCPolarity = LTDC_PCPOLARITY_IPC;
+  hlcd_ltdc.Instance = LTDC;
+
+  HAL_LTDC_Init(&hlcd_ltdc);
+}
+
+void LCD_CMD_MspInit(void)
+{
+  /** @brief Enable the LTDC clock */
+  __HAL_RCC_LTDC_CLK_ENABLE();
+
+  /** @brief Toggle Sw reset of LTDC IP */
+  __HAL_RCC_LTDC_FORCE_RESET();
+  __HAL_RCC_LTDC_RELEASE_RESET();
+
+  /** @brief Enable the DMA2D clock */
+  __HAL_RCC_DMA2D_CLK_ENABLE();
+
+  /** @brief Toggle Sw reset of DMA2D IP */
+  __HAL_RCC_DMA2D_FORCE_RESET();
+  __HAL_RCC_DMA2D_RELEASE_RESET();
+
+  /** @brief Enable DSI Host and wrapper clocks */
+  __HAL_RCC_DSI_CLK_ENABLE();
+
+  /** @brief Soft Reset the DSI Host and wrapper */
+  __HAL_RCC_DSI_FORCE_RESET();
+  __HAL_RCC_DSI_RELEASE_RESET();
+
+  /** @brief NVIC configuration for LTDC interrupt that is now enabled */
+  HAL_NVIC_SetPriority(LTDC_IRQn, 9, 0xf);
+  HAL_NVIC_EnableIRQ(LTDC_IRQn);
+
+  /** @brief NVIC configuration for DMA2D interrupt that is now enabled */
+  HAL_NVIC_SetPriority(DMA2D_IRQn, 9, 0xf);
+  HAL_NVIC_EnableIRQ(DMA2D_IRQn);
+
+  /** @brief NVIC configuration for DSI interrupt that is now enabled */
+  HAL_NVIC_SetPriority(DSI_IRQn, 9, 0xf);
+  HAL_NVIC_EnableIRQ(DSI_IRQn);
+}
+
+uint8_t BSP_LCD_CMD_Init(void)
+{
+  RCC_PeriphCLKInitTypeDef  PeriphClkInitStruct;
+  DSI_PLLInitTypeDef dsiPllInit;
+  DSI_CmdCfgTypeDef CmdCfg;
+  DSI_LPCmdTypeDef LPCmd;
+  DSI_PHY_TimerTypeDef  PhyTimings;
+  
+  OTM8009A_IO_t       IOCtx;
+  OTM8009A_Object_t   OTM8009AObj;
+
+  /* Toggle Hardware Reset of the DSI LCD using
+     its XRES signal (active low) */
+  BSP_LCD_Reset(0);
+  
+  /* Call first MSP Initialize only in case of first initialization
+  * This will set IP blocks LTDC, DSI and DMA2D
+  * - out of reset
+  * - clocked
+  * - NVIC IRQ related to IP blocks enabled
+  */
+  LCD_CMD_MspInit();
+ 
+  /* LCD clock configuration */
+  /* LCD clock configuration */
+  /* PLL3_VCO Input = HSE_VALUE/PLL3M = 5 Mhz */
+  /* PLL3_VCO Output = PLL3_VCO Input * PLL3N = 800 Mhz */
+  /* PLLLCDCLK = PLL3_VCO Output/PLL3R = 800/19 = 42 Mhz */
+  /* LTDC clock frequency = PLLLCDCLK = 42 Mhz */
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_LTDC;
+  PeriphClkInitStruct.PLL3.PLL3M = 5;    
+  PeriphClkInitStruct.PLL3.PLL3N = 160;
+  PeriphClkInitStruct.PLL3.PLL3FRACN = 0;
+  PeriphClkInitStruct.PLL3.PLL3P = 2;
+  PeriphClkInitStruct.PLL3.PLL3Q = 2;  
+  PeriphClkInitStruct.PLL3.PLL3R = 19;
+  HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct);   
+  
+  /* Base address of DSI Host/Wrapper registers to be set before calling De-Init */
+  hlcd_dsi.Instance = DSI;
+  
+  HAL_DSI_DeInit(&(hlcd_dsi));
+  
+  dsiPllInit.PLLNDIV  = 100;
+  dsiPllInit.PLLIDF   = DSI_PLL_IN_DIV5;
+  dsiPllInit.PLLODF  = DSI_PLL_OUT_DIV1;  
+
+  hlcd_dsi.Init.NumberOfLanes = DSI_TWO_DATA_LANES;
+  hlcd_dsi.Init.TXEscapeCkdiv = 0x4;
+  
+  
+  HAL_DSI_Init(&(hlcd_dsi), &(dsiPllInit));
+    
+  /* Configure the DSI for Command mode */
+  CmdCfg.VirtualChannelID      = 0;
+  CmdCfg.HSPolarity            = DSI_HSYNC_ACTIVE_HIGH;
+  CmdCfg.VSPolarity            = DSI_VSYNC_ACTIVE_HIGH;
+  CmdCfg.DEPolarity            = DSI_DATA_ENABLE_ACTIVE_HIGH;
+  CmdCfg.ColorCoding           = DSI_RGB888;
+  CmdCfg.CommandSize           = LTDC_HACT;
+  CmdCfg.TearingEffectSource   = DSI_TE_DSILINK;
+  CmdCfg.TearingEffectPolarity = DSI_TE_RISING_EDGE;
+  CmdCfg.VSyncPol              = DSI_VSYNC_FALLING;
+  CmdCfg.AutomaticRefresh      = DSI_AR_DISABLE;
+  CmdCfg.TEAcknowledgeRequest  = DSI_TE_ACKNOWLEDGE_ENABLE;
+  HAL_DSI_ConfigAdaptedCommandMode(&hlcd_dsi, &CmdCfg);
+  
+  LPCmd.LPGenShortWriteNoP    = DSI_LP_GSW0P_ENABLE;
+  LPCmd.LPGenShortWriteOneP   = DSI_LP_GSW1P_ENABLE;
+  LPCmd.LPGenShortWriteTwoP   = DSI_LP_GSW2P_ENABLE;
+  LPCmd.LPGenShortReadNoP     = DSI_LP_GSR0P_ENABLE;
+  LPCmd.LPGenShortReadOneP    = DSI_LP_GSR1P_ENABLE;
+  LPCmd.LPGenShortReadTwoP    = DSI_LP_GSR2P_ENABLE;
+  LPCmd.LPGenLongWrite        = DSI_LP_GLW_ENABLE;
+  LPCmd.LPDcsShortWriteNoP    = DSI_LP_DSW0P_ENABLE;
+  LPCmd.LPDcsShortWriteOneP   = DSI_LP_DSW1P_ENABLE;
+  LPCmd.LPDcsShortReadNoP     = DSI_LP_DSR0P_ENABLE;
+  LPCmd.LPDcsLongWrite        = DSI_LP_DLW_ENABLE;
+  HAL_DSI_ConfigCommand(&hlcd_dsi, &LPCmd);
+
+  /* Initialize LTDC */
+  LTDC_CMD_Init();
+  
+  /* Start DSI */
+  HAL_DSI_Start(&(hlcd_dsi));
+ 
+  /* Configure DSI PHY HS2LP and LP2HS timings */
+  PhyTimings.ClockLaneHS2LPTime = 35;
+  PhyTimings.ClockLaneLP2HSTime = 35;
+  PhyTimings.DataLaneHS2LPTime = 35;
+  PhyTimings.DataLaneLP2HSTime = 35;
+  PhyTimings.DataLaneMaxReadTime = 0;
+  PhyTimings.StopWaitTime = 10;
+  HAL_DSI_ConfigPhyTimer(&hlcd_dsi, &PhyTimings);   
+
+  OTM8009A_Probe(OTM8009A_COLMOD_RGB888, LCD_ORIENTATION_LANDSCAPE);
+
+  LPCmd.LPGenShortWriteNoP    = DSI_LP_GSW0P_DISABLE;
+  LPCmd.LPGenShortWriteOneP   = DSI_LP_GSW1P_DISABLE;
+  LPCmd.LPGenShortWriteTwoP   = DSI_LP_GSW2P_DISABLE;
+  LPCmd.LPGenShortReadNoP     = DSI_LP_GSR0P_DISABLE;
+  LPCmd.LPGenShortReadOneP    = DSI_LP_GSR1P_DISABLE;
+  LPCmd.LPGenShortReadTwoP    = DSI_LP_GSR2P_DISABLE;
+  LPCmd.LPGenLongWrite        = DSI_LP_GLW_DISABLE;
+  LPCmd.LPDcsShortWriteNoP    = DSI_LP_DSW0P_DISABLE;
+  LPCmd.LPDcsShortWriteOneP   = DSI_LP_DSW1P_DISABLE;
+  LPCmd.LPDcsShortReadNoP     = DSI_LP_DSR0P_DISABLE;
+  LPCmd.LPDcsLongWrite        = DSI_LP_DLW_DISABLE;
+  HAL_DSI_ConfigCommand(&hlcd_dsi, &LPCmd);
+  
+  HAL_DSI_ConfigFlowControl(&hlcd_dsi, DSI_FLOW_CONTROL_BTA);
+  HAL_DSI_ForceRXLowPower(&hlcd_dsi, ENABLE);  
+
+  return BSP_ERROR_NONE;
+}
+
+
 /**
   * @brief  Initializes the LCD in default mode.
   * @param  Instance    LCD Instance
@@ -1948,7 +2143,7 @@ static void LCD_Get_HDMI_VideoModeTiming(uint32_t Format, LCD_HDMI_Timing_t *Tim
   * @param  Timing   pointer to timing structure
   * @retval None
   */
-static void LTDC_HDMI_Init(LCD_HDMI_Timing_t *Timing)
+void LTDC_HDMI_Init(LCD_HDMI_Timing_t *Timing)
 {
   /* Background value */
   hlcd_ltdc.Init.Backcolor.Blue = 0x00;

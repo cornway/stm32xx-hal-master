@@ -246,6 +246,7 @@ extern void               *Lcd_CompObj;
   * @{
   */
 /* Initialization APIs */
+uint8_t BSP_LCD_CMD_Init(void);
 int32_t BSP_LCD_Init(uint32_t Instance, uint32_t Orientation);
 int32_t BSP_LCD_InitEx(uint32_t Instance, uint32_t Orientation, uint32_t PixelFormat, uint32_t Width, uint32_t Height);
 #if (USE_LCD_CTRL_ADV7533 > 0)
