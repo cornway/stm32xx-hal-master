@@ -89,7 +89,7 @@ static IRAMFUNC void __a_paint_buf_ex_smp_task (void *_arg)
 
 void a_paint_buf_ex_smp_task (a_buf_t *abuf, mixdata_t *mixdata, int mixcnt, int compratio)
 {
-    int i, hsem;
+    int hsem;
     a_smp_task_arg_t arg;
 
     arg.abuf = *abuf;

@@ -29,18 +29,17 @@ typedef struct {
     void *base;
     void *frame[LCD_MAX_LAYER];
     void *buf;
+    void *frame_ext;
 } framebuf_t;
 
 typedef struct {
     screen_conf_t config;
     framebuf_t fb;
     screen_update_handler_t scaler;
-    void *raw_mem;
     void *hal_ctxt;
     void *blut;
-    size_t mem_size;
-    uint16_t blutoff;
     uint32_t bilinear: 1;
+    int cvar_have_smp;
 } lcd_t;
 
 void vid_direct_copy (gfx_2d_buf_t *dest2d, gfx_2d_buf_t *src2d);

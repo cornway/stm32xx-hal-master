@@ -75,9 +75,7 @@ void cm4_hal_tick (void)
         }
         if (task) {
             if (task->func) {
-                status_led_on();
                 task->func(task->arg);
-                status_led_off();
             }
             hal_smp_remove_task(task);
         }

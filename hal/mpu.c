@@ -186,6 +186,12 @@ int mpu_lock (arch_word_t addr, arch_word_t *size, const char *mode)
     return reg->init.Number;
 }
 
+uint32_t mpu_roundup (uint32_t size)
+{
+    size_to_mpu_size(&size);
+    return size;
+}
+
 static int __mpu_unlock (int id)
 {
     mpu_reg_t *reg;

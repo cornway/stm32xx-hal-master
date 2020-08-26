@@ -334,6 +334,7 @@ int dev_hal_deinit (void)
 {
 #if defined(USE_STM32H745I_DISCO) || defined(USE_STM32H747I_DISCO)
     BSP_I2C4_DeInit();
+    hal_smp_deinit();
 #endif
     return 0;
 }

@@ -10,6 +10,7 @@ void mpu_deinit (void);
 int mpu_lock (arch_word_t addr, arch_word_t *size, const char *mode);
 int mpu_unlock (arch_word_t addr, arch_word_t size);
 int mpu_read (arch_word_t addr, arch_word_t size);
+uint32_t mpu_roundup (uint32_t size);
 
 #ifdef __cplusplus
     }

@@ -49,6 +49,11 @@ hsem_pool_t *hsem_pool;
 void *task_pool;
 task_list_t *task_list;
 
+int hal_smp_present (void)
+{
+    return 1;
+}
+
 int hal_smp_init (int _core_id)
 {
     uint8_t *mem = (uint8_t *)&__cm4_shared_base;
